@@ -111,35 +111,7 @@ impl VM {
             0x05 => { "DEC  B".to_string() }
             0x06 => { format!("LD   B, ${:02X}", self.read(addr + 1)) }
             0x0C => { "INC  C".to_string() }
-
-            0x18 => {
-                let rel = self.read_i8(addr + 1);
-                let abs = add_i8_to_u16(addr + 2, rel);
-                format!("JR   {}  ; jump to 0x{:04X}", rel, abs)
-            }
-
-            0x1C => { "INC  E".to_string() }
-            0x1E => { format!("LD   E, ${:02X}", self.read(addr + 1)) }
-
-            0x22 => { "LD   (HL+), A".to_string() }
-            0x23 => { "INC  HL".to_string() }
-
-            0x28 => {
-                let rel = self.read_i8(addr + 1);
-                let abs = add_i8_to_u16(addr + 2, rel);
-                format!("JR   Z, {}        ; jump to 0x{:04X}", rel, abs)
-            }
-
-            0x2C => { "INC  L".to_string() }
-            0x3C => { "INC  A".to_string() }
-
             0x0D => { "DEC  C".to_string() }
-            0x1D => { "DEC  E".to_string() }
-            0x2D => { "DEC  L".to_string() }
-            0x2E => { format!("LD   L, ${:02X}", self.read(addr + 1)) }
-            0x3D => { "DEC  A".to_string() }
-            0x4F => { "LD   C, A".to_string() }
-
             0x0E => {
                 format!("LD   C, ${:02X}", self.read(addr + 1))
             }
@@ -153,35 +125,53 @@ impl VM {
             0x15 => { "DEC  D".to_string() }
             0x16 => { format!("LD   D, ${:02X}", self.read(addr + 1)) }
             0x17 => { "RLA".to_string() }
+            0x18 => {
+                let rel = self.read_i8(addr + 1);
+                let abs = add_i8_to_u16(addr + 2, rel);
+                format!("JR   {}  ; jump to 0x{:04X}", rel, abs)
+            }
             0x1A => { "LD   A, (DE)".to_string() }
+            0x1C => { "INC  E".to_string() }
+            0x1D => { "DEC  E".to_string() }
+            0x1E => { format!("LD   E, ${:02X}", self.read(addr + 1)) }
 
             0x20 => {
                 let rel = self.read_i8(addr + 1);
                 let abs = add_i8_to_u16(addr + 2, rel);
                 format!("JR   NZ, {}    ; jump to 0x{:04X}", rel, abs)
             }
-
             0x21 => {
                 let lo = self.read(addr + 1);
                 let hi = self.read(addr + 2);
                 format!("LD   HL, ${:02X}{:02X}", hi, lo)
             }
-
+            0x22 => { "LD   (HL+), A".to_string() }
+            0x23 => { "INC  HL".to_string() }
             0x24 => { "INC  H".to_string() }
+            0x28 => {
+                let rel = self.read_i8(addr + 1);
+                let abs = add_i8_to_u16(addr + 2, rel);
+                format!("JR   Z, {}        ; jump to 0x{:04X}", rel, abs)
+            }
+            0x2C => { "INC  L".to_string() }
+            0x2D => { "DEC  L".to_string() }
+            0x2E => { format!("LD   L, ${:02X}", self.read(addr + 1)) }
 
             0x31 => {
                 let lo = self.read(addr + 1);
                 let hi = self.read(addr + 2);
                 format!("LD   SP, ${:02X}{:02X}", hi, lo)
             }
-
             0x32 => { "LDD  (HL), A".to_string() }
+            0x3C => { "INC  A".to_string() }
+            0x3D => { "DEC  A".to_string() }
             0x3E => { format!("LD   A, ${:02X}", self.read(addr + 1)) }
+
+            0x4F => { "LD   C, A".to_string() }
+
             0x57 => { "LD   D, A".to_string() }
             0x67 => { "LD   H, A".to_string() }
 
-            0xE0 => { format!("LD   ($FF00+${:02X}), A", self.read(addr + 1)) }
-            0xE2 => { "LD   ($FF00+C), A".to_string() }
             0x77 => { "LD   (HL), A".to_string() }
             0x78 => { "LD   A, B".to_string() }
             0x7B => { "LD   A, E".to_string() }
@@ -206,7 +196,6 @@ impl VM {
             0xC4 => { format!("CALL  NZ, ${:04X}", self.read_u16(addr + 1)) }
             0xC5 => { "PUSH BC".to_string() }
             0xC9 => { "RET".to_string() }
-
             0xCB => {
                 let op2 = self.read(addr + 1);
                 match op2 {
@@ -217,9 +206,12 @@ impl VM {
                     }
                 }
             }
-
             0xCD => { format!("CALL ${:04X}", self.read_u16(addr + 1)) }
+
+            0xE0 => { format!("LD   ($FF00+${:02X}), A", self.read(addr + 1)) }
+            0xE2 => { "LD   ($FF00+C), A".to_string() }
             0xEA => { format!("LD   (${:04X}), A", self.read_u16(addr + 1)) }
+
             0xF0 => { format!("LD   A, ($FF00+${:02X})", self.read(addr + 1)) }
             0xFE => { format!("CP   ${:02X}", self.read(addr + 1)) }
 
