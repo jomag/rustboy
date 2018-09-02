@@ -3,14 +3,10 @@
 use std::io::prelude::*;
 use std::fs::File;
 
-const S_BIT:  u8 = 1 << 7;   // sign flag
-const Z_BIT:  u8 = 1 << 6;   // zero flag
-const F5_BIT: u8 = 1 << 5;   // undocumented flag
-const H_BIT:  u8 = 1 << 4;   // half carry flag
-const F3_BIT: u8 = 1 << 3;   // undocumented flag
-const PV_BIT: u8 = 1 << 2;   // parity/overflow flag
-const N_BIT:  u8 = 1 << 1;   // subtract flag
-const C_BIT:  u8 = 1 << 0;   // carry flag
+const Z_BIT:  u8 = 1 << 7;   // zero flag
+const N_BIT:  u8 = 1 << 6;   // subtract flag
+const H_BIT:  u8 = 1 << 5;   // half carry flag
+const C_BIT:  u8 = 1 << 4;   // carry flag
 
 struct VM {
     a: u8,
@@ -43,6 +39,81 @@ impl VM {
             sp: 0, pc: 0,
             mem: [0; 0x10000],
             bootstrap: [0; 0x100]
+        }
+    }
+
+    fn xor_op(&mut self, a: u8, value: u8) -> u8 {
+        // Flags: Z 0 0 0
+        let res = a ^ value;
+        self.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
+        if res == 0 {
+            self.f |= Z_BIT;
+        }
+        res
+    }
+
+    fn bit_op(&mut self, bit: u8, value: u8) {
+        // Test if bit in register is set
+        // Flags: Z 0 1 -
+        if value & (1 << bit) == 0 {
+            self.f &= !N_BIT;
+            self.f |= Z_BIT | H_BIT;
+        } else {
+            self.f &= !(Z_BIT | N_BIT);
+            self.f |= H_BIT;
+        }
+    }
+
+    fn inc_op(&mut self, value: u8) -> u8 {
+        // Flags: Z 0 H -
+        let new_value = if value == 255 { 0 } else { value + 1 };
+
+        if new_value == 0 {
+            self.f |= Z_BIT;
+        } else {
+            self.f &= !Z_BIT;
+        }
+
+        self.f &= !N_BIT;
+
+        if value < 255 && ((value & 0xF) + 1) & 0x10 != 0 {
+            self.f |= H_BIT;
+        } else {
+            self.f &= !H_BIT;
+        }
+
+        new_value
+    }
+
+    fn dec_op(&mut self, value: u8) -> u8 {
+        // Flags: Z 1 H -
+        let new_value = if value == 0 { 255 } else { value - 1 };
+
+        if new_value == 0 {
+            self.f |= Z_BIT | N_BIT;
+        } else {
+            self.f &= !Z_BIT;
+            self.f |= N_BIT;
+        }
+
+        // FIXME: handle half-carry flag
+        new_value
+    }
+
+    fn update_flags(&mut self, from: u8, to: u8) -> u8 {
+        if to == 0 {
+            self.f |= Z_BIT;
+        } else {
+            self.f &= !Z_BIT;
+        }
+        to
+    }
+
+    fn set_z_flag(&mut self, val: bool) {
+        if val {
+            self.f |= Z_BIT;
+        } else {
+           self.f &= !Z_BIT;
         }
     }
 
@@ -102,28 +173,44 @@ impl VM {
     fn format_mnemonic(&self, addr: u16) -> String {
         let op: u8 = self.read(addr);
         match op {
-            0x01 => {
-                let hi = self.read(addr + 1);
-                let lo = self.read(addr + 2);
-                format!("LD  BC, ${:02X}{:02X}", hi, lo)
-            }
+            0x01 => { format!("LD  BC, ${:04X}", self.read_u16(addr + 1)) }
+
+            // INC n: increment register n
             0x04 => { "INC  B".to_string() }
-            0x05 => { "DEC  B".to_string() }
-            0x06 => { format!("LD   B, ${:02X}", self.read(addr + 1)) }
             0x0C => { "INC  C".to_string() }
+            0x14 => { "INC  D".to_string() }
+            0x1C => { "INC  E".to_string() }
+            0x24 => { "INC  H".to_string() }
+            0x2C => { "INC  L".to_string() }
+            0x3C => { "INC  A".to_string() }
+
+            // INC nn: increment 16-bit register nn
+            0x13 => { "INC  DE".to_string() }
+            0x23 => { "INC  HL".to_string() }
+
+            // DEC n: decrement register n
+            0x05 => { "DEC  B".to_string() }
             0x0D => { "DEC  C".to_string() }
-            0x0E => {
-                format!("LD   C, ${:02X}", self.read(addr + 1))
-            }
+            0x15 => { "DEC  D".to_string() }
+            0x1D => { "DEC  E".to_string() }
+            0x25 => { "DEC  H".to_string() }
+            0x2D => { "DEC  L".to_string() }
+            0x3D => { "DEC  A".to_string() }
+
+            // LD n, d: load immediate into register n
+            0x06 => { format!("LD   B, ${:02X}", self.read(addr + 1)) }
+            0x0E => { format!("LD   C, ${:02X}", self.read(addr + 1)) }
+            0x16 => { format!("LD   D, ${:02X}", self.read(addr + 1)) }
+            0x1E => { format!("LD   E, ${:02X}", self.read(addr + 1)) }
+            0x26 => { format!("LD   H, ${:02X}", self.read(addr + 1)) }
+            0x2E => { format!("LD   L, ${:02X}", self.read(addr + 1)) }
+            0x3E => { format!("LD   A, ${:02X}", self.read(addr + 1)) }
 
             0x11 => {
                 let lo = self.read(addr + 1);
                 let hi = self.read(addr + 2);
                 format!("LD   DE, ${:02X}{:02X}", hi, lo)
             }
-            0x13 => { "INC  DE".to_string() }
-            0x15 => { "DEC  D".to_string() }
-            0x16 => { format!("LD   D, ${:02X}", self.read(addr + 1)) }
             0x17 => { "RLA".to_string() }
             0x18 => {
                 let rel = self.read_i8(addr + 1);
@@ -131,9 +218,6 @@ impl VM {
                 format!("JR   {}  ; jump to 0x{:04X}", rel, abs)
             }
             0x1A => { "LD   A, (DE)".to_string() }
-            0x1C => { "INC  E".to_string() }
-            0x1D => { "DEC  E".to_string() }
-            0x1E => { format!("LD   E, ${:02X}", self.read(addr + 1)) }
 
             0x20 => {
                 let rel = self.read_i8(addr + 1);
@@ -146,16 +230,11 @@ impl VM {
                 format!("LD   HL, ${:02X}{:02X}", hi, lo)
             }
             0x22 => { "LD   (HL+), A".to_string() }
-            0x23 => { "INC  HL".to_string() }
-            0x24 => { "INC  H".to_string() }
             0x28 => {
                 let rel = self.read_i8(addr + 1);
                 let abs = add_i8_to_u16(addr + 2, rel);
                 format!("JR   Z, {}        ; jump to 0x{:04X}", rel, abs)
             }
-            0x2C => { "INC  L".to_string() }
-            0x2D => { "DEC  L".to_string() }
-            0x2E => { format!("LD   L, ${:02X}", self.read(addr + 1)) }
 
             0x31 => {
                 let lo = self.read(addr + 1);
@@ -163,13 +242,13 @@ impl VM {
                 format!("LD   SP, ${:02X}{:02X}", hi, lo)
             }
             0x32 => { "LDD  (HL), A".to_string() }
-            0x3C => { "INC  A".to_string() }
             0x3D => { "DEC  A".to_string() }
             0x3E => { format!("LD   A, ${:02X}", self.read(addr + 1)) }
 
             0x4F => { "LD   C, A".to_string() }
 
             0x57 => { "LD   D, A".to_string() }
+
             0x67 => { "LD   H, A".to_string() }
 
             0x77 => { "LD   (HL), A".to_string() }
@@ -260,142 +339,315 @@ impl VM {
         return len;
     }
 
-    fn step(&mut self) -> i32 {
+    fn step(&mut self) {
         let pc = self.pc;
         let op: u8 = self.read(pc);
         let length = self.op_length(pc);
-        let cycles: i32;
 
         match op {
             0x01 => {
                 // LD BC, d16: load immediate (d16) into BC
+                // Length: 3
+                // Flags: - - - -
                 self.c = self.read(self.pc + 1);
                 self.b = self.read(self.pc + 2);
-                cycles = 0;
             }
 
+            // INC n: increment register n
+            // Length: 1
+            // Flags: Z 0 H -
+            0x04 => {
+                // INC B
+                let b = self.b;
+                self.b = self.inc_op(b);
+            }
             0x0C => {
-                cycles = 0;
-
+                // INC C
+                let c = self.c;
+                self.c = self.inc_op(c);
+            }
+            0x14 => {
+                // INC D
+                let d = self.d;
+                self.d = self.inc_op(d);
+            }
+            0x1C => {
+                // INC E
+                let e = self.e;
+                self.e = self.inc_op(e);
+            }
+            0x24 => {
+                // INC H
+                let h = self.h;
+                self.h = self.inc_op(h);
+            }
+            0x2C => {
+                // INC L
+                let l = self.l;
+                self.l = self.inc_op(l);
+            }
+            0x3C => {
+                // INC A
+                let a = self.a;
+                self.a = self.inc_op(a);
             }
 
-            0x0E => {
-                // LD C, d8: load immediate (d8) into C
-                self.c = self.read(self.pc + 1);
-                cycles = 8;
+            // DEC n: decrement register n
+            // Length: 1
+            // Flags: Z 1 H -
+            0x05 => {
+                // DEC B
+                let b = self.b;
+                self.b = self.dec_op(b);
+            }
+            0x0D => {
+                // DEC C
+                let c = self.c;
+                self.c = self.dec_op(c);
+            }
+            0x15 => {
+                // DEC D
+                let d = self.d;
+                self.d = self.dec_op(d);
+            }
+            0x1D => {
+                // DEC E
+                let e = self.e;
+                self.e = self.dec_op(e);
+            }
+            0x25 => {
+                // DEC H
+                let h = self.h;
+                self.h = self.dec_op(h);
+            }
+            0x2D => {
+                // DEC L
+                let l = self.l;
+                self.l = self.dec_op(l);
+            }
+            0x3D => {
+                // DEC A
+                let a = self.a;
+                self.a = self.dec_op(a);
             }
 
-            0x11 => {
-                // LD DE, d16: load immediate (d16) into DE
-                self.d = self.read(self.pc + 1);
-                self.e = self.read(self.pc + 2);
-                cycles = 12;
-            }
+            // LD n, d: load immediate into register n
+            // Length: 2
+            // Flags: - - - -
+            0x06 => { self.b = self.read(self.pc + 1) }
+            0x0E => { self.c = self.read(self.pc + 1) }
+            0x16 => { self.d = self.read(self.pc + 1) }
+            0x1E => { self.e = self.read(self.pc + 1) }
+            0x26 => { self.h = self.read(self.pc + 1) }
+            0x2E => { self.l = self.read(self.pc + 1) }
+            0x3E => { self.a = self.read(self.pc + 1) }
 
-            0x21 => {
-                // LD HL, d16: load immediate (d16) into HL
-                self.l = self.read(self.pc + 1);
-                self.h = self.read(self.pc + 2);
-                cycles = 12;
+            // LD (HL), n: store register value to memory at address HL
+            // Length: 1
+            // Flags: - - - -
+            0x70 => {
+                let hl = self.reg_hl();
+                let b = self.b;
+                self.write(hl, b);
             }
-
-            0x31 => {
-                // LD SP, d16: load immediate (d16) into SP
-                self.sp = self.read_u16(self.pc + 1);
-                cycles = 12;
+            0x71 => {
+                let hl = self.reg_hl();
+                let c = self.c;
+                self.write(hl, c);
             }
-
-            0x3E => {
-                // LD A, d8: load immediate (d8) into A
-                self.a = self.read(self.pc + 1);
-                cycles = 8;
+            0x72 => {
+                let hl = self.reg_hl();
+                let d = self.d;
+                self.write(hl, d);
+            }
+            0x73 => {
+                let hl = self.reg_hl();
+                let e = self.e;
+                self.write(hl, e);
+            }
+            0x74 => {
+                let hl = self.reg_hl();
+                let h = self.h;
+                self.write(hl, h);
+            }
+            0x75 => {
+                let hl = self.reg_hl();
+                let l = self.l;
+                self.write(hl, l);
+            }
+            0x77 => {
+                let hl = self.reg_hl();
+                let a = self.a;
+                self.write(hl, a);
             }
 
             0xE2 => {
                 // LD ($FF00+C), A: put value of A in address 0xFF00 + C
+                // Length: 2
+                // Cycles: 8
+                // Flags: - - - -
                 let addr = 0xFF00 + self.c as u16;
-                let value = self.a;
-                self.write(addr, value);
-                cycles = 8;
+                let a = self.a;
+                self.write(addr, a);
+            }
+
+
+
+            0x11 => {
+                // LD DE, d16: load immediate (d16) into DE
+                // Length: 3
+                // Cycles: 12
+                // Flags: - - - -
+                self.e = self.read(self.pc + 1);
+                self.d = self.read(self.pc + 2);
             }
 
             0x20 => {
                 // JR NZ, d8: jump d8 relative to PC if Z is reset
+                // Length: 2
+                // Cycles: 12/8
+                // Flags: - - - -
                 let offs = self.read_i8(self.pc + 1);
                 if (self.f & Z_BIT) == 0 {
-                    cycles = 8;
                 } else {
                     if offs >= 0 {
                         self.pc = self.pc.wrapping_add(offs as u16);
                     } else {
                         self.pc = self.pc.wrapping_sub(-offs as u16);
                     }
-                    cycles = 12;
                 }
             }
 
-            0xA8 => {
-                self.a |= self.a ^ self.b;
-                cycles = 4;
+            0x21 => {
+                // LD HL, d16: load immediate (d16) into HL
+                // Length: 3
+                // Cycles: 12
+                // Flags: - - - -
+                self.l = self.read(self.pc + 1);
+                self.h = self.read(self.pc + 2);
             }
-            0xA9 => {
-                self.a |= self.a ^ self.c;
-                cycles = 4;
+
+            0x31 => {
+                // LD SP, d16: load immediate (d16) into SP
+                // Length: 3
+                // Cycles: 12
+                // Flags: - - - -
+                self.sp = self.read_u16(self.pc + 1);
             }
-            0xAA => {
-                self.a |= self.a ^ self.d;
-                cycles = 4;
-            }
-            0xAB => {
-                self.a |= self.a ^ self.e;
-                cycles = 4;
-            }
-            0xAC => {
-                self.a |= self.a ^ self.h;
-                cycles = 4;
-            }
-            0xAD => {
-                self.a |= self.a ^ self.l;
-                cycles = 4;
-            }
-            0xAF => {
-                self.a |= self.a ^ self.a;
-                cycles = 4;
-            }
+
             0x32 => {
+                // LD (HL-), A: put A into memory address HL, decrement HL
+                // Length: 1
+                // Cycles: 8
+                // Flags: - - - -
                 let hl: u16 = ((self.h as u16) << 8) | (self.l as u16);
                 let a = self.a;
                 self.write(hl, a);
-                let hl_dec = hl - 1;
-                self.h = (hl_dec >> 8) as u8;
-                self.l = (hl_dec & 0xFF) as u8;
-                cycles = 8;
+                let hl = hl - 1;
+                self.h = (hl >> 8) as u8;
+                self.l = (hl & 0xFF) as u8;
             }
+
+            0x3E => {
+                // LD A, d8: load immediate (d8) into A
+                // Length: 2
+                // Cycles: 8
+                // Flags: - - - -
+                self.a = self.read(self.pc + 1);
+            }
+
+            0xA8 => {
+                // XOR B: A = A XOR B
+                // Length: 1
+                // Cycles: 4
+                // Flags: Z 0 0 0
+                let a = self.a;
+                let b = self.b;
+                self.a = self.xor_op(a, b);
+            }
+
+            0xA9 => {
+                // XOR C: A = A XOR C
+                // Length: 1
+                // Cycles: 4
+                // Flags: Z 0 0 0
+                let a = self.a;
+                let c = self.c;
+                self.a = self.xor_op(a, c);
+            }
+
+            0xAA => {
+                // XOR D: A = A XOR D
+                // Length: 1
+                // Cycles: 4
+                // Flags: Z 0 0 0
+                let a = self.a;
+                let d = self.d;
+                self.a = self.xor_op(a, d);
+            }
+
+            0xAB => {
+                // XOR E: A = A XOR E
+                // Length: 1
+                // Cycles: 4
+                // Flags: Z 0 0 0
+                let a = self.a;
+                let e = self.e;
+                self.a = self.xor_op(a, e);
+            }
+
+            0xAC => {
+                // XOR H: A = A XOR H
+                // Length: 1
+                // Cycles: 4
+                // Flags: Z 0 0 0
+                let a = self.a;
+                let h = self.h;
+                self.a = self.xor_op(a, h);
+            }
+
+            0xAD => {
+                // XOR L: A = A XOR H
+                // Length: 1
+                // Cycles: 4
+                // Flags: Z 0 0 0
+                let l = self.l;
+                let a = self.a;
+                self.a = self.xor_op(a, l);
+            }
+
+            0xAF => {
+                // XOR L: A = A XOR A
+                // Length: 1
+                // Cycles: 4
+                // Flags: Z 0 0 0
+                let a = self.a;
+                self.a = self.xor_op(a, a);
+            }
+
             0xCB => {
                 let op2 = self.read(self.pc + 1);
                 match op2 {
                     0x7C => {
-                        self.f ^= !N_BIT;
-                        self.f |= H_BIT;
-                        if self.h & (1 << 7) == 0 {
-                            self.f &= !Z_BIT;
-                        } else {
-                            self.f |= Z_BIT;
-                        }
-                        cycles = 8;
+                        // BIT 7, H: test if bit 7 in register H is set
+                        // Length: 2
+                        // Cycles: 8
+                        // Flags: Z 0 1 -
+                        let h = self.h;
+                        self.bit_op(7, h);
                     }
                     _ => {
                         panic!("Unsupported opcode at 0x{:04X}: 0x{:02X}{:02X}", self.pc, op, op2);
                     }
                 }
             }
+
             _ => {
                 panic!("Unsupported opcode at 0x{:04X}: 0x{:02X}", self.pc, op);
             }
         }
 
         self.pc += length as u16;
-        return cycles;
     }
 }
 
@@ -493,5 +745,23 @@ mod tests {
         assert_eq!(u8_to_i8(128), -0);
         assert_eq!(u8_to_i8(129), -1);
         assert_eq!(u8_to_i8(0xF0), -112);
+    }
+
+    #[test]
+    fn test_op__inc_c() {
+        let mut vm = VM::new();
+        vm.write(0, 0x0C);
+
+        vm.c = 100;
+        vm.pc = 0;
+        vm.step();
+        assert_eq!(vm.c, 101);
+        assert_eq!(vm.f, 0);
+
+        vm.c = 255;
+        vm.pc = 0;
+        vm.step();
+        assert_eq!(vm.c, 0);
+        assert_eq!(vm.f, Z_BIT);
     }
 }
