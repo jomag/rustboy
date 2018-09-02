@@ -105,123 +105,123 @@ impl VM {
             0x01 => {
                 let hi = self.read(addr + 1);
                 let lo = self.read(addr + 2);
-                return format!("LD  BC, ${:02X}{:02X}", hi, lo);
+                format!("LD  BC, ${:02X}{:02X}", hi, lo)
             }
-            0x04 => { return "INC  B".to_string(); }
-            0x05 => { return "DEC  B".to_string(); }
-            0x06 => { return format!("LD   B, ${:02X}", self.read(addr + 1)); }
-            0x0C => { return "INC  C".to_string(); }
+            0x04 => { "INC  B".to_string() }
+            0x05 => { "DEC  B".to_string() }
+            0x06 => { format!("LD   B, ${:02X}", self.read(addr + 1)) }
+            0x0C => { "INC  C".to_string() }
 
             0x18 => {
                 let rel = self.read_i8(addr + 1);
                 let abs = add_i8_to_u16(addr + 2, rel);
-                return format!("JR   {}  ; jump to 0x{:04X}", rel, abs);
+                format!("JR   {}  ; jump to 0x{:04X}", rel, abs)
             }
 
-            0x1C => { return "INC  E".to_string(); }
-            0x1E => { return format!("LD   E, ${:02X}", self.read(addr + 1)); }
+            0x1C => { "INC  E".to_string() }
+            0x1E => { format!("LD   E, ${:02X}", self.read(addr + 1)) }
 
-            0x22 => { return "LD   (HL+), A".to_string(); }
-            0x23 => { return "INC  HL".to_string(); }
+            0x22 => { "LD   (HL+), A".to_string() }
+            0x23 => { "INC  HL".to_string() }
 
             0x28 => {
                 let rel = self.read_i8(addr + 1);
                 let abs = add_i8_to_u16(addr + 2, rel);
-                return format!("JR   Z, {}        ; jump to 0x{:04X}", rel, abs);
+                format!("JR   Z, {}        ; jump to 0x{:04X}", rel, abs)
             }
 
-            0x2C => { return "INC  L".to_string(); }
-            0x3C => { return "INC  A".to_string(); }
+            0x2C => { "INC  L".to_string() }
+            0x3C => { "INC  A".to_string() }
 
-            0x0D => { return "DEC  C".to_string(); }
-            0x1D => { return "DEC  E".to_string(); }
-            0x2D => { return "DEC  L".to_string(); }
-            0x2E => { return format!("LD   L, ${:02X}", self.read(addr + 1)); }
-            0x3D => { return "DEC  A".to_string(); }
-            0x4F => { return "LD   C, A".to_string(); }
+            0x0D => { "DEC  C".to_string() }
+            0x1D => { "DEC  E".to_string() }
+            0x2D => { "DEC  L".to_string() }
+            0x2E => { format!("LD   L, ${:02X}", self.read(addr + 1)) }
+            0x3D => { "DEC  A".to_string() }
+            0x4F => { "LD   C, A".to_string() }
 
             0x0E => {
-                return format!("LD   C, ${:02X}", self.read(addr + 1));
+                format!("LD   C, ${:02X}", self.read(addr + 1))
             }
 
             0x11 => {
                 let lo = self.read(addr + 1);
                 let hi = self.read(addr + 2);
-                return format!("LD   DE, ${:02X}{:02X}", hi, lo);
+                format!("LD   DE, ${:02X}{:02X}", hi, lo)
             }
-            0x13 => { return "INC  DE".to_string(); }
-            0x15 => { return "DEC  D".to_string(); }
-            0x16 => { return format!("LD   D, ${:02X}", self.read(addr + 1)); }
-            0x17 => { return "RLA".to_string(); }
-            0x1A => { return "LD   A, (DE)".to_string(); }
+            0x13 => { "INC  DE".to_string() }
+            0x15 => { "DEC  D".to_string() }
+            0x16 => { format!("LD   D, ${:02X}", self.read(addr + 1)) }
+            0x17 => { "RLA".to_string() }
+            0x1A => { "LD   A, (DE)".to_string() }
 
             0x20 => {
                 let rel = self.read_i8(addr + 1);
                 let abs = add_i8_to_u16(addr + 2, rel);
-                return format!("JR   NZ, {}    ; jump to 0x{:04X}", rel, abs);
+                format!("JR   NZ, {}    ; jump to 0x{:04X}", rel, abs)
             }
 
             0x21 => {
                 let lo = self.read(addr + 1);
                 let hi = self.read(addr + 2);
-                return format!("LD   HL, ${:02X}{:02X}", hi, lo);
+                format!("LD   HL, ${:02X}{:02X}", hi, lo)
             }
 
-            0x24 => { return "INC  H".to_string(); }
+            0x24 => { "INC  H".to_string() }
 
             0x31 => {
                 let lo = self.read(addr + 1);
                 let hi = self.read(addr + 2);
-                return format!("LD   SP, ${:02X}{:02X}", hi, lo);
+                format!("LD   SP, ${:02X}{:02X}", hi, lo)
             }
 
-            0x32 => { return "LDD  (HL), A".to_string(); }
-            0x3E => { return format!("LD   A, ${:02X}", self.read(addr + 1)); }
-            0x57 => { return "LD   D, A".to_string(); }
-            0x67 => { return "LD   H, A".to_string(); }
+            0x32 => { "LDD  (HL), A".to_string() }
+            0x3E => { format!("LD   A, ${:02X}", self.read(addr + 1)) }
+            0x57 => { "LD   D, A".to_string() }
+            0x67 => { "LD   H, A".to_string() }
 
-            0xE0 => { return format!("LD   ($FF00+${:02X}), A", self.read(addr + 1)); }
-            0xE2 => { return "LD   ($FF00+C), A".to_string(); }
-            0x77 => { return "LD   (HL), A".to_string(); }
-            0x78 => { return "LD   A, B".to_string(); }
-            0x7B => { return "LD   A, E".to_string(); }
-            0x7C => { return "LD   A, H".to_string(); }
-            0x7D => { return "LD   A, L".to_string(); }
+            0xE0 => { format!("LD   ($FF00+${:02X}), A", self.read(addr + 1)) }
+            0xE2 => { "LD   ($FF00+C), A".to_string() }
+            0x77 => { "LD   (HL), A".to_string() }
+            0x78 => { "LD   A, B".to_string() }
+            0x7B => { "LD   A, E".to_string() }
+            0x7C => { "LD   A, H".to_string() }
+            0x7D => { "LD   A, L".to_string() }
 
-            0x86 => { return "ADD  A, (HL)".to_string(); }
+            0x86 => { "ADD  A, (HL)".to_string() }
 
-            0x90 => { return "SUB  B".to_string(); }
+            0x90 => { "SUB  B".to_string() }
 
-            0xA8 => { return "XOR  B".to_string(); }
-            0xA9 => { return "XOR  C".to_string(); }
-            0xAA => { return "XOR  D".to_string(); }
-            0xAB => { return "XOR  E".to_string(); }
-            0xAC => { return "XOR  H".to_string(); }
-            0xAD => { return "XOR  L".to_string(); }
-            0xAF => { return "XOR  A".to_string(); }
+            0xA8 => { "XOR  B".to_string() }
+            0xA9 => { "XOR  C".to_string() }
+            0xAA => { "XOR  D".to_string() }
+            0xAB => { "XOR  E".to_string() }
+            0xAC => { "XOR  H".to_string() }
+            0xAD => { "XOR  L".to_string() }
+            0xAF => { "XOR  A".to_string() }
 
-            0xBE => { return "CP   (HL)".to_string(); }
+            0xBE => { "CP   (HL)".to_string() }
 
-            0xC1 => { return "POP  BC".to_string(); }
-            0xC4 => { return format!("CALL  NZ, ${:04X}", self.read_u16(addr + 1)); }
-            0xC5 => { return "PUSH BC".to_string(); }
-            0xC9 => { return "RET".to_string(); }
+            0xC1 => { "POP  BC".to_string() }
+            0xC4 => { format!("CALL  NZ, ${:04X}", self.read_u16(addr + 1)) }
+            0xC5 => { "PUSH BC".to_string() }
+            0xC9 => { "RET".to_string() }
 
             0xCB => {
                 let op2 = self.read(addr + 1);
                 match op2 {
-                    0x11 => { return "RL   C".to_string(); }
-                    0x7C => { return "BIT 7, h".to_string(); }
+                    0x11 => { "RL   C".to_string() }
+                    0x7C => { "BIT 7, h".to_string() }
                     _ => {
                         panic!("invalid instruction op code: 0x{:02X}{:02X}", op, op2);
                     }
                 }
             }
 
-            0xCD => { return format!("CALL ${:04X}", self.read_u16(addr + 1)); }
-            0xEA => { return format!("LD   (${:04X}), A", self.read_u16(addr + 1)); }
-            0xF0 => { return format!("LD   A, ($FF00+${:02X})", self.read(addr + 1)); }
-            0xFE => { return format!("CP   ${:02X}", self.read(addr + 1)); }
+            0xCD => { format!("CALL ${:04X}", self.read_u16(addr + 1)) }
+            0xEA => { format!("LD   (${:04X}), A", self.read_u16(addr + 1)) }
+            0xF0 => { format!("LD   A, ($FF00+${:02X})", self.read(addr + 1)) }
+            0xFE => { format!("CP   ${:02X}", self.read(addr + 1)) }
 
             _ => {
                 panic!("invalid instruction op code at 0x{:04X}: 0x{:02X}", addr, op);
