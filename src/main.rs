@@ -117,6 +117,11 @@ impl VM {
         }
     }
 
+    fn reg_af(&self) -> u16 {
+        // Return 16-bit value of registers A and F
+        return (self.a as u16) << 8 | self.f as u16;
+    }
+
     fn reg_bc(&self) -> u16 {
         // Return 16-bit value of registers B and C
         return (self.b as u16) << 8 | self.c as u16;
@@ -339,6 +344,17 @@ impl VM {
         return len;
     }
 
+    fn push(&mut self, value: u8) {
+        let sp = self.sp;
+        self.write(sp, value);
+        self.sp.wrapping_sub(1);
+    }
+
+    fn push16(&mut self, value: u16) {
+        self.push((value & 0xFF) as u8);
+        self.push((value >> 8) as u8);
+    }
+
     fn step(&mut self) {
         let pc = self.pc;
         let op: u8 = self.read(pc);
@@ -442,6 +458,21 @@ impl VM {
             0x2E => { self.l = self.read(self.pc + 1) }
             0x3E => { self.a = self.read(self.pc + 1) }
 
+            // LD n, (mm): load value from memory into register n
+            // Length: 1
+            // Flags: - - - -
+            0x0A => { self.a = self.read(self.reg_bc()) }
+            0x1A => { self.a = self.read(self.reg_de()) }
+
+            0xE0 => {
+                // LDH (n), A: Put A into memory address $FF00+n
+                // Length: 2
+                // Flags: - - - -
+                let n = self.read(self.pc + 1);
+                let a = self.a;
+                self.write(0xFF00 + n as u16, a);
+            }
+
             // LD (HL), n: store register value to memory at address HL
             // Length: 1
             // Flags: - - - -
@@ -480,6 +511,37 @@ impl VM {
                 let a = self.a;
                 self.write(hl, a);
             }
+
+            // CALL a16: push address of next instruction on stack
+            //           and jump to address a16
+            // Length: 3
+            // Flags: - - - -
+            0xCD => {
+                let nexti = self.pc + 3;
+                self.push16(nexti);
+                self.pc = self.read_u16(self.pc + 1);
+            }
+
+            // PUSH nn: push 16-bit register nn to stack
+            // Length: 1
+            // Flags: - - - -
+            0xC5 => {
+                let bc = self.reg_bc();
+                self.push16(bc);
+            }
+            0xD5 => {
+                let de = self.reg_de();
+                self.push16(de);
+            }
+            0xE5 => {
+                let hl = self.reg_hl();
+                self.push16(hl);
+            }
+            0xF5 => {
+                let af = self.reg_af();
+                self.push16(af);
+            }
+
 
             0xE2 => {
                 // LD ($FF00+C), A: put value of A in address 0xFF00 + C
