@@ -59,13 +59,10 @@ impl VM {
     fn bit_op(&mut self, bit: u8, value: u8) {
         // Test if bit in register is set
         // Flags: Z 0 1 -
-            println!("VALUE: {} BIT: {}", value, bit);
         if value & (1 << bit) == 0 {
-            println!("CASE 1");
             self.f &= !N_BIT;
             self.f |= Z_BIT | H_BIT;
         } else {
-            println!("CASE 2");
             self.f &= !(Z_BIT | N_BIT);
             self.f |= H_BIT;
         }
@@ -172,18 +169,18 @@ impl VM {
     }
 
     fn set_reg_bc(&mut self, value: u16) {
-        self.b = (value & 0xFF) as u8;
-        self.c = ((value >> 8) & 0xFF) as u8;
+        self.b = ((value >> 8) & 0xFF) as u8;
+        self.c = (value & 0xFF) as u8;
     }
 
     fn reg_de(&self) -> u16 {
         // Return 16-bit value of registers D and E
-        return (self.e as u16) << 8 | self.e as u16;
+        return (self.d as u16) << 8 | self.e as u16;
     }
 
     fn set_reg_de(&mut self, value: u16) {
-        self.d = (value & 0xFF) as u8;
-        self.e = ((value >> 8) & 0xFF) as u8;
+        self.d = ((value >> 8) & 0xFF) as u8;
+        self.e = (value & 0xFF) as u8;
     }
 
     fn reg_hl(&self) -> u16 {
@@ -192,8 +189,8 @@ impl VM {
     }
 
     fn set_reg_hl(&mut self, value: u16) {
-        self.h = (value & 0xFF) as u8;
-        self.l = ((value >> 8) & 0xFF) as u8;
+        self.h = ((value >> 8) & 0xFF) as u8;
+        self.l = (value & 0xFF) as u8;
     }
 
     fn read(&self, addr: u16) -> u8 {
@@ -417,16 +414,19 @@ impl VM {
     }
 
     fn push16(&mut self, value: u16) {
-        let sp = self.sp;
-        self.write(sp, )
         self.push((value >> 8) as u8);
         self.push((value & 0xFF) as u8);
     }
 
+    fn pop(&mut self) -> u8 {
+        let v = self.read(self.sp);
+        self.sp += 1;
+        v
+    }
+
     fn pop16(&mut self) -> u16{
-        let lo = self.read(self.sp);
-        let hi = self.read(self.sp + 1);
-        self.sp += 2;
+        let lo = self.pop();
+        let hi = self.pop();
         return (((hi as u16) << 8) | lo as u16) as u16;
     }
 
@@ -681,7 +681,8 @@ impl VM {
             // Cycles: 16
             // Flags: - - - -
             0xC9 => {
-                self.pc = self.pop16();
+                // Compensate for length of current instruction
+                self.pc = self.pop16() - 1;
             }
 
 
@@ -748,6 +749,18 @@ impl VM {
                 self.d = self.read(self.pc + 2);
             }
 
+            0x18 => {
+                // JR d8: relative jump
+                // Length: 2
+                // Cycles: 12
+                let offs = self.read_i8(self.pc + 1);
+                if offs >= 0 {
+                    self.pc = self.pc.wrapping_add(offs as u16);
+                } else {
+                    self.pc = self.pc.wrapping_sub(-offs as u16);
+                }
+            }
+
             0x20 => {
                 // JR NZ, d8: jump d8 relative to PC if Z is reset
                 // Length: 2
@@ -755,6 +768,21 @@ impl VM {
                 // Flags: - - - -
                 let offs = self.read_i8(self.pc + 1);
                 if !self.z_flag() {
+                    if offs >= 0 {
+                        self.pc = self.pc.wrapping_add(offs as u16);
+                    } else {
+                        self.pc = self.pc.wrapping_sub(-offs as u16);
+                    }
+                }
+            }
+
+            0x28 => {
+                // JR Z, d8: jump d8 relative to PC if Z is set
+                // Length: 2
+                // Cycles: 12/8
+                // Flags: - - - -
+                let offs = self.read_i8(self.pc + 1);
+                if self.z_flag() {
                     if offs >= 0 {
                         self.pc = self.pc.wrapping_add(offs as u16);
                     } else {
@@ -857,6 +885,21 @@ impl VM {
                 self.set_reg_hl(hl + 1);
             }
 
+            // LD (a16), A: store value of A at address a16
+            // Length: 3
+            // Cycles: 16
+            // Flags: - - - -
+            0xEA => {
+                let addr = self.read_u16(self.pc + 1);
+                let val = self.a;
+                self.write(addr, val);
+            }
+
+            // 
+            0xF0 => {
+                
+            }
+
             // CP u8: Compare A with u8. Same as SUB but throw away result.
             // Length: 2
             // Cycles: 8
@@ -944,21 +987,18 @@ fn main() {
 
     let mut breakpoints: Vec<u16> = Vec::new();
     let mut stepping = true;
+    let mut last_command = "".to_string();
 
     breakpoints.push(0x000C);
-    breakpoints.push(0x0095);
+    // breakpoints.push(0x0095);
+    breakpoints.push(0x0034);
+    breakpoints.push(0x0040);
+    breakpoints.push(0x0051);
 
     loop {
         if breakpoints.contains(&vm.pc) {
             println!("- at breakpoint (PC: 0x{:04X})", vm.pc);
             stepping = true;
-    vm.push16(0x1234);
-    vm.push16(0xDEAD);
-    vm.push16(0xBEEF);
-    println!("1 - {:x}", vm.pop16());
-    println!("2 - {:x}", vm.pop16());
-    println!("3 - {:x}", vm.pop16());
-
         }
 
         if stepping {
@@ -972,7 +1012,14 @@ fn main() {
                 stdout().flush().ok();
                 let mut cmd_s: String = String::new();
                 stdin().read_line(&mut cmd_s).expect("invalid command");
-                let mut args: Vec<_> = cmd_s.split_whitespace().collect();
+
+                if cmd_s == "" {
+                    cmd_s = last_command.clone();
+                } else {
+                    last_command = cmd_s.clone();
+                }
+
+                let args: Vec<_> = cmd_s.split_whitespace().collect();
 
                 match args[0] {
                     "c" => { stepping = false; break; },
@@ -984,6 +1031,7 @@ fn main() {
                         }
                         list_offset = print_listing(&vm, list_offset, 10);
                     }
+                    "" => {}
                     _ => { println!("invalid command!"); }
                 }
             }
