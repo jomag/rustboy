@@ -5,3 +5,4 @@ authors = ["Jonatan Magnusson <jonatan.magnusson@gmail.com>"]
 
 [dependencies]
 ctrlc = "3.1.1"
+sdl2 = "0.31.0"

@@ -1,11 +1,14 @@
 
 extern crate ctrlc;
+extern crate sdl2;
 
 // use std::io;
 use std::io::prelude::*;
 use std::fs::File;
 use std::sync::Arc;
 use std::sync::atomic::{ AtomicBool, Ordering };
+
+mod ui;
 
 const Z_BIT:  u8 = 1 << 7;   // zero flag
 const N_BIT:  u8 = 1 << 6;   // subtract flag
@@ -976,6 +979,7 @@ fn print_listing(vm: &VM, addr: u16, line_count: i32) -> u16 {
     return a;
 }
 
+
 fn main() {
     use std::io::stdin;
     use std::io::stdout;
@@ -992,6 +996,8 @@ fn main() {
     let mut breakpoints: Vec<u16> = Vec::new();
     let mut stepping = true;
     let mut last_command = "".to_string();
+
+    let gui = ui::UI::new();
 
     breakpoints.push(0x000C);
     // breakpoints.push(0x0095);
