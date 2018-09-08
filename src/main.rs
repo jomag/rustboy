@@ -1,7 +1,11 @@
 
+extern crate ctrlc;
+
 // use std::io;
 use std::io::prelude::*;
 use std::fs::File;
+use std::sync::Arc;
+use std::sync::atomic::{ AtomicBool, Ordering };
 
 const Z_BIT:  u8 = 1 << 7;   // zero flag
 const N_BIT:  u8 = 1 << 6;   // subtract flag
@@ -995,7 +999,19 @@ fn main() {
     breakpoints.push(0x0040);
     breakpoints.push(0x0051);
 
+    let ctrlc_event = Arc::new(AtomicBool::new(false));
+    let ctrlc_event_clone = ctrlc_event.clone();
+
+    ctrlc::set_handler(move || {
+        println!("Ctrl-C: breaking execution");
+        ctrlc_event_clone.store(true, Ordering::SeqCst)
+    }).expect("failed to setup ctrl-c handler");
+
     loop {
+        if ctrlc_event.load(Ordering::SeqCst) {
+            stepping = true;
+        }
+
         if breakpoints.contains(&vm.pc) {
             println!("- at breakpoint (PC: 0x{:04X})", vm.pc);
             stepping = true;

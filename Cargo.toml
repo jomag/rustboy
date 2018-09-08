@@ -4,3 +4,4 @@ version = "0.1.0"
 authors = ["Jonatan Magnusson <jonatan.magnusson@gmail.com>"]
 
 [dependencies]
+ctrlc = "3.1.1"
