@@ -3,7 +3,7 @@ extern crate ctrlc;
 extern crate sdl2;
 
 // use std::io;
-use std::time::Duration;
+// use std::time::Duration;
 use std::io::prelude::*;
 use std::fs::File;
 use std::sync::Arc;
@@ -14,24 +14,15 @@ use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 
 mod ui;
+mod registers;
 
 const Z_BIT:  u8 = 1 << 7;   // zero flag
 const N_BIT:  u8 = 1 << 6;   // subtract flag
 const H_BIT:  u8 = 1 << 5;   // half carry flag
 const C_BIT:  u8 = 1 << 4;   // carry flag
 
-
 struct VM {
-    a: u8,
-    b: u8,
-    c: u8,
-    d: u8,
-    e: u8,
-    f: u8,
-    h: u8,
-    l: u8,
-    sp: u16,
-    pc: u16,
+    reg: registers::Registers,
     mem: [u8; 0x10000],
     bootstrap: [u8; 0x100]
 }
@@ -47,24 +38,22 @@ fn add_i8_to_u16(a: u16, b: i8) -> u16 {
 impl VM {
     fn new() -> Self {
         VM {
-            a: 0, b: 0, c: 0, d: 0,
-            e: 0, f: 0, h: 0, l: 0,
-            sp: 0, pc: 0,
+            reg: registers::Registers::new(),
             mem: [0; 0x10000],
             bootstrap: [0; 0x100]
         }
     }
 
     fn z_flag(&mut self) -> bool {
-        (self.f & Z_BIT) != 0
+        (self.reg.f & Z_BIT) != 0
     }
 
     fn xor_op(&mut self, a: u8, value: u8) -> u8 {
         // Flags: Z 0 0 0
         let res = a ^ value;
-        self.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
+        self.reg.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
         if res == 0 {
-            self.f |= Z_BIT;
+            self.reg.f |= Z_BIT;
         }
         res
     }
@@ -73,11 +62,11 @@ impl VM {
         // Test if bit in register is set
         // Flags: Z 0 1 -
         if value & (1 << bit) == 0 {
-            self.f &= !N_BIT;
-            self.f |= Z_BIT | H_BIT;
+            self.reg.f &= !N_BIT;
+            self.reg.f |= Z_BIT | H_BIT;
         } else {
-            self.f &= !(Z_BIT | N_BIT);
-            self.f |= H_BIT;
+            self.reg.f &= !(Z_BIT | N_BIT);
+            self.reg.f |= H_BIT;
         }
     }
 
@@ -86,17 +75,17 @@ impl VM {
         let new_value = if value == 255 { 0 } else { value + 1 };
 
         if new_value == 0 {
-            self.f |= Z_BIT;
+            self.reg.f |= Z_BIT;
         } else {
-            self.f &= !Z_BIT;
+            self.reg.f &= !Z_BIT;
         }
 
-        self.f &= !N_BIT;
+        self.reg.f &= !N_BIT;
 
         if value < 255 && ((value & 0xF) + 1) & 0x10 != 0 {
-            self.f |= H_BIT;
+            self.reg.f |= H_BIT;
         } else {
-            self.f &= !H_BIT;
+            self.reg.f &= !H_BIT;
         }
 
         new_value
@@ -111,10 +100,10 @@ impl VM {
         let new_value = if value == 0 { 255 } else { value - 1 };
 
         if new_value == 0 {
-            self.f |= Z_BIT | N_BIT;
+            self.reg.f |= Z_BIT | N_BIT;
         } else {
-            self.f &= !Z_BIT;
-            self.f |= N_BIT;
+            self.reg.f &= !Z_BIT;
+            self.reg.f |= N_BIT;
         }
 
         // FIXME: handle half-carry flag
@@ -123,9 +112,9 @@ impl VM {
 
     fn set_carry(&mut self, en: bool) {
         if en {
-            self.f |= C_BIT;
+            self.reg.f |= C_BIT;
         } else {
-            self.f &= !C_BIT;
+            self.reg.f &= !C_BIT;
         }
     }
 
@@ -134,76 +123,67 @@ impl VM {
         // Flags: Z 0 0 C
         let mut t = (value as u32) << 1;
 
-        if self.f & C_BIT != 0 {
+        if self.reg.f & C_BIT != 0 {
             t |= 1;
         }
 
         if t & 256 == 0 {
-            self.f &= !C_BIT;
+            self.reg.f &= !C_BIT;
         } else {
-            self.f |= C_BIT;
+            self.reg.f |= C_BIT;
         }
 
         if t == 0 {
-            self.f |= Z_BIT;
+            self.reg.f |= Z_BIT;
         } else {
-            self.f &= Z_BIT;
+            self.reg.f &= Z_BIT;
         }
 
-        self.f &= !(N_BIT | H_BIT);
+        self.reg.f &= !(N_BIT | H_BIT);
         return (t & 0xFF) as u8;
-    }
-
-    fn update_flags(&mut self, from: u8, to: u8) -> u8 {
-        if to == 0 {
-            self.f |= Z_BIT;
-        } else {
-            self.f &= !Z_BIT;
-        }
-        to
     }
 
     fn set_z_flag(&mut self, val: bool) {
         if val {
-            self.f |= Z_BIT;
+            self.reg.f |= Z_BIT;
         } else {
-           self.f &= !Z_BIT;
+           self.reg.f &= !Z_BIT;
         }
     }
 
     fn reg_af(&self) -> u16 {
         // Return 16-bit value of registers A and F
-        return (self.a as u16) << 8 | self.f as u16;
+        return (self.reg.a as u16) << 8 | self.reg.f as u16;
     }
 
     fn reg_bc(&self) -> u16 {
         // Return 16-bit value of registers B and C
-        return (self.b as u16) << 8 | self.c as u16;
+        return (self.reg.b as u16) << 8 | self.reg.c as u16;
     }
 
     fn set_reg_bc(&mut self, value: u16) {
-        self.b = ((value >> 8) & 0xFF) as u8;
-        self.c = (value & 0xFF) as u8;
+        self.reg.b = ((value >> 8) & 0xFF) as u8;
+        self.reg.c = (value & 0xFF) as u8;
     }
 
     fn reg_de(&self) -> u16 {
         // Return 16-bit value of registers D and E
-        return (self.d as u16) << 8 | self.e as u16;
+        return (self.reg.d as u16) << 8 | self.reg.e as u16;
     }
 
     fn set_reg_de(&mut self, value: u16) {
-        self.d = ((value >> 8) & 0xFF) as u8;
-        self.e = (value & 0xFF) as u8;
+        self.reg.d = ((value >> 8) & 0xFF) as u8;
+        self.reg.e = (value & 0xFF) as u8;
     }
 
     fn reg_hl(&self) -> u16 {
         // Return 16-bit value of registers H and L
-        return (self.h as u16) << 8 | self.l as u16;
+        return (self.reg.h as u16) << 8 | self.reg.l as u16;
     }
 
     fn set_reg_hl(&mut self, value: u16) {
-        self.h = ((value >> 8) & 0xFF) as u8;
-        self.l = (value & 0xFF) as u8;
+        self.reg.h = ((value >> 8) & 0xFF) as u8;
+        self.reg.l = (value & 0xFF) as u8;
     }
 
     fn read(&self, addr: u16) -> u8 {
@@ -231,15 +211,15 @@ impl VM {
     }
 
     fn print_state(&mut self) {
-        print!("  A: 0x{:02X} B: 0x{:02X} C: 0x{:02X} D: 0x{:02X} ", self.a, self.b, self.c, self.d);
-        println!("E: 0x{:02X} F: 0x{:02X} H: 0x{:02X} L: 0x{:02X}", self.e, self.f, self.h, self.l);
-        println!("  SP: 0x{:04X} PC: 0x{:04X}", self.sp, self.pc);
+        print!("  A: 0x{:02X} B: 0x{:02X} C: 0x{:02X} D: 0x{:02X} ", self.reg.a, self.reg.b, self.reg.c, self.reg.d);
+        println!("E: 0x{:02X} F: 0x{:02X} H: 0x{:02X} L: 0x{:02X}", self.reg.e, self.reg.f, self.reg.h, self.reg.l);
+        println!("  SP: 0x{:04X} PC: 0x{:04X}", self.reg.sp, self.reg.pc);
         println!(
             "  Flags: Z={}, N={}, H={}, C={}",
-            if (self.f & Z_BIT) == 0 { 0 } else { 1 },
-            if (self.f & N_BIT) == 0 { 0 } else { 1 },
-            if (self.f & H_BIT) == 0 { 0 } else { 1 },
-            if (self.f & C_BIT) == 0 { 0 } else { 1 },
+            if (self.reg.f & Z_BIT) == 0 { 0 } else { 1 },
+            if (self.reg.f & N_BIT) == 0 { 0 } else { 1 },
+            if (self.reg.f & H_BIT) == 0 { 0 } else { 1 },
+            if (self.reg.f & C_BIT) == 0 { 0 } else { 1 },
         )
     }
 
@@ -323,8 +303,6 @@ impl VM {
                 format!("LD   SP, ${:02X}{:02X}", hi, lo)
             }
             0x32 => { "LDD  (HL), A".to_string() }
-            0x3D => { "DEC  A".to_string() }
-            0x3E => { format!("LD   A, ${:02X}", self.read(addr + 1)) }
 
             0x4F => { "LD   C, A".to_string() }
 
@@ -421,9 +399,9 @@ impl VM {
     }
 
     fn push(&mut self, value: u8) {
-        let sp = self.sp - 1;
+        let sp = self.reg.sp - 1;
         self.write(sp, value);
-        self.sp = sp;
+        self.reg.sp = sp;
     }
 
     fn push16(&mut self, value: u16) {
@@ -432,8 +410,8 @@ impl VM {
     }
 
     fn pop(&mut self) -> u8 {
-        let v = self.read(self.sp);
-        self.sp += 1;
+        let v = self.read(self.reg.sp);
+        self.reg.sp += 1;
         v
     }
 
@@ -444,7 +422,7 @@ impl VM {
     }
 
     fn step(&mut self) {
-        let pc = self.pc;
+        let pc = self.reg.pc;
         let op: u8 = self.read(pc);
         let length = self.op_length(pc);
 
@@ -453,8 +431,8 @@ impl VM {
                 // LD BC, d16: load immediate (d16) into BC
                 // Length: 3
                 // Flags: - - - -
-                self.c = self.read(self.pc + 1);
-                self.b = self.read(self.pc + 2);
+                self.reg.c = self.read(self.reg.pc + 1);
+                self.reg.b = self.read(self.reg.pc + 2);
             }
 
             // INC n: increment register n
@@ -463,38 +441,38 @@ impl VM {
             // Flags: Z 0 H -
             0x04 => {
                 // INC B
-                let b = self.b;
-                self.b = self.inc_op(b);
+                let b = self.reg.b;
+                self.reg.b = self.inc_op(b);
             }
             0x0C => {
                 // INC C
-                let c = self.c;
-                self.c = self.inc_op(c);
+                let c = self.reg.c;
+                self.reg.c = self.inc_op(c);
             }
             0x14 => {
                 // INC D
-                let d = self.d;
-                self.d = self.inc_op(d);
+                let d = self.reg.d;
+                self.reg.d = self.inc_op(d);
             }
             0x1C => {
                 // INC E
-                let e = self.e;
-                self.e = self.inc_op(e);
+                let e = self.reg.e;
+                self.reg.e = self.inc_op(e);
             }
             0x24 => {
                 // INC H
-                let h = self.h;
-                self.h = self.inc_op(h);
+                let h = self.reg.h;
+                self.reg.h = self.inc_op(h);
             }
             0x2C => {
                 // INC L
-                let l = self.l;
-                self.l = self.inc_op(l);
+                let l = self.reg.l;
+                self.reg.l = self.inc_op(l);
             }
             0x3C => {
                 // INC A
-                let a = self.a;
-                self.a = self.inc_op(a);
+                let a = self.reg.a;
+                self.reg.a = self.inc_op(a);
             }
 
             // INC nn: increments content of register pair nn by 1
@@ -521,8 +499,8 @@ impl VM {
             }
             0x33 => {
                 // INC SP
-                let sp = self.sp;
-                self.sp = self.inc16_op(sp);
+                let sp = self.reg.sp;
+                self.reg.sp = self.inc16_op(sp);
             }
 
             // DEC n: decrement register n
@@ -530,123 +508,123 @@ impl VM {
             // Flags: Z 1 H -
             0x05 => {
                 // DEC B
-                let b = self.b;
-                self.b = self.dec_op(b);
+                let b = self.reg.b;
+                self.reg.b = self.dec_op(b);
             }
             0x0D => {
                 // DEC C
-                let c = self.c;
-                self.c = self.dec_op(c);
+                let c = self.reg.c;
+                self.reg.c = self.dec_op(c);
             }
             0x15 => {
                 // DEC D
-                let d = self.d;
-                self.d = self.dec_op(d);
+                let d = self.reg.d;
+                self.reg.d = self.dec_op(d);
             }
             0x1D => {
                 // DEC E
-                let e = self.e;
-                self.e = self.dec_op(e);
+                let e = self.reg.e;
+                self.reg.e = self.dec_op(e);
             }
             0x25 => {
                 // DEC H
-                let h = self.h;
-                self.h = self.dec_op(h);
+                let h = self.reg.h;
+                self.reg.h = self.dec_op(h);
             }
             0x2D => {
                 // DEC L
-                let l = self.l;
-                self.l = self.dec_op(l);
+                let l = self.reg.l;
+                self.reg.l = self.dec_op(l);
             }
             0x3D => {
                 // DEC A
-                let a = self.a;
-                self.a = self.dec_op(a);
+                let a = self.reg.a;
+                self.reg.a = self.dec_op(a);
             }
 
             // LD n, d: load immediate into register n
             // Length: 2
             // Flags: - - - -
-            0x06 => { self.b = self.read(self.pc + 1) }
-            0x0E => { self.c = self.read(self.pc + 1) }
-            0x16 => { self.d = self.read(self.pc + 1) }
-            0x1E => { self.e = self.read(self.pc + 1) }
-            0x26 => { self.h = self.read(self.pc + 1) }
-            0x2E => { self.l = self.read(self.pc + 1) }
-            0x3E => { self.a = self.read(self.pc + 1) }
+            0x06 => { self.reg.b = self.read(self.reg.pc + 1) }
+            0x0E => { self.reg.c = self.read(self.reg.pc + 1) }
+            0x16 => { self.reg.d = self.read(self.reg.pc + 1) }
+            0x1E => { self.reg.e = self.read(self.reg.pc + 1) }
+            0x26 => { self.reg.h = self.read(self.reg.pc + 1) }
+            0x2E => { self.reg.l = self.read(self.reg.pc + 1) }
+            0x3E => { self.reg.a = self.read(self.reg.pc + 1) }
 
             // LD n, m: load value of register m into register n
             // Length: 1
             // Cycles: 4
             // Flags: - - - -
             0x7F => {}                   // LD A,A
-            0x78 => { self.a = self.b }  // LD A,B
-            0x79 => { self.a = self.c }  // LD A,C
-            0x7A => { self.a = self.d }  // LD A,D
-            0x7B => { self.a = self.e }  // LD A,E
-            0x7C => { self.a = self.h }  // LD A,H
-            0x7D => { self.a = self.l }  // LD A,L
+            0x78 => { self.reg.a = self.reg.b }  // LD A,B
+            0x79 => { self.reg.a = self.reg.c }  // LD A,C
+            0x7A => { self.reg.a = self.reg.d }  // LD A,D
+            0x7B => { self.reg.a = self.reg.e }  // LD A,E
+            0x7C => { self.reg.a = self.reg.h }  // LD A,H
+            0x7D => { self.reg.a = self.reg.l }  // LD A,L
 
-            0x47 => { self.b = self.a }  // LD B,A
+            0x47 => { self.reg.b = self.reg.a }  // LD B,A
             0x40 => {}                   // LD B,B
-            0x41 => { self.b = self.c }  // LD B,C
-            0x42 => { self.b = self.d }  // LD B,D
-            0x43 => { self.b = self.e }  // LD B,E
-            0x44 => { self.b = self.h }  // LD B,H
-            0x45 => { self.b = self.l }  // LD B,L
+            0x41 => { self.reg.b = self.reg.c }  // LD B,C
+            0x42 => { self.reg.b = self.reg.d }  // LD B,D
+            0x43 => { self.reg.b = self.reg.e }  // LD B,E
+            0x44 => { self.reg.b = self.reg.h }  // LD B,H
+            0x45 => { self.reg.b = self.reg.l }  // LD B,L
 
-            0x4F => { self.c = self.a }  // LD C,A
-            0x48 => { self.c = self.b }  // LD C,B
+            0x4F => { self.reg.c = self.reg.a }  // LD C,A
+            0x48 => { self.reg.c = self.reg.b }  // LD C,B
             0x49 => {}                   // LD C,C
-            0x4A => { self.c = self.d }  // LD C,D
-            0x4B => { self.c = self.e }  // LD C,E
-            0x4C => { self.c = self.h }  // LD C,H
-            0x4D => { self.c = self.l }  // LD C,L
+            0x4A => { self.reg.c = self.reg.d }  // LD C,D
+            0x4B => { self.reg.c = self.reg.e }  // LD C,E
+            0x4C => { self.reg.c = self.reg.h }  // LD C,H
+            0x4D => { self.reg.c = self.reg.l }  // LD C,L
 
-            0x57 => { self.d = self.a }  // LD D,A
-            0x50 => { self.d = self.b }  // LD D,B
-            0x51 => { self.d = self.c }  // LD D,C
+            0x57 => { self.reg.d = self.reg.a }  // LD D,A
+            0x50 => { self.reg.d = self.reg.b }  // LD D,B
+            0x51 => { self.reg.d = self.reg.c }  // LD D,C
             0x52 => {}                   // LD D,D
-            0x53 => { self.d = self.e }  // LD D,E
-            0x54 => { self.d = self.h }  // LD D,H
-            0x55 => { self.d = self.l }  // LD D,L
+            0x53 => { self.reg.d = self.reg.e }  // LD D,E
+            0x54 => { self.reg.d = self.reg.h }  // LD D,H
+            0x55 => { self.reg.d = self.reg.l }  // LD D,L
 
-            0x5F => { self.e = self.a }  // LD E,A
-            0x58 => { self.e = self.b }  // LD E,B
-            0x59 => { self.e = self.c }  // LD E,C
-            0x5A => { self.e = self.d }  // LD E,D
+            0x5F => { self.reg.e = self.reg.a }  // LD E,A
+            0x58 => { self.reg.e = self.reg.b }  // LD E,B
+            0x59 => { self.reg.e = self.reg.c }  // LD E,C
+            0x5A => { self.reg.e = self.reg.d }  // LD E,D
             0x5B => {}                   // LD E,E
-            0x5C => { self.e = self.h }  // LD E,H
-            0x5D => { self.e = self.l }  // LD E,L
+            0x5C => { self.reg.e = self.reg.h }  // LD E,H
+            0x5D => { self.reg.e = self.reg.l }  // LD E,L
 
-            0x67 => { self.h = self.a }  // LD H,A
-            0x60 => { self.h = self.b }  // LD H,B
-            0x61 => { self.h = self.c }  // LD H,C
-            0x62 => { self.h = self.d }  // LD H,D
-            0x63 => { self.h = self.e }  // LD H,E
+            0x67 => { self.reg.h = self.reg.a }  // LD H,A
+            0x60 => { self.reg.h = self.reg.b }  // LD H,B
+            0x61 => { self.reg.h = self.reg.c }  // LD H,C
+            0x62 => { self.reg.h = self.reg.d }  // LD H,D
+            0x63 => { self.reg.h = self.reg.e }  // LD H,E
             0x64 => {}                   // LD H,H
-            0x65 => { self.h = self.l }  // LD H,L
+            0x65 => { self.reg.h = self.reg.l }  // LD H,L
 
-            0x6F => { self.l = self.a }  // LD L,A
-            0x68 => { self.l = self.b }  // LD L,B
-            0x69 => { self.l = self.c }  // LD L,C
-            0x6A => { self.l = self.d }  // LD L,D
-            0x6B => { self.l = self.e }  // LD L,E
-            0x6C => { self.l = self.h }  // LD L,H
+            0x6F => { self.reg.l = self.reg.a }  // LD L,A
+            0x68 => { self.reg.l = self.reg.b }  // LD L,B
+            0x69 => { self.reg.l = self.reg.c }  // LD L,C
+            0x6A => { self.reg.l = self.reg.d }  // LD L,D
+            0x6B => { self.reg.l = self.reg.e }  // LD L,E
+            0x6C => { self.reg.l = self.reg.h }  // LD L,H
             0x6D => {}                   // LD L,L
 
             // LD n, (mm): load value from memory into register n
             // Length: 1
             // Flags: - - - -
-            0x0A => { self.a = self.read(self.reg_bc()) }
-            0x1A => { self.a = self.read(self.reg_de()) }
+            0x0A => { self.reg.a = self.read(self.reg_bc()) }
+            0x1A => { self.reg.a = self.read(self.reg_de()) }
 
             0xE0 => {
                 // LDH (n), A: Put A into memory address $FF00+n
                 // Length: 2
                 // Flags: - - - -
-                let n = self.read(self.pc + 1);
-                let a = self.a;
+                let n = self.read(self.reg.pc + 1);
+                let a = self.reg.a;
                 self.write(0xFF00 + n as u16, a);
             }
 
@@ -655,37 +633,37 @@ impl VM {
             // Flags: - - - -
             0x70 => {
                 let hl = self.reg_hl();
-                let b = self.b;
+                let b = self.reg.b;
                 self.write(hl, b);
             }
             0x71 => {
                 let hl = self.reg_hl();
-                let c = self.c;
+                let c = self.reg.c;
                 self.write(hl, c);
             }
             0x72 => {
                 let hl = self.reg_hl();
-                let d = self.d;
+                let d = self.reg.d;
                 self.write(hl, d);
             }
             0x73 => {
                 let hl = self.reg_hl();
-                let e = self.e;
+                let e = self.reg.e;
                 self.write(hl, e);
             }
             0x74 => {
                 let hl = self.reg_hl();
-                let h = self.h;
+                let h = self.reg.h;
                 self.write(hl, h);
             }
             0x75 => {
                 let hl = self.reg_hl();
-                let l = self.l;
+                let l = self.reg.l;
                 self.write(hl, l);
             }
             0x77 => {
                 let hl = self.reg_hl();
-                let a = self.a;
+                let a = self.reg.a;
                 self.write(hl, a);
             }
 
@@ -695,7 +673,7 @@ impl VM {
             // Flags: - - - -
             0xC9 => {
                 // Compensate for length of current instruction
-                self.pc = self.pop16() - 1;
+                self.reg.pc = self.pop16() - 1;
             }
 
 
@@ -704,12 +682,12 @@ impl VM {
             // Length: 3
             // Flags: - - - -
             0xCD => {
-                let nexti = self.pc + 3;
+                let nexti = self.reg.pc + 3;
                 self.push16(nexti);
 
                 // Set PC to target address. Compensate
                 // for the length of the current instruction.
-                self.pc = self.read_u16(self.pc + 1) - 3;
+                self.reg.pc = self.read_u16(self.reg.pc + 1) - 3;
             }
 
             // PUSH nn: push 16-bit register nn to stack
@@ -748,8 +726,8 @@ impl VM {
                 // Length: 2
                 // Cycles: 8
                 // Flags: - - - -
-                let addr = 0xFF00 + self.c as u16;
-                let a = self.a;
+                let addr = 0xFF00 + self.reg.c as u16;
+                let a = self.reg.a;
                 self.write(addr, a);
             }
 
@@ -758,19 +736,19 @@ impl VM {
                 // Length: 3
                 // Cycles: 12
                 // Flags: - - - -
-                self.e = self.read(self.pc + 1);
-                self.d = self.read(self.pc + 2);
+                self.reg.e = self.read(self.reg.pc + 1);
+                self.reg.d = self.read(self.reg.pc + 2);
             }
 
             0x18 => {
                 // JR d8: relative jump
                 // Length: 2
                 // Cycles: 12
-                let offs = self.read_i8(self.pc + 1);
+                let offs = self.read_i8(self.reg.pc + 1);
                 if offs >= 0 {
-                    self.pc = self.pc.wrapping_add(offs as u16);
+                    self.reg.pc = self.reg.pc.wrapping_add(offs as u16);
                 } else {
-                    self.pc = self.pc.wrapping_sub(-offs as u16);
+                    self.reg.pc = self.reg.pc.wrapping_sub(-offs as u16);
                 }
             }
 
@@ -779,12 +757,12 @@ impl VM {
                 // Length: 2
                 // Cycles: 12/8
                 // Flags: - - - -
-                let offs = self.read_i8(self.pc + 1);
+                let offs = self.read_i8(self.reg.pc + 1);
                 if !self.z_flag() {
                     if offs >= 0 {
-                        self.pc = self.pc.wrapping_add(offs as u16);
+                        self.reg.pc = self.reg.pc.wrapping_add(offs as u16);
                     } else {
-                        self.pc = self.pc.wrapping_sub(-offs as u16);
+                        self.reg.pc = self.reg.pc.wrapping_sub(-offs as u16);
                     }
                 }
             }
@@ -794,12 +772,12 @@ impl VM {
                 // Length: 2
                 // Cycles: 12/8
                 // Flags: - - - -
-                let offs = self.read_i8(self.pc + 1);
+                let offs = self.read_i8(self.reg.pc + 1);
                 if self.z_flag() {
                     if offs >= 0 {
-                        self.pc = self.pc.wrapping_add(offs as u16);
+                        self.reg.pc = self.reg.pc.wrapping_add(offs as u16);
                     } else {
-                        self.pc = self.pc.wrapping_sub(-offs as u16);
+                        self.reg.pc = self.reg.pc.wrapping_sub(-offs as u16);
                     }
                 }
             }
@@ -809,8 +787,8 @@ impl VM {
                 // Length: 3
                 // Cycles: 12
                 // Flags: - - - -
-                self.l = self.read(self.pc + 1);
-                self.h = self.read(self.pc + 2);
+                self.reg.l = self.read(self.reg.pc + 1);
+                self.reg.h = self.read(self.reg.pc + 2);
             }
 
             0x31 => {
@@ -818,7 +796,7 @@ impl VM {
                 // Length: 3
                 // Cycles: 12
                 // Flags: - - - -
-                self.sp = self.read_u16(self.pc + 1);
+                self.reg.sp = self.read_u16(self.reg.pc + 1);
             }
 
             0x32 => {
@@ -826,12 +804,12 @@ impl VM {
                 // Length: 1
                 // Cycles: 8
                 // Flags: - - - -
-                let hl: u16 = ((self.h as u16) << 8) | (self.l as u16);
-                let a = self.a;
+                let hl: u16 = ((self.reg.h as u16) << 8) | (self.reg.l as u16);
+                let a = self.reg.a;
                 self.write(hl, a);
                 let hl = hl - 1;
-                self.h = (hl >> 8) as u8;
-                self.l = (hl & 0xFF) as u8;
+                self.reg.h = (hl >> 8) as u8;
+                self.reg.l = (hl & 0xFF) as u8;
             }
 
             // XOR N: assign A xor N to A
@@ -839,38 +817,38 @@ impl VM {
             // Cycles: 4
             // Flags: Z 0 0 0
             0xA8 => {
-                let a = self.a;
-                let b = self.b;
-                self.a = self.xor_op(a, b);
+                let a = self.reg.a;
+                let b = self.reg.b;
+                self.reg.a = self.xor_op(a, b);
             }
             0xA9 => {
-                let a = self.a;
-                let c = self.c;
-                self.a = self.xor_op(a, c);
+                let a = self.reg.a;
+                let c = self.reg.c;
+                self.reg.a = self.xor_op(a, c);
             }
             0xAA => {
-                let a = self.a;
-                let d = self.d;
-                self.a = self.xor_op(a, d);
+                let a = self.reg.a;
+                let d = self.reg.d;
+                self.reg.a = self.xor_op(a, d);
             }
             0xAB => {
-                let a = self.a;
-                let e = self.e;
-                self.a = self.xor_op(a, e);
+                let a = self.reg.a;
+                let e = self.reg.e;
+                self.reg.a = self.xor_op(a, e);
             }
             0xAC => {
-                let a = self.a;
-                let h = self.h;
-                self.a = self.xor_op(a, h);
+                let a = self.reg.a;
+                let h = self.reg.h;
+                self.reg.a = self.xor_op(a, h);
             }
             0xAD => {
-                let a = self.a;
-                let l = self.l;
-                self.a = self.xor_op(a, l);
+                let a = self.reg.a;
+                let l = self.reg.l;
+                self.reg.a = self.xor_op(a, l);
             }
             0xAF => {
-                let a = self.a;
-                self.a = self.xor_op(a, a);
+                let a = self.reg.a;
+                self.reg.a = self.xor_op(a, a);
             }
 
             // RLA: Rotate the contents of register A to the left
@@ -878,11 +856,11 @@ impl VM {
             // Cycles: 4
             // Flags: 0 0 0 C
             0x17 => {
-                let b0 = if self.f & C_BIT == 0 { 0 } else { 1 };
-                let b8 = self.a & 128 == 0;
-                self.a = self.a << 1 | b0;
+                let b0 = if self.reg.f & C_BIT == 0 { 0 } else { 1 };
+                let b8 = self.reg.a & 128 == 0;
+                self.reg.a = self.reg.a << 1 | b0;
                 self.set_carry(b8);
-                self.f &= !(Z_BIT | H_BIT | N_BIT);
+                self.reg.f &= !(Z_BIT | H_BIT | N_BIT);
             }
 
             // LD (HL+), A: store value of A at (HL) and increment HL
@@ -892,7 +870,7 @@ impl VM {
             // Alt mnemonic 1: LD (HLI), A
             // Alt mnemonic 2: LDI (HL), A
             0x22 => {
-                let a = self.a;
+                let a = self.reg.a;
                 let hl = self.reg_hl();
                 self.write(hl, a);
                 self.set_reg_hl(hl + 1);
@@ -903,8 +881,8 @@ impl VM {
             // Cycles: 16
             // Flags: - - - -
             0xEA => {
-                let addr = self.read_u16(self.pc + 1);
-                let val = self.a;
+                let addr = self.read_u16(self.reg.pc + 1);
+                let val = self.reg.a;
                 self.write(addr, val);
             }
 
@@ -918,21 +896,21 @@ impl VM {
             // Cycles: 8
             // Flags: Z 1 H C
             0xFE => {
-                let v = self.read(self.pc + 1);
-                let a = self.a;
+                let v = self.read(self.reg.pc + 1);
+                let a = self.reg.a;
                 self.set_z_flag(a == v);
                 self.set_carry(a < v);
-                self.f |= N_BIT;
+                self.reg.f |= N_BIT;
             }
 
             // Prefix 0xCB instructions
             0xCB => {
-                let op2 = self.read(self.pc + 1);
+                let op2 = self.read(self.reg.pc + 1);
                 match op2 {
                     // RL n: rotate register n left with carry flag
                     0x11 => {
-                        let c = self.c;
-                        self.c = self.rl_op(c);
+                        let c = self.reg.c;
+                        self.reg.c = self.rl_op(c);
                     }
 
                     0x7C => {
@@ -940,21 +918,21 @@ impl VM {
                         // Length: 2
                         // Cycles: 8
                         // Flags: Z 0 1 -
-                        let h = self.h;
+                        let h = self.reg.h;
                         self.bit_op(7, h);
                     }
                     _ => {
-                        panic!("Unsupported opcode at 0x{:04X}: 0x{:02X}{:02X}", self.pc, op, op2);
+                        panic!("Unsupported opcode at 0x{:04X}: 0x{:02X}{:02X}", self.reg.pc, op, op2);
                     }
                 }
             }
 
             _ => {
-                panic!("Unsupported opcode at 0x{:04X}: 0x{:02X}", self.pc, op);
+                panic!("Unsupported opcode at 0x{:04X}: 0x{:02X}", self.reg.pc, op);
             }
         }
 
-        self.pc += length as u16;
+        self.reg.pc += length as u16;
     }
 }
 
@@ -1053,14 +1031,14 @@ fn main() {
             stepping = true;
         }
 
-        if breakpoints.contains(&vm.pc) {
-            println!("- at breakpoint (PC: 0x{:04X})", vm.pc);
+        if breakpoints.contains(&vm.reg.pc) {
+            println!("- at breakpoint (PC: 0x{:04X})", vm.reg.pc);
             stepping = true;
         }
 
         if stepping {
             vm.print_state();
-            let pc = vm.pc;
+            let pc = vm.reg.pc;
             let mut list_offset = pc;
             println!("0x{:04X}: {}", pc, vm.format_mnemonic(pc));
 
@@ -1096,7 +1074,7 @@ fn main() {
 
         vm.step();
 
-        if (stepping) {
+        if stepping {
             texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
                 for y in 0..256 {
                     for x in 0..256 {
