@@ -3,10 +3,15 @@ extern crate ctrlc;
 extern crate sdl2;
 
 // use std::io;
+use std::time::Duration;
 use std::io::prelude::*;
 use std::fs::File;
 use std::sync::Arc;
 use std::sync::atomic::{ AtomicBool, Ordering };
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
+use sdl2::pixels::PixelFormatEnum;
+use sdl2::rect::Rect;
 
 mod ui;
 
@@ -14,6 +19,7 @@ const Z_BIT:  u8 = 1 << 7;   // zero flag
 const N_BIT:  u8 = 1 << 6;   // subtract flag
 const H_BIT:  u8 = 1 << 5;   // half carry flag
 const C_BIT:  u8 = 1 << 4;   // carry flag
+
 
 struct VM {
     a: u8,
@@ -997,7 +1003,27 @@ fn main() {
     let mut stepping = true;
     let mut last_command = "".to_string();
 
-    let gui = ui::UI::new();
+    // Initialize UI
+        let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
+
+    let window = video_subsystem
+        .window("rustboy", 256 + 4, 256 + 4)
+        .position_centered()
+        .opengl()
+        .build()
+        .unwrap();
+
+    let mut canvas = window.into_canvas().build().unwrap();
+    let texture_creator = canvas.texture_creator();
+    let fmt = PixelFormatEnum::RGB24;
+    let mut texture = texture_creator.create_texture_streaming(fmt, 256, 256).unwrap();
+
+    canvas.clear();
+    canvas.copy(&texture, None, Some(Rect::new(2, 2, 256, 256))).unwrap();
+    canvas.present();
+
+    let mut event_pump = sdl_context.event_pump().unwrap();
 
     breakpoints.push(0x000C);
     // breakpoints.push(0x0095);
@@ -1013,7 +1039,16 @@ fn main() {
         ctrlc_event_clone.store(true, Ordering::SeqCst)
     }).expect("failed to setup ctrl-c handler");
 
-    loop {
+    'running: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit {..} | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                    break 'running
+                },
+                _ => {}
+            }
+        }
+
         if ctrlc_event.load(Ordering::SeqCst) {
             stepping = true;
         }
@@ -1060,6 +1095,24 @@ fn main() {
         }
 
         vm.step();
+
+        if (stepping) {
+            texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
+                for y in 0..256 {
+                    for x in 0..256 {
+                        let offset = y * pitch + x * 3;
+                        let c = vm.read((y * 256 + x) as u16);
+                        buffer[offset] = c;
+                        buffer[offset + 1] = c;
+                        buffer[offset + 2] = c;
+                    }
+                }
+            }).unwrap();
+
+            canvas.clear();
+            canvas.copy(&texture, None, Some(Rect::new(2, 2, 256, 256))).unwrap();
+            canvas.present();
+        }
     }
 }
 
