@@ -25,6 +25,55 @@ struct VM {
     bootstrap: [u8; 0x100]
 }
 
+fn address_type(addr: u16) -> String {
+    if addr < 0x4000 {
+        return "ROM bank #0".to_string();
+    }
+
+    if addr < 0x8000 {
+        return "ROM bank #1 (switchable)".to_string();
+    }
+
+    if addr < 0xA000 {
+        return "Video RAM".to_string();
+    }
+
+    if addr < 0xC000 {
+        return "Switchable RAM bank".to_string();
+    }
+
+    if addr < 0xE000 {
+        return "Internal RAM (1)".to_string();
+    }
+
+    if addr < 0xFE00 {
+        return "Echo of internal RAM".to_string();
+    }
+
+    if addr < 0xFEA0 {
+        return "Sprite Attrib Memory (OAM)".to_string();
+    }
+
+    if addr < 0xFF00 {
+        return "Empty memory block, unusable for I/O (1)".to_string();
+    }
+
+    if addr < 0xFF4C {
+        return "I/O ports".to_string();
+    }
+
+    if addr < 0xFF80 {
+        return "Empty memory block, unusable for I/O (2)".to_string();
+    }
+
+    if addr < 0xFFFF {
+        return "Internal RAM (2)".to_string();
+    }
+
+    return "Interrupt Enable Register".to_string();
+}
+
+
 fn add_i8_to_u16(a: u16, b: i8) -> u16 {
     if b > 0 {
         return a + b as u16;
@@ -62,7 +111,7 @@ impl VM {
     }
 
     fn write(&mut self, addr: u16, value: u8) {
-        println!("WRITE MEM: 0x{:04X} = 0x{:02X}", addr, value);
+        println!("WRITE MEM: 0x{:04X} = 0x{:02X} ({})", addr, value, address_type(addr));
         self.mem[addr as usize] = value;
     }
 
