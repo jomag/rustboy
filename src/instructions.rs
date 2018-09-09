@@ -116,6 +116,25 @@ pub fn dec_op(reg: &mut Registers, value: u8) -> u8 {
     new_value
 }
 
+pub fn sub_op(reg: &mut Registers, value: u8) {
+    // Flags: Z 1 H C
+    if reg.a >= value {
+        reg.a = reg.a - value;
+        reg.f &= !C_BIT;
+    } else {
+        reg.a = (reg.a as u32 + 256 - value as u32) as u8;
+        reg.f |= C_BIT;
+    }
+
+    if reg.a == 0 {
+        reg.f |= Z_BIT;
+    } else {
+        reg.f &= !Z_BIT;
+    }
+
+    reg.f |= N_BIT;
+}
+
 pub fn rl_op(reg: &mut Registers, value: u8) -> u8 {
     // Rotate left with carry flag
     // Flags: Z 0 0 C
@@ -146,7 +165,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
     let pc = reg.pc;
     let op: u8 = mem.read(pc);
     let length = op_length(op);
-    let cycles = 4;
+    let cycles: u32 = 4;
 
     match op {
         0x01 => {
@@ -265,6 +284,22 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             reg.a = dec_op(reg, a);
         }
 
+        // SUB r: subtract register r from accumulator
+        // Length: 1
+        // Cycles: 4
+        // Flags: Z 1 H C
+        0x90 => { let b = reg.b; sub_op(reg, b) }
+        0x91 => { let c = reg.c; sub_op(reg, c) }
+        0x92 => { let d = reg.d; sub_op(reg, d) }
+        0x93 => { let e = reg.e; sub_op(reg, e) }
+        0x94 => { let h = reg.h; sub_op(reg, h) }
+        0x95 => { let l = reg.l; sub_op(reg, l) }
+        0x96 => {
+            let hl = reg.hl();
+            sub_op(reg, mem.read(hl));
+        }
+        0x97 => { let a = reg.a; sub_op(reg, a) }
+
         // LD n, d: load immediate into register n
         // Length: 2
         // Flags: - - - -
@@ -280,7 +315,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Length: 1
         // Cycles: 4
         // Flags: - - - -
-        0x7F => {}                   // LD A,A
+        0x7F => {}                 // LD A,A
         0x78 => { reg.a = reg.b }  // LD A,B
         0x79 => { reg.a = reg.c }  // LD A,C
         0x7A => { reg.a = reg.d }  // LD A,D
@@ -289,7 +324,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0x7D => { reg.a = reg.l }  // LD A,L
 
         0x47 => { reg.b = reg.a }  // LD B,A
-        0x40 => {}                   // LD B,B
+        0x40 => {}                 // LD B,B
         0x41 => { reg.b = reg.c }  // LD B,C
         0x42 => { reg.b = reg.d }  // LD B,D
         0x43 => { reg.b = reg.e }  // LD B,E
@@ -298,7 +333,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
 
         0x4F => { reg.c = reg.a }  // LD C,A
         0x48 => { reg.c = reg.b }  // LD C,B
-        0x49 => {}                   // LD C,C
+        0x49 => {}                 // LD C,C
         0x4A => { reg.c = reg.d }  // LD C,D
         0x4B => { reg.c = reg.e }  // LD C,E
         0x4C => { reg.c = reg.h }  // LD C,H
@@ -307,7 +342,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0x57 => { reg.d = reg.a }  // LD D,A
         0x50 => { reg.d = reg.b }  // LD D,B
         0x51 => { reg.d = reg.c }  // LD D,C
-        0x52 => {}                   // LD D,D
+        0x52 => {}                 // LD D,D
         0x53 => { reg.d = reg.e }  // LD D,E
         0x54 => { reg.d = reg.h }  // LD D,H
         0x55 => { reg.d = reg.l }  // LD D,L
@@ -316,7 +351,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0x58 => { reg.e = reg.b }  // LD E,B
         0x59 => { reg.e = reg.c }  // LD E,C
         0x5A => { reg.e = reg.d }  // LD E,D
-        0x5B => {}                   // LD E,E
+        0x5B => {}                 // LD E,E
         0x5C => { reg.e = reg.h }  // LD E,H
         0x5D => { reg.e = reg.l }  // LD E,L
 
@@ -325,7 +360,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0x61 => { reg.h = reg.c }  // LD H,C
         0x62 => { reg.h = reg.d }  // LD H,D
         0x63 => { reg.h = reg.e }  // LD H,E
-        0x64 => {}                   // LD H,H
+        0x64 => {}                 // LD H,H
         0x65 => { reg.h = reg.l }  // LD H,L
 
         0x6F => { reg.l = reg.a }  // LD L,A
@@ -334,7 +369,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0x6A => { reg.l = reg.d }  // LD L,D
         0x6B => { reg.l = reg.e }  // LD L,E
         0x6C => { reg.l = reg.h }  // LD L,H
-        0x6D => {}                   // LD L,L
+        0x6D => {}                 // LD L,L
 
         // LD n, (mm): load value from memory into register n
         // Length: 1
@@ -342,13 +377,22 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0x0A => { reg.a = mem.read(reg.bc()) }
         0x1A => { reg.a = mem.read(reg.de()) }
 
+        // LD ($FF00+n), A: Put A into memory address $FF00+n
+        // Length: 2
+        // Flags: - - - -
         0xE0 => {
-            // LDH (n), A: Put A into memory address $FF00+n
-            // Length: 2
-            // Flags: - - - -
             let n = mem.read(reg.pc + 1);
             let a = reg.a;
             mem.write(0xFF00 + n as u16, a);
+        }
+
+        // LD A, ($FF00+n): read from memory $FF00+n to register A
+        // Length: 2
+        // Cycles: 12
+        // Flags: - - - -
+        0xF0 => {
+            let n = mem.read(reg.pc + 1);
+            reg.a = mem.read(0xFF00 + n as u16);
         }
 
         // LD (HL), n: store register value to memory at address HL
@@ -607,10 +651,6 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             mem.write(addr, val);
         }
 
-        // 
-        0xF0 => {
-            
-        }
 
         // CP u8: Compare A with u8. Same as SUB but throw away result.
         // Length: 2
@@ -654,5 +694,5 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
     }
 
     reg.pc += length as u16;
-    cycles
+    return cycles
 }

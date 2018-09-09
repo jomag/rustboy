@@ -27,6 +27,11 @@ impl Memory {
 
     pub fn read(&self, addr: u16) -> u8 {
         // Read byte (u8) from memory
+
+        // if addr >= 0xFF00 {
+        //     println!("READ MEM: 0x{:04X} ({})", addr, address_type(addr));
+        // }
+
         if addr < 0x100 {
             return self.bootstrap[addr as usize];
         } else {
@@ -46,7 +51,7 @@ impl Memory {
     }
 
     pub fn write(&mut self, addr: u16, value: u8) {
-        println!("WRITE MEM: 0x{:04X} = 0x{:02X} ({})", addr, value, address_type(addr));
+        // println!("WRITE MEM: 0x{:04X} = 0x{:02X} ({})", addr, value, address_type(addr));
         self.mem[addr as usize] = value;
     }
 }

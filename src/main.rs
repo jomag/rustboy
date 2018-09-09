@@ -2,8 +2,6 @@
 extern crate ctrlc;
 extern crate sdl2;
 
-// use std::io;
-// use std::time::Duration;
 use std::io::prelude::*;
 use std::sync::Arc;
 use std::sync::atomic::{ AtomicBool, Ordering };
@@ -17,10 +15,12 @@ mod registers;
 mod memory;
 mod instructions;
 mod debug;
+mod lcd;
 
 use debug::{ print_listing, print_registers, format_mnemonic };
 use memory::Memory;
 use registers::Registers;
+use lcd::LCD;
 
 fn main() {
     use std::io::stdin;
@@ -28,6 +28,7 @@ fn main() {
 
     let mut reg = Registers::new();
     let mut mem = Memory::new();
+    let mut lcd = LCD::new();
 
     println!();
     println!("Starting RustBoy (GameBoy Emulator written in Rust)");
@@ -41,11 +42,11 @@ fn main() {
     let mut last_command = "".to_string();
 
     // Initialize UI
-        let sdl_context = sdl2::init().unwrap();
+    let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
     let window = video_subsystem
-        .window("rustboy", 256 + 4, 256 + 4)
+        .window("rustboy", 160 + 4, 144 + 4)
         .position_centered()
         .opengl()
         .build()
@@ -54,16 +55,15 @@ fn main() {
     let mut canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
     let fmt = PixelFormatEnum::RGB24;
-    let mut texture = texture_creator.create_texture_streaming(fmt, 256, 256).unwrap();
+    let mut texture = texture_creator.create_texture_streaming(fmt, 160, 144).unwrap();
 
     canvas.clear();
-    canvas.copy(&texture, None, Some(Rect::new(2, 2, 256, 256))).unwrap();
+    canvas.copy(&texture, None, Some(Rect::new(2, 2, 160, 144))).unwrap();
     canvas.present();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     breakpoints.push(0x000C);
-    // breakpoints.push(0x0095);
     breakpoints.push(0x0034);
     breakpoints.push(0x0040);
     breakpoints.push(0x0051);
@@ -75,6 +75,8 @@ fn main() {
         println!("Ctrl-C: breaking execution");
         ctrlc_event_clone.store(true, Ordering::SeqCst)
     }).expect("failed to setup ctrl-c handler");
+
+    let mut cycles: u32 = 0;
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -125,32 +127,27 @@ fn main() {
                         }
                         list_offset = print_listing(&mem, list_offset, 10);
                     }
+                    "q" => { break 'running; }
                     "" => {}
                     _ => { println!("invalid command!"); }
                 }
             }
         }
 
-        instructions::step(&mut reg, &mut mem);
+        let op_cycles = instructions::step(&mut reg, &mut mem);
+        cycles += op_cycles;
 
-        if stepping {
-            texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-                for y in 0..256 {
-                    for x in 0..256 {
-                        let offset = y * pitch + x * 3;
-                        let c = mem.read((y * 256 + x) as u16);
-                        buffer[offset] = c;
-                        buffer[offset + 1] = c;
-                        buffer[offset + 2] = c;
-                    }
-                }
-            }).unwrap();
+        lcd.update(op_cycles, &mut mem, &mut texture);
 
+        if cycles >= 69905 {
+            cycles -= 69905;
             canvas.clear();
-            canvas.copy(&texture, None, Some(Rect::new(2, 2, 256, 256))).unwrap();
+            canvas.copy(&texture, None, Some(Rect::new(2, 2, 160, 144))).unwrap();
             canvas.present();
         }
-    }
-}
 
+    }
+
+    println!("Clean shutdown. Bye!");
+}
 
