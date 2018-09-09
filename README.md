@@ -3,6 +3,14 @@ RustBoy
 
 A personal project to learn Rust and basic emulator development.
 
+Graphics
+--------
+
+Resolution: 160 x 144
+Real resolution: 256 x 256
+Tiles: 32 x 32
+Real resolution: 256 x 256 (32 * 8 x 32 * 8)
+
 References
 ----------
 
