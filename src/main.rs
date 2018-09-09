@@ -15,11 +15,9 @@ use sdl2::rect::Rect;
 
 mod ui;
 mod registers;
+mod instructions;
 
-const Z_BIT:  u8 = 1 << 7;   // zero flag
-const N_BIT:  u8 = 1 << 6;   // subtract flag
-const H_BIT:  u8 = 1 << 5;   // half carry flag
-const C_BIT:  u8 = 1 << 4;   // carry flag
+use registers::{ Z_BIT, N_BIT, H_BIT, C_BIT };
 
 struct VM {
     reg: registers::Registers,
@@ -42,148 +40,6 @@ impl VM {
             mem: [0; 0x10000],
             bootstrap: [0; 0x100]
         }
-    }
-
-    fn z_flag(&mut self) -> bool {
-        (self.reg.f & Z_BIT) != 0
-    }
-
-    fn xor_op(&mut self, a: u8, value: u8) -> u8 {
-        // Flags: Z 0 0 0
-        let res = a ^ value;
-        self.reg.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
-        if res == 0 {
-            self.reg.f |= Z_BIT;
-        }
-        res
-    }
-
-    fn bit_op(&mut self, bit: u8, value: u8) {
-        // Test if bit in register is set
-        // Flags: Z 0 1 -
-        if value & (1 << bit) == 0 {
-            self.reg.f &= !N_BIT;
-            self.reg.f |= Z_BIT | H_BIT;
-        } else {
-            self.reg.f &= !(Z_BIT | N_BIT);
-            self.reg.f |= H_BIT;
-        }
-    }
-
-    fn inc_op(&mut self, value: u8) -> u8 {
-        // Flags: Z 0 H -
-        let new_value = if value == 255 { 0 } else { value + 1 };
-
-        if new_value == 0 {
-            self.reg.f |= Z_BIT;
-        } else {
-            self.reg.f &= !Z_BIT;
-        }
-
-        self.reg.f &= !N_BIT;
-
-        if value < 255 && ((value & 0xF) + 1) & 0x10 != 0 {
-            self.reg.f |= H_BIT;
-        } else {
-            self.reg.f &= !H_BIT;
-        }
-
-        new_value
-    }
-
-    fn inc16_op(&mut self, value: u16) -> u16 {
-        return if value == 0xFFFF { 0 } else { value + 1 };
-    }
-
-    fn dec_op(&mut self, value: u8) -> u8 {
-        // Flags: Z 1 H -
-        let new_value = if value == 0 { 255 } else { value - 1 };
-
-        if new_value == 0 {
-            self.reg.f |= Z_BIT | N_BIT;
-        } else {
-            self.reg.f &= !Z_BIT;
-            self.reg.f |= N_BIT;
-        }
-
-        // FIXME: handle half-carry flag
-        new_value
-    }
-
-    fn set_carry(&mut self, en: bool) {
-        if en {
-            self.reg.f |= C_BIT;
-        } else {
-            self.reg.f &= !C_BIT;
-        }
-    }
-
-    fn rl_op(&mut self, value: u8) -> u8 {
-        // Rotate left with carry flag
-        // Flags: Z 0 0 C
-        let mut t = (value as u32) << 1;
-
-        if self.reg.f & C_BIT != 0 {
-            t |= 1;
-        }
-
-        if t & 256 == 0 {
-            self.reg.f &= !C_BIT;
-        } else {
-            self.reg.f |= C_BIT;
-        }
-
-        if t == 0 {
-            self.reg.f |= Z_BIT;
-        } else {
-            self.reg.f &= Z_BIT;
-        }
-
-        self.reg.f &= !(N_BIT | H_BIT);
-        return (t & 0xFF) as u8;
-    }
-
-    fn set_z_flag(&mut self, val: bool) {
-        if val {
-            self.reg.f |= Z_BIT;
-        } else {
-           self.reg.f &= !Z_BIT;
-        }
-    }
-
-    fn reg_af(&self) -> u16 {
-        // Return 16-bit value of registers A and F
-        return (self.reg.a as u16) << 8 | self.reg.f as u16;
-    }
-
-    fn reg_bc(&self) -> u16 {
-        // Return 16-bit value of registers B and C
-        return (self.reg.b as u16) << 8 | self.reg.c as u16;
-    }
-
-    fn set_reg_bc(&mut self, value: u16) {
-        self.reg.b = ((value >> 8) & 0xFF) as u8;
-        self.reg.c = (value & 0xFF) as u8;
-    }
-
-    fn reg_de(&self) -> u16 {
-        // Return 16-bit value of registers D and E
-        return (self.reg.d as u16) << 8 | self.reg.e as u16;
-    }
-
-    fn set_reg_de(&mut self, value: u16) {
-        self.reg.d = ((value >> 8) & 0xFF) as u8;
-        self.reg.e = (value & 0xFF) as u8;
-    }
-
-    fn reg_hl(&self) -> u16 {
-        // Return 16-bit value of registers H and L
-        return (self.reg.h as u16) << 8 | self.reg.l as u16;
-    }
-
-    fn set_reg_hl(&mut self, value: u16) {
-        self.reg.h = ((value >> 8) & 0xFF) as u8;
-        self.reg.l = (value & 0xFF) as u8;
     }
 
     fn read(&self, addr: u16) -> u8 {
@@ -442,37 +298,37 @@ impl VM {
             0x04 => {
                 // INC B
                 let b = self.reg.b;
-                self.reg.b = self.inc_op(b);
+                self.reg.b = instructions::inc_op(&mut self.reg, b);
             }
             0x0C => {
                 // INC C
                 let c = self.reg.c;
-                self.reg.c = self.inc_op(c);
+                self.reg.c = instructions::inc_op(&mut self.reg, c);
             }
             0x14 => {
                 // INC D
                 let d = self.reg.d;
-                self.reg.d = self.inc_op(d);
+                self.reg.d = instructions::inc_op(&mut self.reg, d);
             }
             0x1C => {
                 // INC E
                 let e = self.reg.e;
-                self.reg.e = self.inc_op(e);
+                self.reg.e = instructions::inc_op(&mut self.reg, e);
             }
             0x24 => {
                 // INC H
                 let h = self.reg.h;
-                self.reg.h = self.inc_op(h);
+                self.reg.h = instructions::inc_op(&mut self.reg, h);
             }
             0x2C => {
                 // INC L
                 let l = self.reg.l;
-                self.reg.l = self.inc_op(l);
+                self.reg.l = instructions::inc_op(&mut self.reg, l);
             }
             0x3C => {
                 // INC A
                 let a = self.reg.a;
-                self.reg.a = self.inc_op(a);
+                self.reg.a = instructions::inc_op(&mut self.reg, a);
             }
 
             // INC nn: increments content of register pair nn by 1
@@ -481,26 +337,26 @@ impl VM {
             // Flags: - - - -
             0x03 => {
                 // INC BC
-                let bc = self.reg_bc();
-                let bc = self.inc16_op(bc);
-                self.set_reg_bc(bc);
+                let bc = self.reg.bc();
+                let bc = instructions::inc16_op(bc);
+                self.reg.set_bc(bc);
             }
             0x13 => {
                 // INC DE
-                let de = self.reg_de();
-                let de = self.inc16_op(de);
-                self.set_reg_de(de);
+                let de = self.reg.de();
+                let de = instructions::inc16_op(de);
+                self.reg.set_de(de);
             }
             0x23 => {
                 // INC HL
-                let hl = self.reg_hl();
-                let hl = self.inc16_op(hl);
-                self.set_reg_hl(hl);
+                let hl = self.reg.hl();
+                let hl = instructions::inc16_op(hl);
+                self.reg.set_hl(hl);
             }
             0x33 => {
                 // INC SP
                 let sp = self.reg.sp;
-                self.reg.sp = self.inc16_op(sp);
+                self.reg.sp = instructions::inc16_op(sp);
             }
 
             // DEC n: decrement register n
@@ -509,37 +365,37 @@ impl VM {
             0x05 => {
                 // DEC B
                 let b = self.reg.b;
-                self.reg.b = self.dec_op(b);
+                self.reg.b = instructions::dec_op(&mut self.reg, b);
             }
             0x0D => {
                 // DEC C
                 let c = self.reg.c;
-                self.reg.c = self.dec_op(c);
+                self.reg.c = instructions::dec_op(&mut self.reg, c);
             }
             0x15 => {
                 // DEC D
                 let d = self.reg.d;
-                self.reg.d = self.dec_op(d);
+                self.reg.d = instructions::dec_op(&mut self.reg, d);
             }
             0x1D => {
                 // DEC E
                 let e = self.reg.e;
-                self.reg.e = self.dec_op(e);
+                self.reg.e = instructions::dec_op(&mut self.reg, e);
             }
             0x25 => {
                 // DEC H
                 let h = self.reg.h;
-                self.reg.h = self.dec_op(h);
+                self.reg.h = instructions::dec_op(&mut self.reg, h);
             }
             0x2D => {
                 // DEC L
                 let l = self.reg.l;
-                self.reg.l = self.dec_op(l);
+                self.reg.l = instructions::dec_op(&mut self.reg, l);
             }
             0x3D => {
                 // DEC A
                 let a = self.reg.a;
-                self.reg.a = self.dec_op(a);
+                self.reg.a = instructions::dec_op(&mut self.reg, a);
             }
 
             // LD n, d: load immediate into register n
@@ -616,8 +472,8 @@ impl VM {
             // LD n, (mm): load value from memory into register n
             // Length: 1
             // Flags: - - - -
-            0x0A => { self.reg.a = self.read(self.reg_bc()) }
-            0x1A => { self.reg.a = self.read(self.reg_de()) }
+            0x0A => { self.reg.a = self.read(self.reg.bc()) }
+            0x1A => { self.reg.a = self.read(self.reg.de()) }
 
             0xE0 => {
                 // LDH (n), A: Put A into memory address $FF00+n
@@ -632,37 +488,37 @@ impl VM {
             // Length: 1
             // Flags: - - - -
             0x70 => {
-                let hl = self.reg_hl();
+                let hl = self.reg.hl();
                 let b = self.reg.b;
                 self.write(hl, b);
             }
             0x71 => {
-                let hl = self.reg_hl();
+                let hl = self.reg.hl();
                 let c = self.reg.c;
                 self.write(hl, c);
             }
             0x72 => {
-                let hl = self.reg_hl();
+                let hl = self.reg.hl();
                 let d = self.reg.d;
                 self.write(hl, d);
             }
             0x73 => {
-                let hl = self.reg_hl();
+                let hl = self.reg.hl();
                 let e = self.reg.e;
                 self.write(hl, e);
             }
             0x74 => {
-                let hl = self.reg_hl();
+                let hl = self.reg.hl();
                 let h = self.reg.h;
                 self.write(hl, h);
             }
             0x75 => {
-                let hl = self.reg_hl();
+                let hl = self.reg.hl();
                 let l = self.reg.l;
                 self.write(hl, l);
             }
             0x77 => {
-                let hl = self.reg_hl();
+                let hl = self.reg.hl();
                 let a = self.reg.a;
                 self.write(hl, a);
             }
@@ -694,19 +550,19 @@ impl VM {
             // Length: 1
             // Flags: - - - -
             0xC5 => {
-                let bc = self.reg_bc();
+                let bc = self.reg.bc();
                 self.push16(bc);
             }
             0xD5 => {
-                let de = self.reg_de();
+                let de = self.reg.de();
                 self.push16(de);
             }
             0xE5 => {
-                let hl = self.reg_hl();
+                let hl = self.reg.hl();
                 self.push16(hl);
             }
             0xF5 => {
-                let af = self.reg_af();
+                let af = self.reg.af();
                 self.push16(af);
             }
 
@@ -716,10 +572,8 @@ impl VM {
             // Flags: - - - -
             0xC1 => {
                 let v = self.pop16();
-                self.set_reg_bc(v);
+                self.reg.set_bc(v);
             }
-
-
 
             0xE2 => {
                 // LD ($FF00+C), A: put value of A in address 0xFF00 + C
@@ -758,7 +612,7 @@ impl VM {
                 // Cycles: 12/8
                 // Flags: - - - -
                 let offs = self.read_i8(self.reg.pc + 1);
-                if !self.z_flag() {
+                if !self.reg.z_flag() {
                     if offs >= 0 {
                         self.reg.pc = self.reg.pc.wrapping_add(offs as u16);
                     } else {
@@ -773,7 +627,7 @@ impl VM {
                 // Cycles: 12/8
                 // Flags: - - - -
                 let offs = self.read_i8(self.reg.pc + 1);
-                if self.z_flag() {
+                if self.reg.z_flag() {
                     if offs >= 0 {
                         self.reg.pc = self.reg.pc.wrapping_add(offs as u16);
                     } else {
@@ -819,36 +673,36 @@ impl VM {
             0xA8 => {
                 let a = self.reg.a;
                 let b = self.reg.b;
-                self.reg.a = self.xor_op(a, b);
+                self.reg.a = instructions::xor_op(&mut self.reg, a, b);
             }
             0xA9 => {
                 let a = self.reg.a;
                 let c = self.reg.c;
-                self.reg.a = self.xor_op(a, c);
+                self.reg.a = instructions::xor_op(&mut self.reg, a, c);
             }
             0xAA => {
                 let a = self.reg.a;
                 let d = self.reg.d;
-                self.reg.a = self.xor_op(a, d);
+                self.reg.a = instructions::xor_op(&mut self.reg, a, d);
             }
             0xAB => {
                 let a = self.reg.a;
                 let e = self.reg.e;
-                self.reg.a = self.xor_op(a, e);
+                self.reg.a = instructions::xor_op(&mut self.reg, a, e);
             }
             0xAC => {
                 let a = self.reg.a;
                 let h = self.reg.h;
-                self.reg.a = self.xor_op(a, h);
+                self.reg.a = instructions::xor_op(&mut self.reg, a, h);
             }
             0xAD => {
                 let a = self.reg.a;
                 let l = self.reg.l;
-                self.reg.a = self.xor_op(a, l);
+                self.reg.a = instructions::xor_op(&mut self.reg, a, l);
             }
             0xAF => {
                 let a = self.reg.a;
-                self.reg.a = self.xor_op(a, a);
+                self.reg.a = instructions::xor_op(&mut self.reg, a, a);
             }
 
             // RLA: Rotate the contents of register A to the left
@@ -859,7 +713,7 @@ impl VM {
                 let b0 = if self.reg.f & C_BIT == 0 { 0 } else { 1 };
                 let b8 = self.reg.a & 128 == 0;
                 self.reg.a = self.reg.a << 1 | b0;
-                self.set_carry(b8);
+                self.reg.set_carry(b8);
                 self.reg.f &= !(Z_BIT | H_BIT | N_BIT);
             }
 
@@ -871,9 +725,9 @@ impl VM {
             // Alt mnemonic 2: LDI (HL), A
             0x22 => {
                 let a = self.reg.a;
-                let hl = self.reg_hl();
+                let hl = self.reg.hl();
                 self.write(hl, a);
-                self.set_reg_hl(hl + 1);
+                self.reg.set_hl(hl + 1);
             }
 
             // LD (a16), A: store value of A at address a16
@@ -898,8 +752,8 @@ impl VM {
             0xFE => {
                 let v = self.read(self.reg.pc + 1);
                 let a = self.reg.a;
-                self.set_z_flag(a == v);
-                self.set_carry(a < v);
+                self.reg.set_z_flag(a == v);
+                self.reg.set_carry(a < v);
                 self.reg.f |= N_BIT;
             }
 
@@ -910,7 +764,7 @@ impl VM {
                     // RL n: rotate register n left with carry flag
                     0x11 => {
                         let c = self.reg.c;
-                        self.reg.c = self.rl_op(c);
+                        self.reg.c = instructions::rl_op(&mut self.reg, c);
                     }
 
                     0x7C => {
@@ -919,7 +773,7 @@ impl VM {
                         // Cycles: 8
                         // Flags: Z 0 1 -
                         let h = self.reg.h;
-                        self.bit_op(7, h);
+                        instructions::bit_op(&mut self.reg, 7, h);
                     }
                     _ => {
                         panic!("Unsupported opcode at 0x{:04X}: 0x{:02X}{:02X}", self.reg.pc, op, op2);
