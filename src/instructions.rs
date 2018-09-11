@@ -54,6 +54,27 @@ fn pop_op(reg: &mut Registers, mem: &Memory) -> u16 {
     return (((hi as u16) << 8) | lo as u16) as u16;
 }
 
+pub fn and_op(reg: &mut Registers, value: u8) {
+    reg.a = reg.a & value;
+    if reg.a == 0 {
+        reg.f |= Z_BIT | H_BIT;
+        reg.f &= !(N_BIT | C_BIT);
+    } else {
+        reg.f |= H_BIT;
+        reg.f &= !(Z_BIT | N_BIT | C_BIT);
+    }
+}
+
+pub fn or_op(reg: &mut Registers, value: u8) {
+    reg.a = reg.a | value;
+    if reg.a == 0 {
+        reg.f |= Z_BIT;
+        reg.f &= !(N_BIT | H_BIT | C_BIT);
+    } else {
+        reg.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
+    }
+}
+
 pub fn xor_op(reg: &mut Registers, a: u8, value: u8) -> u8 {
     // Flags: Z 0 0 0
     let res = a ^ value;
@@ -101,6 +122,15 @@ pub fn inc16_op(value: u16) -> u16 {
     return if value == 0xFFFF { 0 } else { value + 1 };
 }
 
+pub fn add_op(reg: &mut Registers, value: u8) {
+    let a32: u32 = reg.a as u32 + value as u32;
+    reg.f &= !N_BIT;
+    reg.set_carry(a32 > 0xFF);
+    let a32 = a32 & 0xFF;
+    reg.a = a32 as u8;
+    reg.set_z_flag(a32 == 0);
+}
+
 pub fn dec_op(reg: &mut Registers, value: u8) -> u8 {
     // Flags: Z 1 H -
     let new_value = if value == 0 { 255 } else { value - 1 };
@@ -132,6 +162,14 @@ pub fn sub_op(reg: &mut Registers, value: u8) {
         reg.f &= !Z_BIT;
     }
 
+    reg.f |= N_BIT;
+}
+
+pub fn cp_op(reg: &mut Registers, value: u8) {
+    // Flags: Z 1 H C
+    let a = reg.a;
+    reg.set_z_flag(a == value);
+    reg.set_carry(a < value);
     reg.f |= N_BIT;
 }
 
@@ -187,10 +225,16 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
     let cycles: u32 = 4;
 
     match op {
+        // NOP: wait for 4 cycles
+        // Length: 1
+        // Cycles: 4
+        // Flags: - - - -
+        0x00 => {}
+
         0x01 => {
             // LD BC, d16: load immediate (d16) into BC
             // Length: 3
-            // Cycles: 
+            // Cycles: 12
             // Flags: - - - -
             reg.c = mem.read(reg.pc + 1);
             reg.b = mem.read(reg.pc + 2);
@@ -303,9 +347,34 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             reg.a = dec_op(reg, a);
         }
 
-        // SUB r: subtract register r from accumulator
+        // DEC rr: decrement register pair rr
         // Length: 1
-        // Cycles: 4
+        // Cycles: 8
+        // Flags: - - - -
+        0x0B => { let bc = reg.bc(); reg.set_bc(bc - 1); }
+        0x1B => { let de = reg.de(); reg.set_de(de - 1); }
+        0x2B => { let hl = reg.hl(); reg.set_hl(hl - 1); }
+        0x3B => { reg.sp = reg.sp - 1; }
+
+        // ADD r, ADD (hl): add register r or value at (hl) to accumulator
+        // Length: 1
+        // Cycles: 4 (8 for ADD (hl))
+        // Flags: Z 1 H C
+        0x80 => { let b = reg.b; add_op(reg, b) }
+        0x81 => { let c = reg.c; add_op(reg, c) }
+        0x82 => { let d = reg.d; add_op(reg, d) }
+        0x83 => { let e = reg.e; add_op(reg, e) }
+        0x84 => { let h = reg.h; add_op(reg, h) }
+        0x85 => { let l = reg.l; add_op(reg, l) }
+        0x86 => {
+            let hl = reg.hl();
+            add_op(reg, mem.read(hl));
+        }
+        0x87 => { let a = reg.a; add_op(reg, a) }
+
+        // SUB r, SUB (hl): subtract register r or value at (hl) from accumulator
+        // Length: 1
+        // Cycles: 4 (8 for SUB (hl))
         // Flags: Z 1 H C
         0x90 => { let b = reg.b; sub_op(reg, b) }
         0x91 => { let c = reg.c; sub_op(reg, c) }
@@ -318,6 +387,38 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             sub_op(reg, mem.read(hl));
         }
         0x97 => { let a = reg.a; sub_op(reg, a) }
+
+        // AND r, AND (hl): set A to "A AND r", or "A AND (hl)""
+        // Length: 1
+        // Cycles: 4 (8 for AND (hl))
+        // Flags: Z 0 1 0
+        0xA0 => { let b = reg.b; and_op(reg, b) }
+        0xA1 => { let c = reg.c; and_op(reg, c) }
+        0xA2 => { let d = reg.d; and_op(reg, d) }
+        0xA3 => { let e = reg.e; and_op(reg, e) }
+        0xA4 => { let h = reg.h; and_op(reg, h) }
+        0xA5 => { let l = reg.l; and_op(reg, l) }
+        0xA6 => {
+            let hl = reg.hl();
+            and_op(reg, mem.read(hl));
+        }
+        0xA7 => { let a = reg.a; and_op(reg, a) }
+
+        // OR r, OR (hl): set A to "A OR r", or "A OR (hl)""
+        // Length: 1
+        // Cycles: 4 (8 for OR (hl))
+        // Flags: Z 0 0 0
+        0xB0 => { let b = reg.b; or_op(reg, b) }
+        0xB1 => { let c = reg.c; or_op(reg, c) }
+        0xB2 => { let d = reg.d; or_op(reg, d) }
+        0xB3 => { let e = reg.e; or_op(reg, e) }
+        0xB4 => { let h = reg.h; or_op(reg, h) }
+        0xB5 => { let l = reg.l; or_op(reg, l) }
+        0xB6 => {
+            let hl = reg.hl();
+            or_op(reg, mem.read(hl));
+        }
+        0xB7 => { let a = reg.a; or_op(reg, a) }
 
         // LD n, d: load immediate into register n
         // Length: 2
@@ -566,6 +667,14 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             }
         }
 
+        0xC3 => {
+            // JP a16: jump to immediate address
+            // Length: 3
+            // Cycles: 16
+            // Flags: - - - -
+            reg.pc = mem.read_u16(reg.pc + 1) - 3;
+        }
+
         0x21 => {
             // LD HL, d16: load immediate (d16) into HL
             // Length: 3
@@ -660,6 +769,35 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             reg.set_hl(hl + 1);
         }
 
+        // LD (HL), d8: store immediate value at (HL)
+        // Length: 2
+        // Cycles: 12
+        // Flags: - - - -
+        0x36 => {
+            let v = mem.read(reg.pc + 1);
+            mem.write(reg.hl(), v);
+        }
+
+        // LD A, (HL+): load value from (HL) to A and increment HL
+        // Length: 1
+        // Cycles: 8
+        // Flags: - - - -
+        0x2A => {
+            let hl = reg.hl();
+            reg.a = mem.read(hl);
+            reg.set_hl(hl + 1);
+        }
+
+        // LD A, (HL+): load value from (HL) to A and decrement HL
+        // Length: 1
+        // Cycles: 8
+        // Flags: - - - -
+        0x3A => {
+            let hl = reg.hl();
+            reg.a = mem.read(hl);
+            reg.set_hl(hl - 1);
+        }
+
         // LD (a16), A: store value of A at address a16
         // Length: 3
         // Cycles: 16
@@ -670,17 +808,39 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             mem.write(addr, val);
         }
 
+        // CP r, CP (hl): Compare r (or value at (hl)) with A. Same as SUB but throws away the result
+        // Length: 1
+        // Cycles: 4 (8 for "CP (hl)")
+        // Flags: Z 1 H C
+        0xB8 => { let b = reg.b; cp_op(reg, b); }
+        0xB9 => { let c = reg.c; cp_op(reg, c); }
+        0xBA => { let d = reg.d; cp_op(reg, d); }
+        0xBB => { let e = reg.e; cp_op(reg, e); }
+        0xBC => { let h = reg.h; cp_op(reg, h); }
+        0xBD => { let l = reg.l; cp_op(reg, l); }
+        0xBE => { let v = mem.read(reg.hl()); cp_op(reg, v); }
+        0xBF => { reg.set_z_flag(true); reg.set_carry(false); reg.f |= N_BIT; }
 
-        // CP u8: Compare A with u8. Same as SUB but throw away result.
+        // CP u8: Compare A with immediate
         // Length: 2
         // Cycles: 8
         // Flags: Z 1 H C
-        0xFE => {
-            let v = mem.read(reg.pc + 1);
-            let a = reg.a;
-            reg.set_z_flag(a == v);
-            reg.set_carry(a < v);
-            reg.f |= N_BIT;
+        0xFE => { let v = mem.read(reg.pc + 1); cp_op(reg, v); }
+
+        0xF3 => {
+            // DI: Disable Interrupt Master Enable Flag, prohibits maskable interrupts
+            // Length: 1
+            // Cycles: 4
+            // Flags: - - - -
+            println!("Note: DI not implemented!");
+        }
+
+        0xFB => {
+            // DI: Enable Interrupt Master Enable Flag
+            // Length: 1
+            // Cycles: 4
+            // Flags: - - - -
+            println!("Note: EI not implemented!");
         }
 
         // Prefix 0xCB instructions
