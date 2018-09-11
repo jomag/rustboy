@@ -27,6 +27,7 @@ pub fn print_registers(reg: &Registers) {
 pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
     let op: u8 = mem.read(addr);
     match op {
+        0x00 => { "NOP".to_string() }
         0x01 => { format!("LD  BC, ${:04X}", mem.read_u16(addr + 1)) }
 
         // INC n: increment register n
@@ -97,11 +98,59 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
         }
         0x32 => { "LDD  (HL), A".to_string() }
 
+        0x40 => { "LD   B, B".to_string() }
+        0x41 => { "LD   B, C".to_string() }
+        0x42 => { "LD   B, D".to_string() }
+        0x43 => { "LD   B, E".to_string() }
+        0x44 => { "LD   B, H".to_string() }
+        0x45 => { "LD   B, L".to_string() }
+        0x46 => { "LD   B, (HL)".to_string() }
+        0x47 => { "LD   B, A".to_string() }
+
+        0x48 => { "LD   C, B".to_string() }
+        0x49 => { "LD   C, C".to_string() }
+        0x4A => { "LD   C, D".to_string() }
+        0x4B => { "LD   C, E".to_string() }
+        0x4C => { "LD   C, H".to_string() }
+        0x4D => { "LD   C, L".to_string() }
+        0x4E => { "LD   C, (HL)".to_string() }
         0x4F => { "LD   C, A".to_string() }
 
+        0x50 => { "LD   D, B".to_string() }
+        0x51 => { "LD   D, C".to_string() }
+        0x52 => { "LD   D, D".to_string() }
+        0x53 => { "LD   D, E".to_string() }
+        0x54 => { "LD   D, H".to_string() }
+        0x55 => { "LD   D, L".to_string() }
+        0x56 => { "LD   D, (HL)".to_string() }
         0x57 => { "LD   D, A".to_string() }
 
+        0x58 => { "LD   E, B".to_string() }
+        0x59 => { "LD   E, C".to_string() }
+        0x5A => { "LD   E, D".to_string() }
+        0x5B => { "LD   E, E".to_string() }
+        0x5C => { "LD   E, H".to_string() }
+        0x5D => { "LD   E, L".to_string() }
+        0x5E => { "LD   E, (HL)".to_string() }
+        0x5F => { "LD   E, A".to_string() }
+
+        0x60 => { "LD   H, B".to_string() }
+        0x61 => { "LD   H, C".to_string() }
+        0x62 => { "LD   H, D".to_string() }
+        0x63 => { "LD   H, E".to_string() }
+        0x64 => { "LD   H, H".to_string() }
+        0x65 => { "LD   H, L".to_string() }
+        0x66 => { "LD   H, (HL)".to_string() }
         0x67 => { "LD   H, A".to_string() }
+
+        0x68 => { "LD   L, B".to_string() }
+        0x69 => { "LD   L, C".to_string() }
+        0x6A => { "LD   L, D".to_string() }
+        0x6B => { "LD   L, E".to_string() }
+        0x6C => { "LD   L, H".to_string() }
+        0x6D => { "LD   L, L".to_string() }
+        0x6E => { "LD   L, (HL)".to_string() }
+        0x6F => { "LD   L, A".to_string() }
 
         0x77 => { "LD   (HL), A".to_string() }
         0x78 => { "LD   A, B".to_string() }
@@ -124,6 +173,7 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
         0xBE => { "CP   (HL)".to_string() }
 
         0xC1 => { "POP  BC".to_string() }
+        0xC3 => { format!("JP   0x{:04X}", mem.read_u16(addr + 1)) }
         0xC4 => { format!("CALL  NZ, ${:04X}", mem.read_u16(addr + 1)) }
         0xC5 => { "PUSH BC".to_string() }
         0xC9 => { "RET".to_string() }
