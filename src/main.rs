@@ -43,7 +43,7 @@ fn main() {
     }
 
     let mut breakpoints: Vec<u16> = Vec::new();
-    let mut stepping = true;
+    let mut stepping = false;
     let mut last_command = "".to_string();
 
     // Initialize UI
@@ -52,7 +52,8 @@ fn main() {
 
     let window = video_subsystem
         .window("rustboy", 320 + 4, 288 + 4)
-        .position_centered()
+        // .position_centered()
+        .position(100, 100)
         .opengl()
         .build()
         .unwrap();
@@ -86,7 +87,8 @@ fn main() {
     let mut cycles: u32 = 0;
 
     'running: loop {
-        /* THIS SLOWS DOWN THE CODE! NOT SURE WHY!
+        /* THIS SLOWS DOWN THE CODE! NOT SURE WHY!*/
+        /*
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit {..} | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
@@ -146,15 +148,14 @@ fn main() {
         let op_cycles = instructions::step(&mut reg, &mut mem);
         cycles += op_cycles;
 
-        lcd.update(op_cycles, &mut mem, &mut texture);
+        let refresh = lcd.update(op_cycles, &mut mem, &mut texture);
 
-        if cycles >= 69905 {
-            cycles -= 69905;
+        if refresh {
+            lcd.copy_to_texture(&mut texture);
             canvas.clear();
-            canvas.copy(&texture, None, Some(Rect::new(2, 2, 160, 144))).unwrap();
+            canvas.copy(&texture, None, Some(Rect::new(2, 2, 320, 288))).unwrap();
             canvas.present();
         }
-
     }
 
     println!("Clean shutdown. Bye!");

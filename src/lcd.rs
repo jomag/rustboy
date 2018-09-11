@@ -12,68 +12,81 @@ use memory::{ LCDC_REG, LY_REG, SCY_REG, Memory };
 // 1 - OBJ Enable (0 = off, 1 = on)
 // 0 - BG Mode (0 = BG Display Off, 1 = BG Display On)
 
-// tmp: 1001 0001
+const SCREEN_WIDTH: usize = 160;
+const SCREEN_HEIGHT: usize = 144;
+const BUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 3;
 
 pub struct LCD {
-    scanline_cycles: u32
+    scanline_cycles: u32,
+
+    // Buffer to hold all pixel data
+    //
+    // Each scanline is rendered to this buffer and then
+    // a texture is locked just once per screen refresh
+    // for much better performance than drawing directly
+    // to the texture.
+    //
+    // The pixel format is RGB24, 3 bytes per pixel.
+    buf: [u8; BUFFER_SIZE]
 }
 
-fn render_line(scanline: u8, txt: &mut Texture, mem: &Memory) {
-    // println!("LCDC: 0x{:02x}", mem.read(LCDC_REG));
+fn render_line(scanline: u8, buf: &mut [u8; BUFFER_SIZE], mem: &Memory) {
+    // Length of one row of pixels in bytes
+    let pitch = SCREEN_WIDTH * 3;
+
     let lcdc = mem.read(LCDC_REG);
 
-    txt.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-        // Start point in texture
-        let mut txt_offs = scanline as usize * pitch;
+    // Start point in texture
+    let mut buf_offs = scanline as usize * pitch;
 
-        let y: u32 = scanline as u32 + mem.read(SCY_REG) as u32;
+    let y: u32 = scanline as u32 + mem.read(SCY_REG) as u32;
 
-        let mut ty: u16 = (y / 8) as u16;
-        let mut tile_map_offset = ty * 32;
+    let mut ty: u16 = (y / 8) as u16;
+    let mut tile_map_offset = ty * 32;
 
-        // Bit 3 of LCDC selects bg tile map address
-        if lcdc & 8 == 0 {
-            tile_map_offset += 0x9800;
+    // Bit 3 of LCDC selects bg tile map address
+    if lcdc & 8 == 0 {
+        tile_map_offset += 0x9800;
+    } else {
+        tile_map_offset += 0x9C00;
+    }
+
+    for tx in 0..20 {
+        let tile_index = mem.read(tile_map_offset + tx) as u16;
+        let mut tile_data_offset = tile_index * 16 + (y & 7) as u16 * 2;
+
+        if lcdc & 16 == 0 {
+            tile_data_offset += 0x8800;
         } else {
-            tile_map_offset += 0x9C00;
+            tile_data_offset += 0x8000;
         }
 
-        for tx in 0..20 {
-            let tile_index = mem.read(tile_map_offset + tx) as u16;
-            let mut tile_data_offset = tile_index * 16 + (y & 7) as u16 * 2;
+        let b1 = mem.read(tile_data_offset);
+        let b2 = mem.read(tile_data_offset + 1);
 
-            if lcdc & 16 == 0 {
-                tile_data_offset += 0x8800;
-            } else {
-                tile_data_offset += 0x8000;
-            }
-
-            let b1 = mem.read(tile_data_offset);
-            let b2 = mem.read(tile_data_offset + 1);
-
-            for x in 0..8 {
-                let hi = b1 & (1 << (7 - x)) != 0;
-                let lo = b2 & (1 << (7 - x)) != 0;
-                let mut v = 0;
-                if hi { v += 128; }
-                if lo { v += 64; }
-                buffer[txt_offs] = v;
-                buffer[txt_offs + 1] = v;
-                buffer[txt_offs + 2] = v;
-                txt_offs += 3;
-            }
+        for x in 0..8 {
+            let hi = b1 & (1 << (7 - x)) != 0;
+            let lo = b2 & (1 << (7 - x)) != 0;
+            let mut v = 0;
+            if hi { v += 128; }
+            if lo { v += 64; }
+            buf[buf_offs] = v;
+            buf[buf_offs + 1] = v;
+            buf[buf_offs + 2] = v;
+            buf_offs += 3;
         }
-    }).unwrap();
+    }
 }
 
 impl LCD {
     pub fn new() -> Self {
         LCD {
-            scanline_cycles: 0
+            scanline_cycles: 0,
+            buf: [0; BUFFER_SIZE]
         }
     }
 
-    pub fn update(&mut self, cycles: u32, mem: &mut Memory, txt: &mut Texture) {
+    pub fn update(&mut self, cycles: u32, mem: &mut Memory, txt: &mut Texture) -> bool {
         self.scanline_cycles += cycles;
 
         if cycles > 16 {
@@ -86,7 +99,7 @@ impl LCD {
             let mut scanline = mem.read(LY_REG);
 
             if scanline < 144 {
-                render_line(scanline, txt, mem);
+                render_line(scanline, &mut self.buf, mem);
                 scanline += 1;
             } else if scanline < 153 {
                 scanline += 1;
@@ -95,6 +108,16 @@ impl LCD {
             }
 
             mem.write(LY_REG, scanline);
+
+            (scanline == 0)
+        } else {
+            false
         }
+    }
+
+    pub fn copy_to_texture(&self, txt: &mut Texture) {
+        txt.with_lock(None, |buffer: &mut [u8], pitch: usize| {
+            buffer.copy_from_slice(&self.buf);
+        }).unwrap();
     }
 }
