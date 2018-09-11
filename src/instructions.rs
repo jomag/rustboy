@@ -136,6 +136,25 @@ pub fn sub_op(reg: &mut Registers, value: u8) {
 }
 
 pub fn rl_op(reg: &mut Registers, value: u8) -> u8 {
+    let mut t = (value as u32) << 1;
+
+    if t & 0x100 != 0 {
+        t |= 1;
+        reg.f |= C_BIT;
+    } else {
+        reg.f &= !C_BIT;
+    }
+
+    reg.f &= !(N_BIT | H_BIT);
+
+    if t & 0xFF == 0 {
+        reg.f |= Z_BIT;
+    } else {
+        reg.f &= !Z_BIT;
+    }
+
+    return (t & 0xFF) as u8;
+
     // Rotate left with carry flag
     // Flags: Z 0 0 C
     let mut t = (value as u32) << 1;
