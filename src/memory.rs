@@ -4,6 +4,34 @@ use std::fs::File;
 
 use debug::address_type;
 
+// Port/Mode registers
+pub const P1_REG:   u16 = 0xFF00;
+pub const SB_REG:   u16 = 0xFF01;
+pub const SC_REG:   u16 = 0xFF02;
+pub const DIV_REG:  u16 = 0xFF04;
+pub const TIMA_REG: u16 = 0xFF05;  // timer counter
+pub const TMA_REG:  u16 = 0xFF06;  // timer modulo
+pub const TAC_REG:  u16 = 0xFF07;  // timer control
+
+// Interrupt Flags
+pub const IF_REG: u16 = 0xFF0F;
+pub const IE_REG: u16 = 0xFFFF;
+
+// LCD registers
+pub const LCDC_REG: u16 = 0xFF40;
+pub const STAT_REG: u16 = 0xFF41;
+pub const SCY_REG:  u16 = 0xFF42;
+pub const SCX_REG:  u16 = 0xFF43;
+pub const LY_REG:   u16 = 0xFF44;
+pub const LYC_REG:  u16 = 0xFF45;
+pub const DMA_REG:  u16 = 0xFF46;
+pub const BGP_REG:  u16 = 0xFF47;
+pub const OBP0_REG: u16 = 0xFF48;
+pub const OBP1_REG: u16 = 0xFF49;
+pub const WY_REG:   u16 = 0xFF4A;
+pub const WX_REG:   u16 = 0xFF4B;
+
+
 pub struct Memory {
     mem: [u8; 0x10000],
     bootstrap: [u8; 0x100]
@@ -12,7 +40,7 @@ pub struct Memory {
 impl Memory {
     pub fn new() -> Self {
         Memory {
-            mem: [0; 0x10000],
+            mem: [0xFF; 0x10000],
             bootstrap: [0; 0x100]
         }
     }
@@ -23,6 +51,13 @@ impl Memory {
             .expect("failed to open boot rom");
         f.read(&mut self.bootstrap)
             .expect("failed to read content of boot rom");
+    }
+
+    pub fn load_cartridge(&mut self, filename: &str) {
+        let mut f = File::open(filename)
+            .expect("failed to open cartridge rom");
+        f.read(&mut self.mem)
+            .expect("failed to read content of cartridge rom");
     }
 
     pub fn read(&self, addr: u16) -> u8 {

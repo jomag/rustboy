@@ -36,6 +36,11 @@ fn main() {
     println!();
 
     mem.load_bootstrap("rom/boot.gb");
+    mem.load_cartridge("rom/tetris.gb");
+
+    for a in 0x104..0x133 {
+        print!("{:x},", mem.read(a));
+    }
 
     let mut breakpoints: Vec<u16> = Vec::new();
     let mut stepping = true;
@@ -46,7 +51,7 @@ fn main() {
     let video_subsystem = sdl_context.video().unwrap();
 
     let window = video_subsystem
-        .window("rustboy", 160 + 4, 144 + 4)
+        .window("rustboy", 320 + 4, 288 + 4)
         .position_centered()
         .opengl()
         .build()
@@ -58,15 +63,17 @@ fn main() {
     let mut texture = texture_creator.create_texture_streaming(fmt, 160, 144).unwrap();
 
     canvas.clear();
-    canvas.copy(&texture, None, Some(Rect::new(2, 2, 160, 144))).unwrap();
+    canvas.copy(&texture, None, Some(Rect::new(2, 2, 320, 288))).unwrap();
     canvas.present();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    breakpoints.push(0x000C);
-    breakpoints.push(0x0034);
-    breakpoints.push(0x0040);
-    breakpoints.push(0x0051);
+    // breakpoints.push(0x000C);
+    // breakpoints.push(0x0034);
+    // breakpoints.push(0x0040);
+    // breakpoints.push(0x0051);
+    // breakpoints.push(0x6A);
+    // breakpoints.push(0x95);
 
     let ctrlc_event = Arc::new(AtomicBool::new(false));
     let ctrlc_event_clone = ctrlc_event.clone();
@@ -79,14 +86,16 @@ fn main() {
     let mut cycles: u32 = 0;
 
     'running: loop {
+        /* THIS SLOWS DOWN THE CODE! NOT SURE WHY!
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit {..} | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                     break 'running
                 },
-                _ => {}
+                _ => { println!("unhandled event"); }
             }
         }
+        */
 
         if ctrlc_event.load(Ordering::SeqCst) {
             stepping = true;
