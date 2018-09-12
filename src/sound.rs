@@ -28,21 +28,23 @@ impl SquareWaveSoundGenerator {
         let mut result = Vec::new();
 
         for _ in 0..samples {
+            self.ctr += 1;
+
             if self.ctr % 10 == 0 {
                 if (volume > 5) {
                     volume = volume - 20;
                 }
             }
+            if self.ctr % 10000 == 0 {
+                self.period = self.period + 1;
+            }
 
             if self.period == 0 {
                 result.push(0);
             } else {
-                self.ctr += 1;
-                if self.ctr >= self.period {
-                    self.ctr = 0;
-                }
+                let pctr = self.ctr % self.period;
 
-                if self.ctr * 8 < self.period * self.duty {
+                if pctr * 8 < self.period * self.duty {
                     result.push(volume);
                 } else {
                     result.push(-volume);
@@ -122,7 +124,7 @@ pub fn sound_test() {
 
             println!("Play {}", freq);
             apu.s1.duty = apu.s1.duty + 1;
-            if apu.s1.duty == 6 { apu.s1.duty = 2 }
+            if apu.s1.duty == 8 { apu.s1.duty = 1 }
             apu.s1.period = ((1.0 / freq) * 44100.0) as u32;
             apu.s1.volume = 16384;
             println!(" period: {}", apu.s1.period);
