@@ -16,13 +16,18 @@ mod memory;
 mod instructions;
 mod debug;
 mod lcd;
+mod sound;
 
 use debug::{ print_listing, print_registers, format_mnemonic };
 use memory::Memory;
 use registers::Registers;
 use lcd::LCD;
+use sound::{ sound_test };
 
 fn main() {
+    sound_test();
+    return;
+
     use std::io::stdin;
     use std::io::stdout;
 
@@ -75,6 +80,7 @@ fn main() {
     // breakpoints.push(0x0051);
     // breakpoints.push(0x6A);
     // breakpoints.push(0x95);
+    breakpoints.push(0x100);
 
     let ctrlc_event = Arc::new(AtomicBool::new(false));
     let ctrlc_event_clone = ctrlc_event.clone();
