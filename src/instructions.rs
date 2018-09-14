@@ -173,6 +173,39 @@ pub fn cp_op(reg: &mut Registers, value: u8) {
     reg.f |= N_BIT;
 }
 
+pub fn swap_op(reg: &mut Registers, value: u8) -> u8 {
+    let res = ((value >> 4) & 0x0F) | (value << 4);
+    reg.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
+    if res == 0 { reg.f |= Z_BIT }
+    res
+}
+
+pub fn rr_op(reg: &mut Registers, value: u8) -> u8 {
+    // RRA, RR r
+    let mut res;
+
+    if value & 1 == 0 {
+        if reg.f & C_BIT == 0 {
+            reg.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
+            res = value >> 1;
+        } else {
+            reg.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
+            res = (value >> 1) | 128;
+        }
+    } else {
+        if reg.c & C_BIT == 0 {
+            reg.f &= !(Z_BIT | N_BIT | H_BIT);
+            res = value >> 1;
+        } else {
+            reg.f &= !(Z_BIT | N_BIT | H_BIT);
+            res = value >> 1 | 128;
+        }
+        reg.f |= C_BIT;
+    }
+
+    res
+}
+
 pub fn rl_op(reg: &mut Registers, value: u8) -> u8 {
     let mut t = (value as u32) << 1;
 
@@ -388,9 +421,9 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         }
         0x97 => { let a = reg.a; sub_op(reg, a) }
 
-        // AND r, AND (hl): set A to "A AND r", or "A AND (hl)""
+        // AND r, AND (hl), AND d8: set A to "A AND r", or "A AND (hl)""
         // Length: 1
-        // Cycles: 4 (8 for AND (hl))
+        // Cycles: 4 (8 for (hl) and d8)
         // Flags: Z 0 1 0
         0xA0 => { let b = reg.b; and_op(reg, b) }
         0xA1 => { let c = reg.c; and_op(reg, c) }
@@ -403,6 +436,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             and_op(reg, mem.read(hl));
         }
         0xA7 => { let a = reg.a; and_op(reg, a) }
+        0xE6 => { let v = mem.read(reg.pc + 1); and_op(reg, v) }
 
         // OR r, OR (hl): set A to "A OR r", or "A OR (hl)""
         // Length: 1
@@ -419,6 +453,13 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             or_op(reg, mem.read(hl));
         }
         0xB7 => { let a = reg.a; or_op(reg, a) }
+        0xF6 => { let v = mem.read(reg.pc + 1); or_op(reg, v) }
+
+        // RRA: ...
+        // Length: 1
+        // Cycles: 4
+        // Flags: 0 0 0 C
+        0x2F => { let a = reg.a; reg.a = rr_op(reg, a); }
 
         // LD n, d: load immediate into register n
         // Length: 2
@@ -852,6 +893,16 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                     let c = reg.c;
                     reg.c = rl_op(reg, c);
                 }
+
+                // SWAP r
+                0x30 => { let b = reg.b; reg.b = swap_op(reg, b) }
+                0x31 => { let c = reg.c; reg.c = swap_op(reg, c) }
+                0x32 => { let d = reg.d; reg.d = swap_op(reg, d) }
+                0x33 => { let e = reg.e; reg.e = swap_op(reg, e) }
+                0x34 => { let h = reg.h; reg.h = swap_op(reg, h) }
+                0x35 => { let l = reg.l; reg.l = swap_op(reg, l) }
+                0x36 => { let v = mem.read(reg.hl()); mem.write(reg.hl(), swap_op(reg, v)) }
+                0x37 => { let a = reg.a; reg.a = swap_op(reg, a) }
 
                 0x7C => {
                     // BIT 7, H: test if bit 7 in register H is set
