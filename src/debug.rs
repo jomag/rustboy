@@ -162,12 +162,22 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
 
         0x90 => { "SUB  B".to_string() }
 
+        0xA0 => { "AND  B".to_string() }
+        0xA1 => { "AND  C".to_string() }
+        0xA2 => { "AND  D".to_string() }
+        0xA3 => { "AND  E".to_string() }
+        0xA4 => { "AND  H".to_string() }
+        0xA5 => { "AND  L".to_string() }
+        0xA6 => { "AND  (HL)".to_string() }
+        0xA7 => { "AND  A".to_string() }
+
         0xA8 => { "XOR  B".to_string() }
         0xA9 => { "XOR  C".to_string() }
         0xAA => { "XOR  D".to_string() }
         0xAB => { "XOR  E".to_string() }
         0xAC => { "XOR  H".to_string() }
         0xAD => { "XOR  L".to_string() }
+        0xAE => { "XOR  (HL)".to_string() }
         0xAF => { "XOR  A".to_string() }
 
         0xBE => { "CP   (HL)".to_string() }
