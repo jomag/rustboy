@@ -33,15 +33,17 @@ pub const WX_REG:   u16 = 0xFF4B;
 
 
 pub struct Memory {
-    mem: [u8; 0x10000],
-    bootstrap: [u8; 0x100]
+    pub mem: [u8; 0x10000],
+    bootstrap: [u8; 0x100],
+    bootstrap_mode: bool
 }
 
 impl Memory {
     pub fn new() -> Self {
         Memory {
             mem: [0xFF; 0x10000],
-            bootstrap: [0; 0x100]
+            bootstrap: [0; 0x100],
+            bootstrap_mode: true
         }
     }
 
@@ -67,7 +69,7 @@ impl Memory {
         //     println!("READ MEM: 0x{:04X} ({})", addr, address_type(addr));
         // }
 
-        if addr < 0x100 {
+        if addr < 0x100 && self.bootstrap_mode {
             return self.bootstrap[addr as usize];
         } else {
             return self.mem[addr as usize];
@@ -87,6 +89,16 @@ impl Memory {
 
     pub fn write(&mut self, addr: u16, value: u8) {
         // println!("WRITE MEM: 0x{:04X} = 0x{:02X} ({})", addr, value, address_type(addr));
+        if addr >= 0xFF00 {
+            match addr {
+                0xFF42 => {}
+                
+                // 0xFF50: write 1 to disable bootstrap ROM
+                0xFF50 => { self.bootstrap_mode = false }
+                _ => { println!("unhandled write to special register 0x{:04X}: {}", addr, value) }
+            }
+        }
+
         self.mem[addr as usize] = value;
     }
 }

@@ -107,7 +107,7 @@ impl LCD {
                 scanline = 0;
             }
 
-            mem.write(LY_REG, scanline);
+            mem.mem[LY_REG as usize] = scanline;
 
             (scanline == 0)
         } else {

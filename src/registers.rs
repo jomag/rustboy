@@ -26,7 +26,11 @@ impl Registers {
         }
     }
 
-    pub fn z_flag(&mut self) -> bool {
+    pub fn c_flag(&self) -> bool {
+        (self.f & C_BIT) != 0
+    }
+
+    pub fn z_flag(&self) -> bool {
         (self.f & Z_BIT) != 0
     }
 
@@ -71,6 +75,11 @@ impl Registers {
     pub fn set_hl(&mut self, value: u16) {
         self.h = ((value >> 8) & 0xFF) as u8;
         self.l = (value & 0xFF) as u8;
+    }
+
+    pub fn set_af(&mut self, value: u16) {
+        self.a = ((value >> 8) & 0xFF) as u8;
+        self.f = (value & 0xFF) as u8;
     }
 
     pub fn set_carry(&mut self, en: bool) {
