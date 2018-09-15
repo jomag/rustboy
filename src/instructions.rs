@@ -40,7 +40,7 @@ pub fn op_length(op: u8) -> u32 {
 }
 
 
-fn push_op(reg: &mut Registers, mem: &mut Memory, value: u16) {
+pub fn push_op(reg: &mut Registers, mem: &mut Memory, value: u16) {
     let sp = reg.sp - 2;
     mem.write(sp + 1, (value >> 8) as u8);
     mem.write(sp, (value & 0xFF) as u8);
@@ -269,6 +269,13 @@ pub fn rl_op(reg: &mut Registers, value: u8) -> u8 {
     (t & 0xFF) as u8
 }
 
+fn sla_op(reg: &mut Registers, value: u8) -> u8 {
+    reg.set_carry(value & 128 != 0);
+    let result = (value << 1) & 0xFF;
+    reg.set_z_flag(result == 0);
+    result
+}
+
 pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
     let pc = reg.pc;
     let op: u8 = mem.read(pc);
@@ -447,6 +454,12 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             add_op(reg, mem.read(hl));
         }
         0x87 => { let a = reg.a; add_op(reg, a) }
+
+        // ADD A, d8: add immediate value d8 to A
+        // Length: 2
+        // Cycles: 8
+        // Flags: Z 0 H C
+        0xC6 => { let d8 = mem.read(reg.pc + 1); add_op(reg, d8) }
 
         // ADD HL, rr: adds value of register pair rr to HL and stores result in HL
         // Length: 1
@@ -640,12 +653,27 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             reg.pc = pop_op(reg, &mem) - 1;
         }
 
+        // RETI: set PC to 16-bit value popped from stack and enable IME
+        // Length: 1
+        // Cycles: 16
+        // Flags: - - - -
+        0xD9 => {
+            // Compensate for length of current instruction
+            reg.pc = pop_op(reg, &mem) - 1;
+            reg.ime = true;
+        }
+
         // RET Z: set PC to 16-bit value popped from stack if Z-flag is set
+        // RET C: set PC to 16-bit value popped from stack if C-flag is set
+        // RET NZ: set PC to 16-bit value popped from stack if Z-flag is *not* set
+        // RET NC: set PC to 16-bit value popped from stack if C-flag is *not* set
         // Length: 1
         // Cycles: 20/8
         // Flags: - - - -
         0xC8 => { if reg.z_flag() { reg.pc = pop_op(reg, &mem) - 1 }}
         0xD8 => { if reg.c_flag() { reg.pc = pop_op(reg, &mem) - 1 }}
+        0xC0 => { if !reg.z_flag() { reg.pc = pop_op(reg, &mem) - 1 }}
+        0xD0 => { if !reg.c_flag() { reg.pc = pop_op(reg, &mem) - 1 }}
 
         // CALL a16: push address of next instruction on stack
         //           and jump to address a16
@@ -751,16 +779,20 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             }
         }
 
+        // JP NZ, a16: jump to address a16 if Z is *not* set
         // JP Z, a16: jump to address a16 if Z is set
         // Length: 3
         // Cycles: 16/12
         // Flags: - - - -
+        0xC2 => { if !reg.z_flag() { reg.pc = mem.read_u16(reg.pc + 1) - 3 }}
         0xCA => { if reg.z_flag() { reg.pc = mem.read_u16(reg.pc + 1) - 3 }}
 
-        // JP Z, a16: jump to address a16 if C is set
+        // JP NC, a16: jump to address a16 if C is *not* set
+        // JP C, a16: jump to address a16 if C is set
         // Length: 3
         // Cycles: 16/12
         // Flags: - - - -
+        0xD2 => { if !reg.c_flag() { reg.pc = mem.read_u16(reg.pc + 1) - 3 }}
         0xDA => { if reg.c_flag() { reg.pc = mem.read_u16(reg.pc + 1) - 3 }}
 
         // JP a16: jump to immediate address
@@ -909,7 +941,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             // Length: 1
             // Cycles: 4
             // Flags: - - - -
-            println!("Note: DI not implemented!");
+            reg.ime = false;
         }
 
         0xFB => {
@@ -917,7 +949,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             // Length: 1
             // Cycles: 4
             // Flags: - - - -
-            println!("Note: EI not implemented!");
+            reg.ime = true;
         }
 
         // Prefix 0xCB instructions
@@ -930,6 +962,20 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                     reg.c = rl_op(reg, c);
                 }
 
+                // SLA r
+                0x20 => { let b = reg.b; reg.b = sla_op(reg, b) }
+                0x21 => { let c = reg.c; reg.c = sla_op(reg, c) }
+                0x22 => { let d = reg.d; reg.d = sla_op(reg, d) }
+                0x23 => { let e = reg.e; reg.e = sla_op(reg, e) }
+                0x24 => { let h = reg.h; reg.h = sla_op(reg, h) }
+                0x25 => { let l = reg.l; reg.l = sla_op(reg, l) }
+                0x26 => {
+                    let hl = reg.hl() as usize;
+                    let v = mem.mem[hl];
+                    mem.mem[hl] = sla_op(reg, v)
+                }
+                0x27 => { let a = reg.b; reg.b = sla_op(reg, a) }
+
                 // SWAP r
                 0x30 => { let b = reg.b; reg.b = swap_op(reg, b) }
                 0x31 => { let c = reg.c; reg.c = swap_op(reg, c) }
@@ -940,14 +986,40 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x36 => { let v = mem.read(reg.hl()); mem.write(reg.hl(), swap_op(reg, v)) }
                 0x37 => { let a = reg.a; reg.a = swap_op(reg, a) }
 
-                0x7C => {
-                    // BIT 7, H: test if bit 7 in register H is set
-                    // Length: 2
-                    // Cycles: 8
-                    // Flags: Z 0 1 -
-                    let h = reg.h;
-                    bit_op(reg, 7, h);
-                }
+                // BIT b, r: test if bit 'b' in register 'r' is set
+                // Length: 2
+                // Cycles: 8
+                // Flags: Z 0 1 -
+                0x50 => { let b = reg.b; bit_op(reg, 2, b); }
+                0x51 => { let c = reg.c; bit_op(reg, 2, c); }
+                0x52 => { let d = reg.d; bit_op(reg, 2, d); }
+                0x53 => { let e = reg.e; bit_op(reg, 2, e); }
+                0x54 => { let h = reg.h; bit_op(reg, 2, h); }
+                0x55 => { let l = reg.l; bit_op(reg, 2, l); }
+
+                0x58 => { let b = reg.b; bit_op(reg, 3, b); }
+                0x59 => { let c = reg.c; bit_op(reg, 3, c); }
+                0x5A => { let d = reg.d; bit_op(reg, 3, d); }
+                0x5B => { let e = reg.e; bit_op(reg, 3, e); }
+                0x5C => { let h = reg.h; bit_op(reg, 3, h); }
+                0x5D => { let l = reg.l; bit_op(reg, 3, l); }
+
+                0x60 => { let b = reg.b; bit_op(reg, 4, b); }
+                0x61 => { let c = reg.c; bit_op(reg, 4, c); }
+                0x62 => { let d = reg.d; bit_op(reg, 4, d); }
+                0x63 => { let e = reg.e; bit_op(reg, 4, e); }
+                0x64 => { let h = reg.h; bit_op(reg, 4, h); }
+                0x65 => { let l = reg.l; bit_op(reg, 4, l); }
+
+                0x68 => { let b = reg.b; bit_op(reg, 5, b); }
+                0x69 => { let c = reg.c; bit_op(reg, 5, c); }
+                0x6A => { let d = reg.d; bit_op(reg, 5, d); }
+                0x6B => { let e = reg.e; bit_op(reg, 5, e); }
+                0x6C => { let h = reg.h; bit_op(reg, 5, h); }
+                0x6D => { let l = reg.l; bit_op(reg, 5, l); }
+
+                0x7C => { let h = reg.h; bit_op(reg, 7, h); }
+                0x7F => { let a = reg.a; bit_op(reg, 7, a); }
 
                 // RES b, r: reset bit b in register r
                 // Length: 2
@@ -959,7 +1031,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x83 => { reg.e &= !1; }
                 0x84 => { reg.h &= !1; }
                 0x85 => { reg.l &= !1; }
-                // 0x86 => { /* FIXME */ }
+                0x86 => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v & !1); }
                 0x87 => { reg.a &= !1; }
 
                 0x88 => { reg.b &= !2; }
@@ -968,7 +1040,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x8B => { reg.e &= !2; }
                 0x8C => { reg.h &= !2; }
                 0x8D => { reg.l &= !2; }
-                // 0x8E => { /* FIXME */ }
+                0x8E => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v & !2); }
                 0x8F => { reg.a &= !2; }
 
                 0x90 => { reg.b &= !4; }
@@ -977,7 +1049,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x93 => { reg.e &= !4; }
                 0x94 => { reg.h &= !4; }
                 0x95 => { reg.l &= !4; }
-                // 0x96 => { /* FIXME */ }
+                0x96 => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v & !4); }
                 0x97 => { reg.a &= !4; }
 
                 0x98 => { reg.b &= !8; }
@@ -986,7 +1058,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x9B => { reg.e &= !8; }
                 0x9C => { reg.h &= !8; }
                 0x9D => { reg.l &= !8; }
-                // 0x9E => { /* FIXME */ }
+                0x9D => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v & !8); }
                 0x9F => { reg.a &= !8; }
 
                 0xA0 => { reg.b &= !16; }
@@ -995,7 +1067,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0xA3 => { reg.e &= !16; }
                 0xA4 => { reg.h &= !16; }
                 0xA5 => { reg.l &= !16; }
-                // 0xA6 => { /* FIXME */ }
+                0xA6 => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v & !16); }
                 0xA7 => { reg.a &= !16; }
 
                 0xA8 => { reg.b &= !32; }
@@ -1004,7 +1076,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0xAB => { reg.e &= !32; }
                 0xAC => { reg.h &= !32; }
                 0xAD => { reg.l &= !32; }
-                // 0xAE => { /* FIXME */ }
+                0xAE => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v & !32); }
                 0xAF => { reg.a &= !32; }
 
                 0xB0 => { reg.b &= !64; }
@@ -1013,7 +1085,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0xB3 => { reg.e &= !64; }
                 0xB4 => { reg.h &= !64; }
                 0xB5 => { reg.l &= !64; }
-                // 0xB6 => { /* FIXME */ }
+                0xB6 => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v & !64); }
                 0xB7 => { reg.a &= !64; }
 
                 0xB8 => { reg.b &= !128; }
@@ -1022,7 +1094,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0xBB => { reg.e &= !128; }
                 0xBC => { reg.h &= !128; }
                 0xBD => { reg.l &= !128; }
-                // 0xBE => { /* FIXME */ }
+                0xBE => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v & !128); }
                 0xBF => { reg.a &= !128; }
 
                 _ => {
