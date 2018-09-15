@@ -1,6 +1,7 @@
 
 use sdl2::render::Texture;
-use memory::{ LCDC_REG, LY_REG, SCY_REG, Memory };
+use memory::{ LCDC_REG, LY_REG, SCY_REG, IF_REG, Memory };
+use interrupt::VBLANK_BIT;
 
 // Bits of LCDC register:
 // 7 - LCD Enable (0 = off, 1 = on)
@@ -104,6 +105,7 @@ impl LCD {
             } else if scanline < 153 {
                 scanline += 1;
             } else {
+                mem.mem[IF_REG as usize] |= VBLANK_BIT;
                 scanline = 0;
             }
 
