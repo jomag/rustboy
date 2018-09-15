@@ -1,6 +1,6 @@
 
-use memory::{ TAC_REG, TIMA_REG };
-use memory::Memory;
+use memory::{ TAC_REG, TIMA_REG, TMA_REG, IF_REG, Memory };
+use interrupt::TMR_BIT;
 
 const clock_selection: [u32; 4] = [ 4095, 262143, 65535, 16383 ];
 
@@ -16,7 +16,6 @@ impl Timer {
     }
 
     pub fn update(&mut self, mem: &mut Memory, cycles: u32) {
-
         // TAC register:
         // Bit 2: 0 = stop timer, 1 = start timer
         // Bit 1-0: Clock select
@@ -33,12 +32,18 @@ impl Timer {
         } else {
             for _ in 0..(cycles / 4) {
                 if self.cycle & clock_selection[(tac & 3) as usize] == 0 {
-                    if mem.mem[TIMA_REG as usize] == 252 {
-                        mem.mem[TIMA_REG as usize] = 0;
-                    } else {
-                        mem.mem[TIMA_REG as usize] += 4;
+                    let mut tima: u32 = (mem.mem[TIMA_REG as usize] as u32) + 4;
+                    if tima > 0xFF {
+                        // On overflow, set TIMA to the value of the
+                        // timer modulo (TMA).
+                        // FIXME: if TMA has a very high value
+                        //        it could cause TIMA to immediately
+                        //        overflow again! This is only because
+                        //        we add 4 cycles at once.
+                        tima = tima & 0xFF + (mem.mem[TMA_REG as usize] as u32);
+                        mem.mem[IF_REG as usize] |= TMR_BIT;
                     }
-                    println!("TIMA new value: {}", mem.mem[TIMA_REG as usize]);
+                    mem.mem[TIMA_REG as usize] = tima as u8;
                 }
             }
         }

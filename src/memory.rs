@@ -102,15 +102,20 @@ impl Memory {
         } else if addr >= 0xFF00 {
             if addr >= 0xFF10 && addr <= 0xFF26 {
                 println!("unhandled write to audio register 0x{:04X}: {}", addr, value);
+            } else if addr >= 0xFF30 && addr <= 0xFF3F {
+                println!("unhandled write to wave register 0x{:04X}: {}", addr, value);
             } else {
                 match addr {
                     0xFF00 => {}  // P1
                     0xFF01 => {}  // SB
                     0xFF02 => {}  // SC
+
+
                     0xFF40 => {}
                     0xFF41 => {}  // STAT
                     0xFF42 => {}
                     0xFF43 => {}  // SCX
+                    0xFF46 => {}  // DMA
                     0xFF47 => {}  // BGP
                     0xFF48 => {}  // OBP0
                     0xFF49 => {}  // OBP1

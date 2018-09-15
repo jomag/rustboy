@@ -18,6 +18,7 @@ mod debug;
 mod lcd;
 mod sound;
 mod timer;
+mod interrupt;
 
 use debug::{ print_listing, print_registers, format_mnemonic };
 use memory::Memory;
@@ -25,11 +26,9 @@ use registers::Registers;
 use lcd::LCD;
 use sound::{ sound_test };
 use timer::Timer;
+use interrupt::handle_interrupts;
 
 fn main() {
-    sound_test();
-    return;
-
     use std::io::stdin;
     use std::io::stdout;
 
@@ -83,7 +82,8 @@ fn main() {
     // breakpoints.push(0x0051);
     // breakpoints.push(0x6A);
     // breakpoints.push(0x95);
-    breakpoints.push(0x100);
+    // breakpoints.push(0x100);
+    // breakpoints.push(0x40);
 
     let ctrlc_event = Arc::new(AtomicBool::new(false));
     let ctrlc_event_clone = ctrlc_event.clone();
@@ -160,6 +160,7 @@ fn main() {
         timer.update(&mut mem, op_cycles);
 
         let refresh = lcd.update(op_cycles, &mut mem, &mut texture);
+        handle_interrupts(&mut reg, &mut mem);
 
         if refresh {
             lcd.copy_to_texture(&mut texture);

@@ -14,7 +14,8 @@ pub struct Registers {
     pub h: u8,
     pub l: u8,
     pub sp: u16,
-    pub pc: u16
+    pub pc: u16,
+    pub ime: bool
 }
 
 impl Registers {
@@ -22,7 +23,8 @@ impl Registers {
         Registers {
             a: 0, b: 0, c: 0, d: 0,
             e: 0, f: 0, h: 0, l: 0,
-            sp: 0, pc: 0
+            sp: 0, pc: 0,
+            ime: false
         }
     }
 
