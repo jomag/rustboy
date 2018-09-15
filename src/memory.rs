@@ -89,13 +89,43 @@ impl Memory {
 
     pub fn write(&mut self, addr: u16, value: u8) {
         // println!("WRITE MEM: 0x{:04X} = 0x{:02X} ({})", addr, value, address_type(addr));
-        if addr >= 0xFF00 {
-            match addr {
-                0xFF42 => {}
-                
-                // 0xFF50: write 1 to disable bootstrap ROM
-                0xFF50 => { self.bootstrap_mode = false }
-                _ => { println!("unhandled write to special register 0x{:04X}: {}", addr, value) }
+        if addr == 0xFF0F {
+            println!("Write to IF register 0xFF0F: {}", value);
+        }
+        
+        else if addr == 0xFFFF {
+            println!("Write to IE register 0xFFFF: {}", value);
+        }
+        
+        else if addr >= 0xFF80 && addr <= 0xFFFE {
+
+        } else if addr >= 0xFF00 {
+            if addr >= 0xFF10 && addr <= 0xFF26 {
+                println!("unhandled write to audio register 0x{:04X}: {}", addr, value);
+            } else {
+                match addr {
+                    0xFF00 => {}  // P1
+                    0xFF01 => {}  // SB
+                    0xFF02 => {}  // SC
+                    0xFF40 => {}
+                    0xFF41 => {}  // STAT
+                    0xFF42 => {}
+                    0xFF43 => {}  // SCX
+                    0xFF47 => {}  // BGP
+                    0xFF48 => {}  // OBP0
+                    0xFF49 => {}  // OBP1
+                    0xFF4A => {}  // WY
+                    0xFF4B => {}  // WX
+                    0xFF06 => { println!("write to 0xFF06 - TMA: {}", value) }  // TMA
+
+                    // Invalid registers, that are still used by for example Tetris
+                    // https://www.reddit.com/r/EmuDev/comments/5nixai/gb_tetris_writing_to_unused_memory/
+                    0xFF7F => {}
+
+                    // 0xFF50: write 1 to disable bootstrap ROM
+                    0xFF50 => { self.bootstrap_mode = false }
+                    _ => { panic!("unhandled write to special register 0x{:04X}: {}", addr, value) }
+                }
             }
         }
 

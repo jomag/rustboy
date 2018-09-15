@@ -17,12 +17,14 @@ mod instructions;
 mod debug;
 mod lcd;
 mod sound;
+mod timer;
 
 use debug::{ print_listing, print_registers, format_mnemonic };
 use memory::Memory;
 use registers::Registers;
 use lcd::LCD;
 use sound::{ sound_test };
+use timer::Timer;
 
 fn main() {
     sound_test();
@@ -34,6 +36,7 @@ fn main() {
     let mut reg = Registers::new();
     let mut mem = Memory::new();
     let mut lcd = LCD::new();
+    let mut timer = Timer::new();
 
     println!();
     println!("Starting RustBoy (GameBoy Emulator written in Rust)");
@@ -153,6 +156,8 @@ fn main() {
 
         let op_cycles = instructions::step(&mut reg, &mut mem);
         cycles += op_cycles;
+
+        timer.update(&mut mem, op_cycles);
 
         let refresh = lcd.update(op_cycles, &mut mem, &mut texture);
 
