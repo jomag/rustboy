@@ -24,33 +24,131 @@ pub fn print_registers(reg: &Registers) {
     )
 }
 
+const simple_mnemonics: [&str; 256] = [
+    // 0x00
+    "NOP", "", "LD   (BC), A", "INC  BC", "INC  B", "DEC  B", "", "RLCA",
+
+    // 0x08
+    "", "ADD  HL, BC", "LD   A, (BC)", "DEC  BC", "INC  C", "DEC  C", "", "RRCA",
+    
+    // 0x10
+    "STOP 0", "", "LD   (DE), A", "INC  DE", "INC  D", "DEC  D", "", "RLA",
+
+    // 0x18
+    "", "ADD  HL, DE", "LD   A, (DE)", "DEC  DE", "INC  E", "DEC  E", "", "RRA",
+
+    // 0x20
+    "", "", "LD   (HL+), A", "INC  HL", "INC  H", "DEC  H", "", "DAA",
+    
+    // 0x28
+    "", "ADD  HL, HL", "LD   A, (HL+)", "DEC  HL", "INC  L", "DEC  L", "", "CPL",
+
+    // 0x30
+    "", "", "LD   (HL-), A", "INC  SP", "INC  (HL)", "DEC  (HL)", "", "SCF",
+
+    // 0x38
+    "", "ADD  HL, SP", "LD   A, (HL-)", "DEC  SP", "INC  A", "DEC  A", "", "CCF",
+
+    // 0x40
+    "LD   B, B", "LD   B, C", "LD   B, D",    "LD   B, E",
+    "LD   B, H", "LD   B, L", "LD   B, (HL)", "LD   B, A",
+
+    // 0x48
+    "LD   C, B", "LD   C, C", "LD   C, D",    "LD   C, E",
+    "LD   C, H", "LD   C, L", "LD   C, (HL)", "LD   C, A",
+
+    // 0x50
+    "LD   D, B", "LD   D, C", "LD   D, D",    "LD   D, E",
+    "LD   D, H", "LD   D, L", "LD   D, (HL)", "LD   D, A",
+
+    // 0x58
+    "LD   E, B", "LD   E, C", "LD   E, D",    "LD   E, E",
+    "LD   E, H", "LD   E, L", "LD   E, (HL)", "LD   E, A",
+
+    // 0x60
+    "LD   H, B", "LD   H, C", "LD   H, D",    "LD   H, E",
+    "LD   H, H", "LD   H, L", "LD   H, (HL)", "LD   H, A",
+
+    // 0x68
+    "LD   L, B", "LD   L, C", "LD   L, D",    "LD   L, E",
+    "LD   L, H", "LD   L, L", "LD   L, (HL)", "LD   L, A",
+
+    // 0x70
+    "LD   (HL), B", "LD   (HL), C", "LD   (HL), D", "LD   (HL), E",
+    "LD   (HL), H", "LD   (HL), L", "HALT",         "LD   (HL), A",
+
+    // 0x78
+    "LD   A, B", "LD   A, C", "LD   A, D",    "LD   A, E",
+    "LD   A, H", "LD   A, L", "LD   A, (HL)", "LD   A, A",
+    
+    // 0x80
+    "ADD  A, B", "ADD  A, C", "ADD  A, D",    "ADD  A, E",
+    "ADD  A, H", "ADD  A, L", "ADD  A, (HL)", "ADD  A, A",
+
+    // 0x88
+    "ADC  A, B", "ADC  A, C", "ADC  A, D",    "ADC  A, E",
+    "ADC  A, H", "ADC  A, L", "ADC  A, (HL)", "ADC  A, A",
+
+    // 0x90
+    "SUB  B", "SUB  C", "SUB  D",    "SUB  E",
+    "SUB  H", "SUB  L", "SUB  (HL)", "SUB  A",
+
+    // 0x98
+    "SBC  A, B", "SBC  A, C", "SBC  A, D",    "SBC  A, E",
+    "SBC  A, H", "SBC  A, L", "SBC  A, (HL)", "SBC  A, A",
+
+    // 0xA0
+    "AND  B", "AND  C", "AND  D",    "AND  E",
+    "AND  H", "AND  L", "AND  (HL)", "AND  A",
+
+    // 0xA8
+    "XOR  B", "XOR  C", "XOR  D",    "XOR  E",
+    "XOR  H", "XOR  L", "XOR  (HL)", "XOR  A",
+
+    // 0xB0
+    "OR   B", "OR   C", "OR   D",    "OR   E",
+    "OR   H", "OR   L", "OR   (HL)", "OR   A",
+
+    // 0xB8
+    "CP   B", "CP   C", "CP   D",    "CP   E",
+    "CP   H", "CP   L", "CP   (HL)", "CP   A",
+
+    // 0xC0
+    "RET  NZ", "POP  BC", "", "", "", "PUSH BC", "", "RST  00H",
+
+    // 0xC8
+    "RET  Z", "RET", "", "", "", "", "", "RST  08H",
+
+    // 0xD0
+    "RET  NC", "POP  DE", "", "", "", "PUSH DE", "", "RST  10H",
+
+    // 0xD8
+    "RET  C", "RETI", "", "", "", "", "", "RST  18H",
+    
+    // 0xE0
+    "", "POP  HL", "LD   (C), A", "", "", "PUSH HL", "", "RST  20H",
+
+    // 0xE8
+    "", "JP   (HL)", "", "", "", "", "", "RST  28H",
+
+    // 0xF0
+    "", "POP  AF", "LD   A, (C)", "DI", "", "PUSH AF", "", "RST 30H",
+
+    // 0xF8
+    "", "LD   SP, HL", "", "EI", "", "", "", "RST  38H"
+];
+
 pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
     let op: u8 = mem.read(addr);
+
+    let easy = simple_mnemonics[op as usize];
+
+    if !easy.is_empty() {
+        return easy.to_string();
+    }
+
     match op {
-        0x00 => { "NOP".to_string() }
         0x01 => { format!("LD  BC, ${:04X}", mem.read_u16(addr + 1)) }
-
-        // INC n: increment register n
-        0x04 => { "INC  B".to_string() }
-        0x0C => { "INC  C".to_string() }
-        0x14 => { "INC  D".to_string() }
-        0x1C => { "INC  E".to_string() }
-        0x24 => { "INC  H".to_string() }
-        0x2C => { "INC  L".to_string() }
-        0x3C => { "INC  A".to_string() }
-
-        // INC nn: increment 16-bit register nn
-        0x13 => { "INC  DE".to_string() }
-        0x23 => { "INC  HL".to_string() }
-
-        // DEC n: decrement register n
-        0x05 => { "DEC  B".to_string() }
-        0x0D => { "DEC  C".to_string() }
-        0x15 => { "DEC  D".to_string() }
-        0x1D => { "DEC  E".to_string() }
-        0x25 => { "DEC  H".to_string() }
-        0x2D => { "DEC  L".to_string() }
-        0x3D => { "DEC  A".to_string() }
 
         // LD n, d: load immediate into register n
         0x06 => { format!("LD   B, ${:02X}", mem.read(addr + 1)) }
@@ -66,25 +164,25 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
             let hi = mem.read(addr + 2);
             format!("LD   DE, ${:02X}{:02X}", hi, lo)
         }
-        0x17 => { "RLA".to_string() }
+
         0x18 => {
             let rel = mem.read_i8(addr + 1);
             let abs = add_i8_to_u16(addr + 2, rel);
             format!("JR   {}  ; jump to 0x{:04X}", rel, abs)
         }
-        0x1A => { "LD   A, (DE)".to_string() }
 
         0x20 => {
             let rel = mem.read_i8(addr + 1);
             let abs = add_i8_to_u16(addr + 2, rel);
             format!("JR   NZ, {}    ; jump to 0x{:04X}", rel, abs)
         }
+
         0x21 => {
             let lo = mem.read(addr + 1);
             let hi = mem.read(addr + 2);
             format!("LD   HL, ${:02X}{:02X}", hi, lo)
         }
-        0x22 => { "LD   (HL+), A".to_string() }
+
         0x28 => {
             let rel = mem.read_i8(addr + 1);
             let abs = add_i8_to_u16(addr + 2, rel);
@@ -96,112 +194,27 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
             let hi = mem.read(addr + 2);
             format!("LD   SP, ${:02X}{:02X}", hi, lo)
         }
-        0x32 => { "LDD  (HL), A".to_string() }
 
-        0x40 => { "LD   B, B".to_string() }
-        0x41 => { "LD   B, C".to_string() }
-        0x42 => { "LD   B, D".to_string() }
-        0x43 => { "LD   B, E".to_string() }
-        0x44 => { "LD   B, H".to_string() }
-        0x45 => { "LD   B, L".to_string() }
-        0x46 => { "LD   B, (HL)".to_string() }
-        0x47 => { "LD   B, A".to_string() }
-
-        0x48 => { "LD   C, B".to_string() }
-        0x49 => { "LD   C, C".to_string() }
-        0x4A => { "LD   C, D".to_string() }
-        0x4B => { "LD   C, E".to_string() }
-        0x4C => { "LD   C, H".to_string() }
-        0x4D => { "LD   C, L".to_string() }
-        0x4E => { "LD   C, (HL)".to_string() }
-        0x4F => { "LD   C, A".to_string() }
-
-        0x50 => { "LD   D, B".to_string() }
-        0x51 => { "LD   D, C".to_string() }
-        0x52 => { "LD   D, D".to_string() }
-        0x53 => { "LD   D, E".to_string() }
-        0x54 => { "LD   D, H".to_string() }
-        0x55 => { "LD   D, L".to_string() }
-        0x56 => { "LD   D, (HL)".to_string() }
-        0x57 => { "LD   D, A".to_string() }
-
-        0x58 => { "LD   E, B".to_string() }
-        0x59 => { "LD   E, C".to_string() }
-        0x5A => { "LD   E, D".to_string() }
-        0x5B => { "LD   E, E".to_string() }
-        0x5C => { "LD   E, H".to_string() }
-        0x5D => { "LD   E, L".to_string() }
-        0x5E => { "LD   E, (HL)".to_string() }
-        0x5F => { "LD   E, A".to_string() }
-
-        0x60 => { "LD   H, B".to_string() }
-        0x61 => { "LD   H, C".to_string() }
-        0x62 => { "LD   H, D".to_string() }
-        0x63 => { "LD   H, E".to_string() }
-        0x64 => { "LD   H, H".to_string() }
-        0x65 => { "LD   H, L".to_string() }
-        0x66 => { "LD   H, (HL)".to_string() }
-        0x67 => { "LD   H, A".to_string() }
-
-        0x68 => { "LD   L, B".to_string() }
-        0x69 => { "LD   L, C".to_string() }
-        0x6A => { "LD   L, D".to_string() }
-        0x6B => { "LD   L, E".to_string() }
-        0x6C => { "LD   L, H".to_string() }
-        0x6D => { "LD   L, L".to_string() }
-        0x6E => { "LD   L, (HL)".to_string() }
-        0x6F => { "LD   L, A".to_string() }
-
-        0x77 => { "LD   (HL), A".to_string() }
-        0x78 => { "LD   A, B".to_string() }
-        0x7B => { "LD   A, E".to_string() }
-        0x7C => { "LD   A, H".to_string() }
-        0x7D => { "LD   A, L".to_string() }
-
-        0x86 => { "ADD  A, (HL)".to_string() }
-
-        0x90 => { "SUB  B".to_string() }
-
-        0xA0 => { "AND  B".to_string() }
-        0xA1 => { "AND  C".to_string() }
-        0xA2 => { "AND  D".to_string() }
-        0xA3 => { "AND  E".to_string() }
-        0xA4 => { "AND  H".to_string() }
-        0xA5 => { "AND  L".to_string() }
-        0xA6 => { "AND  (HL)".to_string() }
-        0xA7 => { "AND  A".to_string() }
-
-        0xA8 => { "XOR  B".to_string() }
-        0xA9 => { "XOR  C".to_string() }
-        0xAA => { "XOR  D".to_string() }
-        0xAB => { "XOR  E".to_string() }
-        0xAC => { "XOR  H".to_string() }
-        0xAD => { "XOR  L".to_string() }
-        0xAE => { "XOR  (HL)".to_string() }
-        0xAF => { "XOR  A".to_string() }
-
-        0xBE => { "CP   (HL)".to_string() }
-
-        0xC1 => { "POP  BC".to_string() }
         0xC3 => { format!("JP   0x{:04X}", mem.read_u16(addr + 1)) }
         0xC4 => { format!("CALL  NZ, ${:04X}", mem.read_u16(addr + 1)) }
-        0xC5 => { "PUSH BC".to_string() }
-        0xC9 => { "RET".to_string() }
+
         0xCB => {
             let op2 = mem.read(addr + 1);
             match op2 {
                 0x11 => { "RL   C".to_string() }
                 0x7C => { "BIT 7, h".to_string() }
+                0x37 => { "SWAP A".to_string() }
                 _ => {
                     panic!("invalid instruction op code: 0x{:02X}{:02X}", op, op2);
                 }
             }
         }
+
         0xCD => { format!("CALL ${:04X}", mem.read_u16(addr + 1)) }
 
         0xE0 => { format!("LD   ($FF00+${:02X}), A", mem.read(addr + 1)) }
-        0xE2 => { "LD   ($FF00+C), A".to_string() }
         0xEA => { format!("LD   (${:04X}), A", mem.read_u16(addr + 1)) }
+        0xE6 => { format!("AND  ${:02X}", mem.read(addr + 1)) }
 
         0xF0 => { format!("LD   A, ($FF00+${:02X})", mem.read(addr + 1)) }
         0xFE => { format!("CP   ${:02X}", mem.read(addr + 1)) }
