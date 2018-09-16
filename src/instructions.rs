@@ -80,7 +80,7 @@ pub fn xor_op(reg: &mut Registers, value: u8) {
     reg.a = reg.a ^ value;
     reg.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
     if reg.a == 0 {
-        reg.f |= Z_BIT;
+        reg.set_z_flag(true);
     }
 }
 
@@ -447,7 +447,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0x0B => { let bc = reg.bc(); reg.set_bc(bc - 1); }
         0x1B => { let de = reg.de(); reg.set_de(de - 1); }
         0x2B => { let hl = reg.hl(); reg.set_hl(hl - 1); }
-        0x3B => { reg.sp = if reg.sp == 0 { 0xFFFF} else { reg.sp - 1 }}
+        0x3B => { reg.sp = if reg.sp == 0 { 0xFFFF } else { reg.sp - 1 }}
 
         // DEC (HL): decrement memory stored at HL
         // Length: 1
@@ -1102,6 +1102,16 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             reg.clear_n_flag();
             reg.set_z_flag(false);
         }
+
+        0x2F => {
+            // CPL: complement (bitwise not) register A
+            // Length: 1
+            // Cycles: 4
+            // Flags: - 1 1 -
+            reg.a = !reg.a;
+            reg.set_n_flag();
+        }
+
 
         0x10 => {
             // STOP 0
