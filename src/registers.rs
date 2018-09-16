@@ -15,7 +15,8 @@ pub struct Registers {
     pub l: u8,
     pub sp: u16,
     pub pc: u16,
-    pub ime: bool
+    pub ime: bool,
+    pub stopped: bool
 }
 
 impl Registers {
@@ -24,7 +25,8 @@ impl Registers {
             a: 0, b: 0, c: 0, d: 0,
             e: 0, f: 0, h: 0, l: 0,
             sp: 0, pc: 0,
-            ime: false
+            ime: false,
+            stopped: false
         }
     }
 
@@ -42,6 +44,14 @@ impl Registers {
         } else {
            self.f &= !Z_BIT;
         }
+    }
+
+    pub fn set_n_flag(&mut self) {
+        self.f |= N_BIT;
+    }
+
+    pub fn clear_n_flag(&mut self) {
+        self.f &= !N_BIT;
     }
 
     pub fn af(&self) -> u16 {

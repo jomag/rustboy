@@ -9,6 +9,9 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
+use std::io::stdin;
+use std::io::stdout;
+use std::env;
 
 mod ui;
 mod registers;
@@ -29,8 +32,14 @@ use timer::Timer;
 use interrupt::handle_interrupts;
 
 fn main() {
-    use std::io::stdin;
-    use std::io::stdout;
+    let bootstrap_rom ="rom/boot.gb";
+
+    let args: Vec<String> = env::args().collect();
+
+    let cartridge_rom = if args.len() > 1 { &args[1] } else { "rom/tetris.gb" };
+
+    // sound_test();
+    // return;
 
     let mut reg = Registers::new();
     let mut mem = Memory::new();
@@ -42,8 +51,11 @@ fn main() {
     println!("---------------------------------------------------");
     println!();
 
-    mem.load_bootstrap("rom/boot.gb");
-    mem.load_cartridge("rom/tetris.gb");
+    println!("Loading bootstrap ROM: {}", bootstrap_rom);
+    mem.load_bootstrap(bootstrap_rom);
+
+    println!("Loading cartridge ROM: {}", cartridge_rom);
+    mem.load_cartridge(cartridge_rom);
 
     for a in 0x104..0x133 {
         print!("{:x},", mem.read(a));
@@ -152,6 +164,13 @@ fn main() {
                     _ => { println!("invalid command!"); }
                 }
             }
+        }
+
+        if reg.stopped {
+            println!("Stopped! Press enter to continue");
+            let mut inp: String = String::new();
+            stdin().read_line(&mut inp).expect("invalid command");
+            reg.stopped = false;
         }
 
         let op_cycles = instructions::step(&mut reg, &mut mem);

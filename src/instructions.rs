@@ -75,14 +75,13 @@ pub fn or_op(reg: &mut Registers, value: u8) {
     }
 }
 
-pub fn xor_op(reg: &mut Registers, a: u8, value: u8) -> u8 {
+pub fn xor_op(reg: &mut Registers, value: u8) {
     // Flags: Z 0 0 0
-    let res = a ^ value;
+    reg.a = reg.a ^ value;
     reg.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
-    if res == 0 {
+    if reg.a == 0 {
         reg.f |= Z_BIT;
     }
-    res
 }
 
 pub fn bit_op(reg: &mut Registers, bit: u8, value: u8) {
@@ -138,6 +137,38 @@ pub fn add_hl_op(reg: &mut Registers, value: u16) {
     reg.set_carry(hl32 > 0xFFFF);
     let hl32 = hl32 & 0xFFFF;
     reg.set_hl(hl32 as u16);
+}
+
+pub fn adc_op(reg: &mut Registers, value: u8) {
+    // ADC A, n: add sum of n and carry to A
+    // Flags: Z 0 H C
+    let carry: u32 = if reg.c_flag() { 1 } else { 0 };
+    let a: u32 = (reg.a as u32) + (value as u32) + carry;
+    reg.set_carry(a > 0xFF);
+    reg.a = (a & 0xFF) as u8;
+    if reg.a == 0 {
+        reg.set_z_flag(true);
+    } else {
+        reg.set_z_flag(false);
+    }
+    reg.clear_n_flag();
+}
+
+pub fn sbc_op(reg: &mut Registers, value: u8) {
+    // SBC A, n: subtract sum of n and carry to A
+    // Flags: Z 1 H C
+    let carry: u32 = if reg.c_flag() { 1 } else { 0 };
+    let mut a: u32 = reg.a as u32;
+    if a >= (value as u32) + carry {
+        a = a - value as u32 - carry;
+        reg.set_carry(false);
+    } else {
+        a = a + 256 - value as u32 - carry;
+        reg.set_carry(true);
+    }
+    a = a & 0xFF;
+    reg.set_z_flag(a == 0);
+    reg.set_n_flag();
 }
 
 pub fn dec_op(reg: &mut Registers, value: u8) -> u8 {
@@ -243,35 +274,20 @@ pub fn rl_op(reg: &mut Registers, value: u8) -> u8 {
     }
 
     return (t & 0xFF) as u8;
-
-    // Rotate left with carry flag
-    // Flags: Z 0 0 C
-    let mut t = (value as u32) << 1;
-
-    if reg.f & C_BIT != 0 {
-        t |= 1;
-    }
-
-    if t & 256 == 0 {
-        reg.f &= !C_BIT;
-    } else {
-        reg.f |= C_BIT;
-    }
-
-    if t == 0 {
-        reg.f |= Z_BIT;
-    } else {
-        reg.f &= Z_BIT;
-    }
-
-    reg.f &= !(N_BIT | H_BIT);
-
-    (t & 0xFF) as u8
 }
+
 
 fn sla_op(reg: &mut Registers, value: u8) -> u8 {
     reg.set_carry(value & 128 != 0);
     let result = (value << 1) & 0xFF;
+    reg.set_z_flag(result == 0);
+    result
+}
+
+fn srl_op(reg: &mut Registers, value: u8) -> u8 {
+    // Shift n right into Carry. MSB set to 0.
+    reg.set_carry(value & 1 != 0);
+    let result = value >> 1;
     reg.set_z_flag(result == 0);
     result
 }
@@ -431,7 +447,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0x0B => { let bc = reg.bc(); reg.set_bc(bc - 1); }
         0x1B => { let de = reg.de(); reg.set_de(de - 1); }
         0x2B => { let hl = reg.hl(); reg.set_hl(hl - 1); }
-        0x3B => { reg.sp = reg.sp - 1; }
+        0x3B => { reg.sp = if reg.sp == 0 { 0xFFFF} else { reg.sp - 1 }}
 
         // DEC (HL): decrement memory stored at HL
         // Length: 1
@@ -461,6 +477,12 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Flags: Z 0 H C
         0xC6 => { let d8 = mem.read(reg.pc + 1); add_op(reg, d8) }
 
+        // ADC A, d8: add immediate value + carry to A
+        0xCE => { let d8 = mem.read(reg.pc + 1); adc_op(reg, d8) }
+
+        // SBC A, d8: subtract immediate value and carry from A
+        0xDE => { let d8 = mem.read(reg.pc + 1); sbc_op(reg, d8) }
+
         // ADD HL, rr: adds value of register pair rr to HL and stores result in HL
         // Length: 1
         // Cycles: 8
@@ -469,6 +491,17 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0x19 => { let hl = reg.hl(); let de = reg.de(); add_hl_op(reg, de) }
         0x29 => { let hl = reg.hl(); add_hl_op(reg, hl) }
         0x39 => { let hl = reg.hl(); let sp = reg.sp; add_hl_op(reg, sp) }
+
+        // ADD SP, d8: add immediate value d8 to SP
+        // Length: 2
+        // Cycles: 16
+        // Flags: 0 0 H C
+        0xE8 => {
+            let sp: u32 = reg.sp as u32 + mem.read(reg.pc + 1) as u32;
+            reg.set_carry(sp > 0xFFFF);
+            reg.set_z_flag(false);
+            reg.sp = (sp & 0xFFFF) as u16;
+        }
 
         // SUB r, SUB (hl): subtract register r or value at (hl) from accumulator
         // Length: 1
@@ -485,6 +518,12 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             sub_op(reg, mem.read(hl));
         }
         0x97 => { let a = reg.a; sub_op(reg, a) }
+
+        // SUB d8: subtract immediate value d8 from A
+        // Length: 2
+        // Cycles: 8
+        // Flags: Z 1 H C
+        0xD6 => { let v = mem.read(reg.pc + 1); sub_op(reg, v) }
 
         // AND r, AND (hl), AND d8: set A to "A AND r", or "A AND (hl)""
         // Length: 1
@@ -524,7 +563,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Length: 1
         // Cycles: 4
         // Flags: 0 0 0 C
-        0x2F => { let a = reg.a; reg.a = rr_op(reg, a); }
+        0x1F => { let a = reg.a; reg.a = rr_op(reg, a); }
 
         // LD n, d: load immediate into register n
         // Length: 2
@@ -688,6 +727,32 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             reg.pc = mem.read_u16(reg.pc + 1) - 3;
         }
 
+        // CALL NZ, a16: if Z-flag is not set, push address of next
+        //               instruction on stack and jump to address a16
+        // Length: 3
+        // Cycles: 24/12
+        // Flags: - - - -
+        0xC4 => {
+            if !reg.z_flag() {
+                let nexti = reg.pc + 3;
+                push_op(reg, mem, nexti);
+                reg.pc = mem.read_u16(reg.pc + 1) - 3;
+            }
+        }
+
+        // CALL NC, a16: if C-flag is not set, push address of next
+        //               instruction on stack and jump to address a16
+        // Length: 3
+        // Cycles: 24/12
+        // Flags: - - - -
+        0xD4 => {
+            if !reg.c_flag() {
+                let nexti = reg.pc + 3;
+                push_op(reg, mem, nexti);
+                reg.pc = mem.read_u16(reg.pc + 1) - 3;
+            }
+        }
+
         // RST n: push PC and jump to one out of 8 possible addresses
         // Length: 1
         // Cycles: 16
@@ -750,12 +815,27 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         }
 
         0x20 => {
-            // JR NZ, d8: jump d8 relative to PC if Z is reset
+            // JR NZ, d8: jump d8 relative to PC if Z flag is not set
             // Length: 2
             // Cycles: 12/8
             // Flags: - - - -
             let offs = mem.read_i8(reg.pc + 1);
             if !reg.z_flag() {
+                if offs >= 0 {
+                    reg.pc = reg.pc.wrapping_add(offs as u16);
+                } else {
+                    reg.pc = reg.pc.wrapping_sub(-offs as u16);
+                }
+            }
+        }
+
+        0x30 => {
+            // JR NC, d8: jump d8 relative to PC if C flag is not set
+            // Length: 2
+            // Cycles: 12/8
+            // Flags: - - - -
+            let offs = mem.read_i8(reg.pc + 1);
+            if !reg.c_flag() {
                 if offs >= 0 {
                     reg.pc = reg.pc.wrapping_add(offs as u16);
                 } else {
@@ -771,6 +851,21 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             // Flags: - - - -
             let offs = mem.read_i8(reg.pc + 1);
             if reg.z_flag() {
+                if offs >= 0 {
+                    reg.pc = reg.pc.wrapping_add(offs as u16);
+                } else {
+                    reg.pc = reg.pc.wrapping_sub(-offs as u16);
+                }
+            }
+        }
+
+        0x38 => {
+            // JR C, d8: jump d8 relative to PC if C is set
+            // Length: 2
+            // Cycles: 12/8
+            // Flags: - - - -
+            let offs = mem.read_i8(reg.pc + 1);
+            if reg.c_flag() {
                 if offs >= 0 {
                     reg.pc = reg.pc.wrapping_add(offs as u16);
                 } else {
@@ -829,6 +924,14 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             reg.sp = mem.read_u16(reg.pc + 1);
         }
 
+        0xF9 => {
+            // LD SP, HL: set HL to value of SP
+            // Length: 1
+            // Cycles: 8
+            // Flags: - - - -
+            reg.sp = reg.hl();
+        }
+
         0x32 => {
             // LD (HL-), A: put A into memory address HL, decrement HL
             // Length: 1
@@ -846,13 +949,24 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Length: 1
         // Cycles: 4
         // Flags: Z 0 0 0
-        0xA8 => { let a = reg.a; let b = reg.b; reg.a = xor_op(reg, a, b); }
-        0xA9 => { let a = reg.a; let c = reg.c; reg.a = xor_op(reg, a, c); }
-        0xAA => { let a = reg.a; let d = reg.d; reg.a = xor_op(reg, a, d); }
-        0xAB => { let a = reg.a; let e = reg.e; reg.a = xor_op(reg, a, e); }
-        0xAC => { let a = reg.a; let h = reg.h; reg.a = xor_op(reg, a, h); }
-        0xAD => { let a = reg.a; let l = reg.l; reg.a = xor_op(reg, a, l); }
-        0xAF => { let a = reg.a; reg.a = xor_op(reg, a, a); }
+        0xA8 => { let b = reg.b; xor_op(reg, b); }
+        0xA9 => { let c = reg.c; xor_op(reg, c); }
+        0xAA => { let d = reg.d; xor_op(reg, d); }
+        0xAB => { let e = reg.e; xor_op(reg, e); }
+        0xAC => { let h = reg.h; xor_op(reg, h); }
+        0xAD => { let l = reg.l; xor_op(reg, l); }
+        0xAE => {
+            let hl = reg.hl();
+            let v = mem.read(hl);
+            xor_op(reg, v);
+        }
+        0xAF => { let a = reg.a; xor_op(reg, a); }
+
+        // XOR d8: assign A xor d8 to A
+        // Length: 2
+        // Cycles: 8
+        // Flags: Z 0 0 0
+        0xEE => { let v = mem.read(reg.pc + 1); xor_op(reg, v) }
 
         // RLA: Rotate the contents of register A to the left
         // Length: 1
@@ -917,6 +1031,29 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             mem.write(addr, val);
         }
 
+        // LD (a16), SP: store SP at address (a16)
+        // Length: 3
+        // Cycles: 20
+        // Flags: - - - -
+        0x08 => {
+            let addr = mem.read_u16(reg.pc + 1);
+            mem.write_u16(addr, reg.sp);
+        }
+
+        // LD HL, SP+d8: load HL with value of SP + immediate value r8
+        // Alt syntax: LDHL SP, d8
+        // Length: 2
+        // Cycles: 12
+        // Flags: 0 0 H C
+        0xF8 => {
+            let v = mem.read(reg.pc + 1) as u32;
+            let hl32 = (reg.sp as u32) + v;
+            reg.set_carry(hl32 > 0xFFFF);
+            reg.set_z_flag(false);
+            reg.clear_n_flag();
+            reg.set_hl((hl32 & 0xFFFF) as u16);
+        }
+
         // CP r, CP (hl): Compare r (or value at (hl)) with A. Same as SUB but throws away the result
         // Length: 1
         // Cycles: 4 (8 for "CP (hl)")
@@ -952,6 +1089,27 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             reg.ime = true;
         }
 
+        0x07 => {
+            // RLCA: rotate content of register A left, with carry
+            let a = (reg.a as u32) << 1;
+            if a > 0xFF {
+                reg.set_carry(true);
+                reg.a = (a & 0xFF) as u8 | 1;
+            } else {
+                reg.set_carry(false);
+                reg.a = (a & 0xFF) as u8;
+            }
+            reg.clear_n_flag();
+            reg.set_z_flag(false);
+        }
+
+        0x10 => {
+            // STOP 0
+            // Length: 2
+            // Cycles: 4
+            reg.stopped = true;
+        }
+
         // Prefix 0xCB instructions
         0xCB => {
             let op2 = mem.read(reg.pc + 1);
@@ -962,6 +1120,20 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                     reg.c = rl_op(reg, c);
                 }
 
+                // RR n, rotate register n right with carry flag
+                0x18 => { let b = reg.b; reg.b = rr_op(reg, b) }
+                0x19 => { let c = reg.c; reg.c = rr_op(reg, c) }
+                0x1A => { let d = reg.d; reg.d = rr_op(reg, d) }
+                0x1B => { let e = reg.e; reg.e = rr_op(reg, e) }
+                0x1C => { let h = reg.h; reg.h = rr_op(reg, h) }
+                0x1D => { let l = reg.l; reg.l = rr_op(reg, l) }
+                0x2E => {
+                    let hl = reg.hl();
+                    let v = mem.read(hl);
+                    mem.write(hl, rr_op(reg, v));
+                }
+                0x1F => { let a = reg.a; reg.a = rr_op(reg, a) }
+
                 // SLA r
                 0x20 => { let b = reg.b; reg.b = sla_op(reg, b) }
                 0x21 => { let c = reg.c; reg.c = sla_op(reg, c) }
@@ -970,9 +1142,9 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x24 => { let h = reg.h; reg.h = sla_op(reg, h) }
                 0x25 => { let l = reg.l; reg.l = sla_op(reg, l) }
                 0x26 => {
-                    let hl = reg.hl() as usize;
-                    let v = mem.mem[hl];
-                    mem.mem[hl] = sla_op(reg, v)
+                    let hl = reg.hl();
+                    let v = mem.read(hl);
+                    mem.write(hl, sla_op(reg, v));
                 }
                 0x27 => { let a = reg.b; reg.b = sla_op(reg, a) }
 
@@ -985,6 +1157,20 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x35 => { let l = reg.l; reg.l = swap_op(reg, l) }
                 0x36 => { let v = mem.read(reg.hl()); mem.write(reg.hl(), swap_op(reg, v)) }
                 0x37 => { let a = reg.a; reg.a = swap_op(reg, a) }
+
+                // SRL r
+                0x38 => { let b = reg.b; reg.b = srl_op(reg, b) }
+                0x39 => { let c = reg.c; reg.c = srl_op(reg, c) }
+                0x3A => { let d = reg.d; reg.d = srl_op(reg, d) }
+                0x3B => { let e = reg.e; reg.e = srl_op(reg, e) }
+                0x3C => { let h = reg.h; reg.h = srl_op(reg, h) }
+                0x3D => { let l = reg.l; reg.l = srl_op(reg, l) }
+                0x3E => {
+                    let hl = reg.hl();
+                    let v = mem.read(hl);
+                    mem.write(hl, srl_op(reg, v))
+                }
+                0x3F => { let a = reg.a; reg.a = srl_op(reg, a) }
 
                 // BIT b, r: test if bit 'b' in register 'r' is set
                 // Length: 2
@@ -1019,6 +1205,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x6D => { let l = reg.l; bit_op(reg, 5, l); }
 
                 0x7C => { let h = reg.h; bit_op(reg, 7, h); }
+                0x7E => { let v = mem.read(reg.hl()); bit_op(reg, 7, v) }
                 0x7F => { let a = reg.a; bit_op(reg, 7, a); }
 
                 // RES b, r: reset bit b in register r

@@ -87,6 +87,11 @@ impl Memory {
         return ((hi as u16) << 8) | (lo as u16);
     }
 
+    pub fn write_u16(&mut self, addr: u16, value: u16) {
+        self.write(addr, (value & 0xFF) as u8);
+        self.write(addr + 1, ((value >> 8) & 0xFF) as u8);
+    }
+
     pub fn write(&mut self, addr: u16, value: u8) {
         // println!("WRITE MEM: 0x{:04X} = 0x{:02X} ({})", addr, value, address_type(addr));
         if addr == 0xFF0F {
@@ -109,7 +114,7 @@ impl Memory {
                     0xFF00 => {}  // P1
                     0xFF01 => {}  // SB
                     0xFF02 => {}  // SC
-
+                    0xFF07 => {}  // TAC
 
                     0xFF40 => {}
                     0xFF41 => {}  // STAT
@@ -121,6 +126,7 @@ impl Memory {
                     0xFF49 => {}  // OBP1
                     0xFF4A => {}  // WY
                     0xFF4B => {}  // WX
+                    0xFF4D => { println!("write to 0xFF4D - KEY1 (CGB only): {}", value) }
                     0xFF06 => { println!("write to 0xFF06 - TMA: {}", value) }  // TMA
 
                     // Invalid registers, that are still used by for example Tetris
