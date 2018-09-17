@@ -1,6 +1,9 @@
 
+extern crate ansi_term;
+
 use std::io::Read;
 use std::fs::File;
+use memory::ansi_term::Colour::Blue;
 
 use debug::address_type;
 
@@ -112,9 +115,17 @@ impl Memory {
             } else {
                 match addr {
                     0xFF00 => {}  // P1
-                    0xFF01 => {}  // SB
+                    
+                    0xFF01 => {
+                        let s = format!("{}", value as char);
+                        print!("{}", Blue.bold().paint(s))  // SB
+                    }
+
+
                     0xFF02 => {}  // SC
+                    0xFF04 => { println!("write to 0xFF04 - DIV: {}", value) }
                     0xFF07 => {}  // TAC
+                    0xFF08 => { println!("write to 0xFF08 - undocumented!: {}", value) }
 
                     0xFF40 => {}
                     0xFF41 => {}  // STAT
