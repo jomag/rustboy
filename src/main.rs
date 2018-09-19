@@ -129,6 +129,12 @@ fn main() {
             stepping = true;
         }
 
+        if mem.watch_triggered {
+            println!("Break: watched memory change (PC 0x{:04X})", reg.pc);
+            mem.watch_triggered = false;
+            stepping = true;
+        }
+
         if stepping {
             print_registers(&reg);
             let pc = reg.pc;

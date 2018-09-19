@@ -38,15 +38,17 @@ pub const WX_REG:   u16 = 0xFF4B;
 pub struct Memory {
     pub mem: [u8; 0x10000],
     bootstrap: [u8; 0x100],
-    bootstrap_mode: bool
+    pub bootstrap_mode: bool,
+    pub watch_triggered: bool
 }
 
 impl Memory {
     pub fn new() -> Self {
         Memory {
-            mem: [0xFF; 0x10000],
+            mem: [0; 0x10000],
             bootstrap: [0; 0x100],
-            bootstrap_mode: true
+            bootstrap_mode: true,
+            watch_triggered: false
         }
     }
 
@@ -96,6 +98,11 @@ impl Memory {
     }
 
     pub fn write(&mut self, addr: u16, value: u8) {
+        if addr >= 0xD000 && addr < 0xD100 {
+            println!("Write to watched memory location 0x{:04X}. Current: 0x{:02X}. New value: 0x{:02X}", addr, self.mem[addr as usize], value);
+            self.watch_triggered = true;
+        }
+
         // println!("WRITE MEM: 0x{:04X} = 0x{:02X} ({})", addr, value, address_type(addr));
         if addr == 0xFF0F {
             println!("Write to IF register 0xFF0F: {}", value);
