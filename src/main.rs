@@ -107,6 +107,8 @@ fn main() {
 
     let mut cycles: u32 = 0;
 
+    let mut op_usage: [u32; 256] = [0; 256];
+
     'running: loop {
         /* THIS SLOWS DOWN THE CODE! NOT SURE WHY!*/
         /*
@@ -179,6 +181,11 @@ fn main() {
             reg.stopped = false;
         }
 
+        if !mem.bootstrap_mode {
+            let op = mem.read(reg.pc);
+            op_usage[op as usize] += 1;
+        }
+
         let op_cycles = instructions::step(&mut reg, &mut mem);
         cycles += op_cycles;
 
@@ -192,6 +199,12 @@ fn main() {
             canvas.clear();
             canvas.copy(&texture, None, Some(Rect::new(2, 2, 320, 288))).unwrap();
             canvas.present();
+        }
+    }
+
+    for n in 0..255 {
+        if op_usage[n as usize] > 0 {
+            println!("Op 0x{:02X}: {} uses", n, op_usage[n as usize])
         }
     }
 
