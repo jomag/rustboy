@@ -46,6 +46,14 @@ impl Registers {
         }
     }
 
+    pub fn set_zero_from_a(&mut self) {
+        if self.a == 0 {
+            self.f |= Z_BIT;
+        } else {
+            self.f &= !Z_BIT;
+        }
+    }
+
     pub fn set_n_flag(&mut self) {
         self.f |= N_BIT;
     }
@@ -99,6 +107,13 @@ impl Registers {
             self.f |= C_BIT;
         } else {
             self.f &= !C_BIT;
+        }
+    }
+    pub fn set_half_carry(&mut self, en: bool) {
+        if en {
+            self.f |= H_BIT;
+        } else {
+            self.f &= !H_BIT;
         }
     }
 }
