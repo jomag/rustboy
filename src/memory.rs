@@ -123,12 +123,13 @@ impl Memory {
                 match addr {
                     0xFF00 => {}  // P1
                     
-                    0xFF01 => {
-                        let s = format!("{}", value as char);
-                        print!("{}", Blue.bold().paint(s))  // SB
+                    0xFF01 => {}
+                    0xFF02 => {
+                        if value == 0x81 {
+                            let s = format!("{}", self.mem[0xFF01] as char);
+                            print!("{}", Blue.bold().paint(s))  // SB
+                        }
                     }
-
-
                     0xFF02 => {}  // SC
                     0xFF04 => { println!("write to 0xFF04 - DIV: {}", value) }
                     0xFF07 => {}  // TAC
