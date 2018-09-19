@@ -40,6 +40,8 @@ pub fn op_length(op: u8) -> u32 {
 }
 
 
+// 16-bit push operation
+// Flags: - - - -
 pub fn push_op(reg: &mut Registers, mem: &mut Memory, value: u16) {
     let sp = reg.sp - 2;
     mem.write(sp + 1, (value >> 8) as u8);
@@ -47,12 +49,17 @@ pub fn push_op(reg: &mut Registers, mem: &mut Memory, value: u16) {
     reg.sp = sp;
 }
 
+// 16-bit pop operation
+// Flags: - - - -
+// Note that flags are still affected by POP AF
 fn pop_op(reg: &mut Registers, mem: &Memory) -> u16 {
     let v = mem.read_u16(reg.sp);
     reg.sp += 2;
     v
 }
 
+// Bitwise AND operation
+// Flags: Z 0 1 0
 pub fn and_op(reg: &mut Registers, value: u8) {
     reg.a = reg.a & value;
     if reg.a == 0 {
@@ -64,6 +71,8 @@ pub fn and_op(reg: &mut Registers, value: u8) {
     }
 }
 
+// Bitwise OR operation
+// Flags: Z 0 0 0
 pub fn or_op(reg: &mut Registers, value: u8) {
     reg.a = reg.a | value;
     if reg.a == 0 {
@@ -74,18 +83,23 @@ pub fn or_op(reg: &mut Registers, value: u8) {
     }
 }
 
+// Bitwise XOR operation
+// Flags: Z 0 0 0
 pub fn xor_op(reg: &mut Registers, value: u8) {
     // Flags: Z 0 0 0
     reg.a = reg.a ^ value;
-    reg.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
     if reg.a == 0 {
-        reg.set_z_flag(true);
+        reg.f |= Z_BIT;
+        reg.f &= !(N_BIT | H_BIT | C_BIT);
+    } else {
+        reg.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
     }
 }
 
+// Bit test operation
+// Flags: Z 0 1 -
 pub fn bit_op(reg: &mut Registers, bit: u8, value: u8) {
     // Test if bit in register is set
-    // Flags: Z 0 1 -
     if value & (1 << bit) == 0 {
         reg.f &= !N_BIT;
         reg.f |= Z_BIT | H_BIT;
@@ -95,67 +109,62 @@ pub fn bit_op(reg: &mut Registers, bit: u8, value: u8) {
     }
 }
 
+// Increment value operation
+// Flags: Z 0 H -
 pub fn inc_op(reg: &mut Registers, value: u8) -> u8 {
-    // Flags: Z 0 H -
-    let new_value = if value == 255 { 0 } else { value + 1 };
-
-    if new_value == 0 {
-        reg.f |= Z_BIT;
-    } else {
-        reg.f &= !Z_BIT;
-    }
-
-    reg.f &= !N_BIT;
-
-    if value < 255 && ((value & 0xF) + 1) & 0x10 != 0 {
-        reg.f |= H_BIT;
-    } else {
-        reg.f &= !H_BIT;
-    }
-
-    new_value
+    let result = if value == 255 { 0 } else { value + 1 };
+    reg.set_z_flag(result == 0);
+    reg.set_carry(value == 255);
+    reg.set_half_carry(value == 0xF);
+    result
 }
 
+// Increment 16-bit value operation
+// Flags: - - - - (correct?)
 pub fn inc16_op(value: u16) -> u16 {
     return if value == 0xFFFF { 0 } else { value + 1 };
 }
 
+// Add 8-bit value to accumulator
+// Flags: Z - - -
 pub fn add_op(reg: &mut Registers, value: u8) {
     let a32: u32 = reg.a as u32 + value as u32;
-    reg.f &= !N_BIT;
+    let hc = ((reg.a & 0xF) + (value & 0xF)) & 0x10 == 0x10;
+    reg.set_half_carry(hc);
     reg.set_carry(a32 > 0xFF);
-    let a32 = a32 & 0xFF;
-    reg.a = a32 as u8;
-    reg.set_z_flag(a32 == 0);
+    reg.set_z_flag((a32 & 0xFF) == 0);
+    reg.f &= !N_BIT;
+    reg.a = (a32 & 0xFF) as u8;
 }
 
 pub fn add_hl_op(reg: &mut Registers, value: u16) {
+    // Add 16-bit value to HL
     // Flags: - 0 H C
-    let hl32: u32 = reg.hl() as u32 + value as u32;
+    let sum: u32 = reg.hl() as u32 + value as u32;
+    let hc = ((reg.hl() & 0x0FFF) + (value & 0xFFF)) & 0x1000 == 0x1000;
+    reg.set_half_carry(hc);
+    reg.set_carry(sum > 0xFFFF);
     reg.f &= !N_BIT;
-    reg.set_carry(hl32 > 0xFFFF);
-    let hl32 = hl32 & 0xFFFF;
-    reg.set_hl(hl32 as u16);
+    reg.set_hl((sum & 0xFFFF) as u16);
 }
 
 pub fn adc_op(reg: &mut Registers, value: u8) {
     // ADC A, n: add sum of n and carry to A
     // Flags: Z 0 H C
     let carry: u32 = if reg.c_flag() { 1 } else { 0 };
-    let a: u32 = (reg.a as u32) + (value as u32) + carry;
-    reg.set_carry(a > 0xFF);
-    reg.a = (a & 0xFF) as u8;
-    if reg.a == 0 {
-        reg.set_z_flag(true);
-    } else {
-        reg.set_z_flag(false);
-    }
+    let sum: u32 = (reg.a as u32) + (value as u32) + carry;
+    let hc = ((reg.a as u32 & 0x0F) + ((value as u32 + carry) & 0x0F)) & 0x10 == 0x10;
+    reg.set_half_carry(hc);
+    reg.set_carry(sum > 0xFF);
+    reg.a = (sum & 0xFF) as u8;
+    reg.set_z_flag(sum & 0xFF == 0);
     reg.clear_n_flag();
 }
 
 pub fn sbc_op(reg: &mut Registers, value: u8) {
     // SBC A, n: subtract sum of n and carry to A
     // Flags: Z 1 H C
+    panic!("USED!");
     let carry: u32 = if reg.c_flag() { 1 } else { 0 };
     let mut a: u32 = reg.a as u32;
     if a >= (value as u32) + carry {
@@ -172,43 +181,38 @@ pub fn sbc_op(reg: &mut Registers, value: u8) {
 
 pub fn dec_op(reg: &mut Registers, value: u8) -> u8 {
     // Flags: Z 1 H -
-    let new_value = if value == 0 { 255 } else { value - 1 };
-
-    if new_value == 0 {
-        reg.f |= Z_BIT | N_BIT;
-    } else {
-        reg.f &= !Z_BIT;
-        reg.f |= N_BIT;
-    }
-
-    // FIXME: handle half-carry flag
-    new_value
+    let dec_value = if value == 0 { 255 } else { value - 1 };
+    reg.set_z_flag(dec_value == 0);
+    reg.set_carry(value == 0);
+    reg.set_n_flag();
+    reg.set_half_carry(value == 0x10);
+    dec_value
 }
 
 pub fn sub_op(reg: &mut Registers, value: u8) {
     // Flags: Z 1 H C
+    let hc = reg.a & 0xF < value & 0xF;
+    reg.set_half_carry(hc);
+
     if reg.a >= value {
+        reg.set_carry(false);
         reg.a = reg.a - value;
-        reg.f &= !C_BIT;
     } else {
+        reg.set_carry(true);
         reg.a = (reg.a as u32 + 256 - value as u32) as u8;
-        reg.f |= C_BIT;
     }
 
-    if reg.a == 0 {
-        reg.f |= Z_BIT;
-    } else {
-        reg.f &= !Z_BIT;
-    }
-
-    reg.f |= N_BIT;
+    reg.set_zero_from_a();
+    reg.set_n_flag();
 }
 
 pub fn cp_op(reg: &mut Registers, value: u8) {
     // Flags: Z 1 H C
+    //panic!("no half carry in cp_op!");
     let a = reg.a;
     reg.set_z_flag(a == value);
     reg.set_carry(a < value);
+    reg.set_half_carry(a & 0xF < value & 0xF);
     reg.f |= N_BIT;
 }
 
@@ -842,12 +846,21 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
 
         0xE2 => {
             // LD ($FF00+C), A: put value of A in address 0xFF00 + C
-            // Length: 2
+            // Length: 1
             // Cycles: 8
             // Flags: - - - -
             let addr = 0xFF00 + reg.c as u16;
             let a = reg.a;
             mem.write(addr, a);
+        }
+
+        // LD A, ($FF00+C): store value at address 0xFF00 + C in A 
+        // Length: 1
+        // Cycles: 8
+        // Flags: - - - -
+        0xF2 => {
+            let addr = 0xFF00 + reg.c as u16;
+            reg.a = mem.read(addr);
         }
 
         0x11 => {
@@ -1183,7 +1196,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
 
         0x10 => {
             // STOP 0
-            // Length: 2
+            // Length: 1 (not 2, see https://stackoverflow.com/questions/41353869)
             // Cycles: 4
             reg.stopped = true;
         }
