@@ -115,12 +115,14 @@ pub fn inc_op(reg: &mut Registers, value: u8) -> u8 {
     let result = if value == 255 { 0 } else { value + 1 };
     reg.set_z_flag(result == 0);
     reg.set_carry(value == 255);
-    reg.set_half_carry(value == 0xF);
+    let hc = ((value & 0xF) + (result & 0xF)) & 0x10 == 0x10;
+    reg.set_half_carry(hc);
+    reg.clear_n_flag();
     result
 }
 
 // Increment 16-bit value operation
-// Flags: - - - - (correct?)
+// Flags: - - - -
 pub fn inc16_op(value: u16) -> u16 {
     return if value == 0xFFFF { 0 } else { value + 1 };
 }
@@ -161,31 +163,13 @@ pub fn adc_op(reg: &mut Registers, value: u8) {
     reg.clear_n_flag();
 }
 
-pub fn sbc_op(reg: &mut Registers, value: u8) {
-    // SBC A, n: subtract sum of n and carry to A
-    // Flags: Z 1 H C
-    panic!("USED!");
-    let carry: u32 = if reg.c_flag() { 1 } else { 0 };
-    let mut a: u32 = reg.a as u32;
-    if a >= (value as u32) + carry {
-        a = a - value as u32 - carry;
-        reg.set_carry(false);
-    } else {
-        a = a + 256 - value as u32 - carry;
-        reg.set_carry(true);
-    }
-    a = a & 0xFF;
-    reg.set_z_flag(a == 0);
-    reg.set_n_flag();
-}
-
 pub fn dec_op(reg: &mut Registers, value: u8) -> u8 {
     // Flags: Z 1 H -
     let dec_value = if value == 0 { 255 } else { value - 1 };
     reg.set_z_flag(dec_value == 0);
     reg.set_carry(value == 0);
     reg.set_n_flag();
-    reg.set_half_carry(value == 0x10);
+    reg.set_half_carry((dec_value ^ 0x01 ^ value) & 0x10 == 0x10);
     dec_value
 }
 
@@ -206,6 +190,27 @@ pub fn sub_op(reg: &mut Registers, value: u8) {
     reg.set_n_flag();
 }
 
+pub fn sbc_op(reg: &mut Registers, value: u8) {
+    // SBC A, n: subtract sum of n and carry to A
+    // Flags: Z 1 H C
+    let carry: u32 = if reg.c_flag() { 1 } else { 0 };
+
+    let hc = (reg.a & 0xF) < ((value + carry as u8) & 0xF);
+    reg.set_half_carry(hc);
+
+    let mut a: u32 = reg.a as u32;
+    if a >= (value as u32) + carry {
+        a = a - value as u32 - carry;
+        reg.set_carry(false);
+    } else {
+        a = a + 256 - value as u32 - carry;
+        reg.set_carry(true);
+    }
+    reg.a = (a & 0xFF) as u8;
+    reg.set_z_flag(a == 0);
+    reg.set_n_flag();
+}
+
 pub fn cp_op(reg: &mut Registers, value: u8) {
     // Flags: Z 1 H C
     //panic!("no half carry in cp_op!");
@@ -216,43 +221,49 @@ pub fn cp_op(reg: &mut Registers, value: u8) {
     reg.f |= N_BIT;
 }
 
+// Swap upper and lower 4 bits
+// Flags: Z 0 0 0
 pub fn swap_op(reg: &mut Registers, value: u8) -> u8 {
     let res = ((value >> 4) & 0x0F) | (value << 4);
-    reg.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
-    if res == 0 { reg.f |= Z_BIT }
+
+    reg.f &= !(N_BIT | H_BIT | C_BIT);
+    reg.set_z_flag(res == 0);
+
     res
 }
 
 pub fn rst_op(reg: &mut Registers, mem: &mut Memory, address: u16) {
     let next = reg.pc + 1;
     push_op(reg, mem, next);
-
-    // Jump to the address. Compensate for the length
-    // of the current instruction.
     reg.pc = address;
 }
 
+// RRA, RR A, RR B, ...:
+// Rotates register to the right with the carry put in bit 7
+// and bit 0 put into the carry
+// Flags RRA: 0 0 0 C
+// Flags RR A, RR B, ...: Z 0 0 C
 pub fn rr_op(reg: &mut Registers, value: u8) -> u8 {
-    // RRA, RR r
     let mut res;
 
-    if value & 1 == 0 {
-        if reg.f & C_BIT == 0 {
-            reg.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
-            res = value >> 1;
-        } else {
-            reg.f &= !(Z_BIT | N_BIT | H_BIT | C_BIT);
-            res = (value >> 1) | 128;
-        }
-    } else {
-        if reg.c & C_BIT == 0 {
-            reg.f &= !(Z_BIT | N_BIT | H_BIT);
-            res = value >> 1;
-        } else {
-            reg.f &= !(Z_BIT | N_BIT | H_BIT);
-            res = value >> 1 | 128;
-        }
-        reg.f |= C_BIT;
+    // Store bit 0
+    let bit0 = value & 1;
+
+    // Shift right
+    res = value >> 1;
+
+    // Copy carry to it 7
+    if reg.f & C_BIT != 0 {
+        res = res | 128;
+    }
+
+    // Put bit 0 in carry
+    reg.set_carry(bit0 != 0);
+
+    // Update flags (note that RRA should always clear Z)
+    reg.f &= !(Z_BIT | N_BIT | H_BIT);;
+    if res == 0 {
+        reg.f |= Z_BIT;
     }
 
     res
@@ -309,13 +320,24 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Flags: - - - -
         0x00 => {}
 
+        // LD rr, d16: load immediate (d16) into 16-bit register rr
+        // Length: 3
+        // Cycles: 12
+        // Flags: - - - -
         0x01 => {
-            // LD BC, d16: load immediate (d16) into BC
-            // Length: 3
-            // Cycles: 12
-            // Flags: - - - -
             reg.c = mem.read(reg.pc + 1);
             reg.b = mem.read(reg.pc + 2);
+        }
+        0x11 => {
+            reg.e = mem.read(reg.pc + 1);
+            reg.d = mem.read(reg.pc + 2);
+        }
+        0x21 => {
+            reg.l = mem.read(reg.pc + 1);
+            reg.h = mem.read(reg.pc + 2);
+        }
+        0x31 => {
+            reg.sp = mem.read_u16(reg.pc + 1);
         }
 
         // LD (rr), A: stores the contents of register A in the memory specified by register pair BC or DE.
@@ -335,41 +357,13 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Length: 1
         // Cycles: 4
         // Flags: Z 0 H -
-        0x04 => {
-            // INC B
-            let b = reg.b;
-            reg.b = inc_op(reg, b);
-        }
-        0x0C => {
-            // INC C
-            let c = reg.c;
-            reg.c = inc_op(reg, c);
-        }
-        0x14 => {
-            // INC D
-            let d = reg.d;
-            reg.d = inc_op(reg, d);
-        }
-        0x1C => {
-            // INC E
-            let e = reg.e;
-            reg.e = inc_op(reg, e);
-        }
-        0x24 => {
-            // INC H
-            let h = reg.h;
-            reg.h = inc_op(reg, h);
-        }
-        0x2C => {
-            // INC L
-            let l = reg.l;
-            reg.l = inc_op(reg, l);
-        }
-        0x3C => {
-            // INC A
-            let a = reg.a;
-            reg.a = inc_op(reg, a);
-        }
+        0x04 => { let b = reg.b; reg.b = inc_op(reg, b); }
+        0x0C => { let c = reg.c; reg.c = inc_op(reg, c); }
+        0x14 => { let d = reg.d; reg.d = inc_op(reg, d); }
+        0x1C => { let e = reg.e; reg.e = inc_op(reg, e); }
+        0x24 => { let h = reg.h; reg.h = inc_op(reg, h); }
+        0x2C => { let l = reg.l; reg.l = inc_op(reg, l); }
+        0x3C => { let a = reg.a; reg.a = inc_op(reg, a); }
 
         // INC (HL): increment memory stored at HL
         // Length: 1
@@ -381,75 +375,28 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Length: 1
         // Cycles: 8
         // Flags: - - - -
-        0x03 => {
-            // INC BC
-            let bc = reg.bc();
-            let bc = inc16_op(bc);
-            reg.set_bc(bc);
-        }
-        0x13 => {
-            // INC DE
-            let de = reg.de();
-            let de = inc16_op(de);
-            reg.set_de(de);
-        }
-        0x23 => {
-            // INC HL
-            let hl = reg.hl();
-            let hl = inc16_op(hl);
-            reg.set_hl(hl);
-        }
-        0x33 => {
-            // INC SP
-            let sp = reg.sp;
-            reg.sp = inc16_op(sp);
-        }
+        0x03 => { let bc = inc16_op(reg.bc()); reg.set_bc(bc); }
+        0x13 => { let de = inc16_op(reg.de()); reg.set_de(de); }
+        0x23 => { let hl = inc16_op(reg.hl()); reg.set_hl(hl); }
+        0x33 => { let sp = reg.sp; reg.sp = inc16_op(sp); }
 
         // DEC n: decrement register n
         // Length: 1
         // Flags: Z 1 H -
-        0x05 => {
-            // DEC B
-            let b = reg.b;
-            reg.b = dec_op(reg, b);
-        }
-        0x0D => {
-            // DEC C
-            let c = reg.c;
-            reg.c = dec_op(reg, c);
-        }
-        0x15 => {
-            // DEC D
-            let d = reg.d;
-            reg.d = dec_op(reg, d);
-        }
-        0x1D => {
-            // DEC E
-            let e = reg.e;
-            reg.e = dec_op(reg, e);
-        }
-        0x25 => {
-            // DEC H
-            let h = reg.h;
-            reg.h = dec_op(reg, h);
-        }
-        0x2D => {
-            // DEC L
-            let l = reg.l;
-            reg.l = dec_op(reg, l);
-        }
-        0x3D => {
-            // DEC A
-            let a = reg.a;
-            reg.a = dec_op(reg, a);
-        }
+        0x05 => { let b = reg.b; reg.b = dec_op(reg, b); }
+        0x0D => { let c = reg.c; reg.c = dec_op(reg, c); }
+        0x15 => { let d = reg.d; reg.d = dec_op(reg, d); }
+        0x1D => { let e = reg.e; reg.e = dec_op(reg, e); }
+        0x25 => { let h = reg.h; reg.h = dec_op(reg, h); }
+        0x2D => { let l = reg.l; reg.l = dec_op(reg, l); }
+        0x3D => { let a = reg.a; reg.a = dec_op(reg, a); }
 
         // DEC rr: decrement register pair rr
         // Length: 1
         // Cycles: 8
         // Flags: - - - -
         0x0B => { let bc = reg.bc(); reg.set_bc(if bc == 0 { 0xFFFF} else { bc - 1 }); }
-        0x1B => { let de = reg.de(); reg.set_bc(if de == 0 { 0xFFFF} else { de - 1 }); }
+        0x1B => { let de = reg.de(); reg.set_de(if de == 0 { 0xFFFF} else { de - 1 }); }
         0x2B => { let hl = reg.hl(); reg.set_hl(if hl == 0 { 0xFFFF} else { hl - 1 }); }
         0x3B => { reg.sp = if reg.sp == 0 { 0xFFFF } else { reg.sp - 1 }}
 
@@ -529,8 +476,15 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Length: 2
         // Cycles: 16
         // Flags: 0 0 H C
+        // TODO: this is very similar to the add_hl_op. could they be combined?
         0xE8 => {
-            let sp: u32 = reg.sp as u32 + mem.read(reg.pc + 1) as u32;
+            let d8 = mem.read(reg.pc + 1) as u32;
+            let sp: u32 = reg.sp as u32;
+
+            let hc = ((sp & 0x0FFF) + (d8 & 0xFFF)) & 0x1000 == 0x1000;
+            reg.set_half_carry(hc);
+
+            let sp = sp + d8;
             reg.set_carry(sp > 0xFFFF);
             reg.set_z_flag(false);
             reg.sp = (sp & 0xFFFF) as u16;
@@ -596,7 +550,8 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Length: 1
         // Cycles: 4
         // Flags: 0 0 0 C
-        0x1F => { let a = reg.a; reg.a = rr_op(reg, a); }
+        // Note that rr_op() sets Z flag, but RRA should always clear Z flag
+        0x1F => { let a = reg.a; reg.a = rr_op(reg, a); reg.f &= !Z_BIT }
 
         // LD n, d: load immediate into register n
         // Length: 2
@@ -818,14 +773,14 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Length: 1
         // Cycles: 16
         // Flags: - - - -
-        0xC7 => { rst_op(reg, mem, 0x0000) }
-        0xCF => { rst_op(reg, mem, 0x0008) }
-        0xD7 => { rst_op(reg, mem, 0x0010) }
-        0xDF => { rst_op(reg, mem, 0x0018) }
-        0xE7 => { rst_op(reg, mem, 0x0020) }
-        0xEF => { rst_op(reg, mem, 0x0028) }
-        0xF7 => { rst_op(reg, mem, 0x0030) }
-        0xFF => { rst_op(reg, mem, 0x0038) }
+        0xC7 => { rst_op(reg, mem, 0x0000); inc_pc = false }
+        0xCF => { rst_op(reg, mem, 0x0008); inc_pc = false }
+        0xD7 => { rst_op(reg, mem, 0x0010); inc_pc = false }
+        0xDF => { rst_op(reg, mem, 0x0018); inc_pc = false }
+        0xE7 => { rst_op(reg, mem, 0x0020); inc_pc = false }
+        0xEF => { rst_op(reg, mem, 0x0028); inc_pc = false }
+        0xF7 => { rst_op(reg, mem, 0x0030); inc_pc = false }
+        0xFF => { rst_op(reg, mem, 0x0038); inc_pc = false }
 
         // PUSH nn: push 16-bit register nn to stack
         // Length: 1
@@ -861,15 +816,6 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0xF2 => {
             let addr = 0xFF00 + reg.c as u16;
             reg.a = mem.read(addr);
-        }
-
-        0x11 => {
-            // LD DE, d16: load immediate (d16) into DE
-            // Length: 3
-            // Cycles: 12
-            // Flags: - - - -
-            reg.e = mem.read(reg.pc + 1);
-            reg.d = mem.read(reg.pc + 2);
         }
 
         0x18 => {
@@ -988,22 +934,6 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             inc_pc = false;
         }
 
-        0x21 => {
-            // LD HL, d16: load immediate (d16) into HL
-            // Length: 3
-            // Cycles: 12
-            // Flags: - - - -
-            let v = mem.read_u16(reg.pc + 1);
-            reg.set_hl(v)
-        }
-
-        0x31 => {
-            // LD SP, d16: load immediate (d16) into SP
-            // Length: 3
-            // Cycles: 12
-            // Flags: - - - -
-            reg.sp = mem.read_u16(reg.pc + 1);
-        }
 
         0xF9 => {
             // LD SP, HL: set HL to value of SP
@@ -1129,6 +1059,10 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0xF8 => {
             let v = mem.read(reg.pc + 1) as u32;
             let hl32 = (reg.sp as u32) + v;
+
+            let hc = ((reg.sp as u32 & 0x0FFF) + (v & 0xFFF)) & 0x1000 == 0x1000;
+            reg.set_half_carry(hc);
+
             reg.set_carry(hl32 > 0xFFFF);
             reg.set_z_flag(false);
             reg.clear_n_flag();
