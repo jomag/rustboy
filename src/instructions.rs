@@ -195,7 +195,7 @@ pub fn sbc_op(reg: &mut Registers, value: u8) {
     // Flags: Z 1 H C
     let carry: u32 = if reg.c_flag() { 1 } else { 0 };
 
-    let hc = (reg.a & 0xF) < ((value + carry as u8) & 0xF);
+    let hc = (reg.a & 0xF) < ((value as u32 + carry) & 0xF) as u8;
     reg.set_half_carry(hc);
 
     let mut a: u32 = reg.a as u32;
