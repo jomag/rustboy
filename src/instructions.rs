@@ -229,6 +229,24 @@ pub fn rst_op(reg: &mut Registers, mem: &mut Memory, address: u16) {
     reg.pc = address;
 }
 
+pub fn rrc_op(reg: &mut Registers, value: u8) -> u8 {
+    let bit0 = value & 1;
+    let rotated = (value >> 1) | (bit0 << 7);
+    reg.f &= !(N_BIT | H_BIT);
+    reg.set_z_flag(rotated == 0);
+    reg.set_carry(bit0 != 0);
+    rotated
+}
+
+pub fn rlc_op(reg: &mut Registers, value: u8) -> u8 {
+    let bit7 = value & 128;
+    let rotated = (value << 1) | (bit7 >> 7);
+    reg.f &= !(N_BIT | H_BIT);
+    reg.set_z_flag(rotated == 0);
+    reg.set_carry(bit7 != 0);
+    rotated
+}
+
 // RRA, RR A, RR B, ...:
 // Rotates register to the right with the carry put in bit 7
 // and bit 0 put into the carry
@@ -544,6 +562,13 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0xB6 => { let v = mem.read(reg.hl()); or_op(reg, v); }
         0xB7 => { let a = reg.a; or_op(reg, a) }
         0xF6 => { let v = mem.read(reg.pc + 1); or_op(reg, v) }
+
+        // RRCA: ...
+        // Length: 1
+        // Cycles: 4
+        // Flags: 0 0 0 C
+        // Note that rrc_op() sets Z flag, but RRCA should always clear Z flag
+        0x0F => { let a = reg.a; reg.a = rrc_op(reg, a); reg.f &= !Z_BIT; }
 
         // RRA: ...
         // Length: 1
@@ -1106,20 +1131,28 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             reg.set_z_flag(false);
         }
 
+        // CPL: complement (bitwise not) register A
+        // Length: 1
+        // Cycles: 4
+        // Flags: - 1 1 -
         0x2F => {
-            // CPL: complement (bitwise not) register A
-            // Length: 1
-            // Cycles: 4
-            // Flags: - 1 1 -
             reg.a = !reg.a;
             reg.set_n_flag();
         }
 
+        // CCF: Flip carry flag
+        // Length: 1
+        // Cycles: 4
+        // Flags: - 0 0 C
+        0x3F => {
+            let carry = reg.c_flag();
+            reg.set_carry(!carry);
+        }
 
+        // STOP 0
+        // Length: 1 (not 2, see https://stackoverflow.com/questions/41353869)
+        // Cycles: 4
         0x10 => {
-            // STOP 0
-            // Length: 1 (not 2, see https://stackoverflow.com/questions/41353869)
-            // Cycles: 4
             reg.stopped = true;
         }
 
@@ -1127,6 +1160,34 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0xCB => {
             let op2 = mem.read(reg.pc + 1);
             match op2 {
+                // RLC n: rotate register n left
+                0x00 => { let b = reg.b; reg.b = rlc_op(reg, b); }
+                0x01 => { let c = reg.c; reg.c = rlc_op(reg, c); }
+                0x02 => { let d = reg.d; reg.d = rlc_op(reg, d); }
+                0x03 => { let e = reg.e; reg.e = rlc_op(reg, e); }
+                0x04 => { let h = reg.h; reg.h = rlc_op(reg, h); }
+                0x05 => { let l = reg.l; reg.l = rlc_op(reg, l); }
+                0x06 => {
+                    let v = mem.read(reg.hl());
+                    let rot = rlc_op(reg, v);
+                    mem.write(reg.hl(), rot);
+                }
+                0x07 => { let b = reg.b; reg.b = rlc_op(reg, b); }
+
+                // RLC n: rotate register n right
+                0x08 => { let b = reg.b; reg.b = rrc_op(reg, b); }
+                0x09 => { let c = reg.c; reg.c = rrc_op(reg, c); }
+                0x0A => { let d = reg.d; reg.d = rrc_op(reg, d); }
+                0x0B => { let e = reg.e; reg.e = rrc_op(reg, e); }
+                0x0C => { let h = reg.h; reg.h = rrc_op(reg, h); }
+                0x0D => { let l = reg.l; reg.l = rrc_op(reg, l); }
+                0x0E => {
+                    let v = mem.read(reg.hl());
+                    let rot = rrc_op(reg, v);
+                    mem.write(reg.hl(), rot);
+                }
+                0x0F => { let b = reg.b; reg.b = rrc_op(reg, b); }
+
                 // RL n: rotate register n left with carry flag
                 0x10 => { let b = reg.b; reg.b = rl_op(reg, b); }
                 0x11 => { let c = reg.c; reg.c = rl_op(reg, c); }
@@ -1134,7 +1195,11 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x13 => { let e = reg.e; reg.e = rl_op(reg, e); }
                 0x14 => { let h = reg.h; reg.h = rl_op(reg, h); }
                 0x15 => { let l = reg.l; reg.l = rl_op(reg, l); }
-                0x16 => { let v = mem.read(reg.hl()); reg.c = rl_op(reg, v); }
+                0x16 => {
+                    let v = mem.read(reg.hl());
+                    let rot = rl_op(reg, v);
+                    mem.write(reg.hl(), rot);
+                }
                 0x17 => { let a = reg.a; reg.a = rl_op(reg, a); }
 
                 // RR n, rotate register n right with carry flag
@@ -1144,7 +1209,11 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x1B => { let e = reg.e; reg.e = rr_op(reg, e) }
                 0x1C => { let h = reg.h; reg.h = rr_op(reg, h) }
                 0x1D => { let l = reg.l; reg.l = rr_op(reg, l) }
-                0x1E => { let v = mem.read(reg.hl()); reg.c = rr_op(reg, v); }
+                0x1E => {
+                    let v = mem.read(reg.hl());
+                    let rot = rr_op(reg, v);
+                    mem.write(reg.hl(), rot);
+                }
                 0x1F => { let a = reg.a; reg.a = rr_op(reg, a) }
 
                 // SLA r
@@ -1155,9 +1224,9 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x24 => { let h = reg.h; reg.h = sla_op(reg, h) }
                 0x25 => { let l = reg.l; reg.l = sla_op(reg, l) }
                 0x26 => {
-                    let hl = reg.hl();
-                    let v = mem.read(hl);
-                    mem.write(hl, sla_op(reg, v));
+                    let v = mem.read(reg.hl());
+                    let result = sla_op(reg, v);
+                    mem.write(reg.hl(), result);
                 }
                 0x27 => { let a = reg.b; reg.b = sla_op(reg, a) }
 
@@ -1168,7 +1237,11 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x33 => { let e = reg.e; reg.e = swap_op(reg, e) }
                 0x34 => { let h = reg.h; reg.h = swap_op(reg, h) }
                 0x35 => { let l = reg.l; reg.l = swap_op(reg, l) }
-                0x36 => { let v = mem.read(reg.hl()); mem.write(reg.hl(), swap_op(reg, v)) }
+                0x36 => {
+                    let v = mem.read(reg.hl());
+                    let result = swap_op(reg, v);
+                    mem.write(reg.hl(), result);
+                }
                 0x37 => { let a = reg.a; reg.a = swap_op(reg, a) }
 
                 // SRL r
@@ -1179,9 +1252,9 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x3C => { let h = reg.h; reg.h = srl_op(reg, h) }
                 0x3D => { let l = reg.l; reg.l = srl_op(reg, l) }
                 0x3E => {
-                    let hl = reg.hl();
-                    let v = mem.read(hl);
-                    mem.write(hl, srl_op(reg, v))
+                    let v = mem.read(reg.hl());
+                    let result = srl_op(reg, v);
+                    mem.write(reg.hl(), result);
                 }
                 0x3F => { let a = reg.a; reg.a = srl_op(reg, a) }
 
@@ -1336,6 +1409,82 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0xBD => { reg.l &= !128; }
                 0xBE => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v & !128); }
                 0xBF => { reg.a &= !128; }
+
+                // SET b, r: set bit b in register r
+                // Length: 2
+                // Cycles: 8
+                // Flags: - - - -
+                0xC0 => { reg.b |= 1; }
+                0xC1 => { reg.c |= 1; }
+                0xC2 => { reg.d |= 1; }
+                0xC3 => { reg.e |= 1; }
+                0xC4 => { reg.h |= 1; }
+                0xC5 => { reg.l |= 1; }
+                0xC6 => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v | 1); }
+                0xC7 => { reg.a |= 1; }
+
+                0xC8 => { reg.b |= 2; }
+                0xC9 => { reg.c |= 2; }
+                0xCA => { reg.d |= 2; }
+                0xCB => { reg.e |= 2; }
+                0xCC => { reg.h |= 2; }
+                0xCD => { reg.l |= 2; }
+                0xCE => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v | 2); }
+                0xCF => { reg.a |= 2; }
+
+                0xD0 => { reg.b |= 4; }
+                0xD1 => { reg.c |= 4; }
+                0xD2 => { reg.d |= 4; }
+                0xD3 => { reg.e |= 4; }
+                0xD4 => { reg.h |= 4; }
+                0xD5 => { reg.l |= 4; }
+                0xD6 => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v | 4); }
+                0xD7 => { reg.a |= 4; }
+
+                0xD8 => { reg.b |= 8; }
+                0xD9 => { reg.c |= 8; }
+                0xDA => { reg.d |= 8; }
+                0xDB => { reg.e |= 8; }
+                0xDC => { reg.h |= 8; }
+                0xDD => { reg.l |= 8; }
+                0xDD => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v | 8); }
+                0xDF => { reg.a |= 8; }
+
+                0xE0 => { reg.b |= 16; }
+                0xE1 => { reg.c |= 16; }
+                0xE2 => { reg.d |= 16; }
+                0xE3 => { reg.e |= 16; }
+                0xE4 => { reg.h |= 16; }
+                0xE5 => { reg.l |= 16; }
+                0xE6 => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v | 16); }
+                0xE7 => { reg.a |= 16; }
+
+                0xE8 => { reg.b |= 32; }
+                0xE9 => { reg.c |= 32; }
+                0xEA => { reg.d |= 32; }
+                0xEB => { reg.e |= 32; }
+                0xEC => { reg.h |= 32; }
+                0xED => { reg.l |= 32; }
+                0xEE => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v | 32); }
+                0xEF => { reg.a |= 32; }
+
+                0xF0 => { reg.b |= 64; }
+                0xF1 => { reg.c |= 64; }
+                0xF2 => { reg.d |= 64; }
+                0xF3 => { reg.e |= 64; }
+                0xF4 => { reg.h |= 64; }
+                0xF5 => { reg.l |= 64; }
+                0xF6 => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v | 64); }
+                0xF7 => { reg.a |= 64; }
+
+                0xF8 => { reg.b |= 128; }
+                0xF9 => { reg.c |= 128; }
+                0xFA => { reg.d |= 128; }
+                0xFB => { reg.e |= 128; }
+                0xFC => { reg.h |= 128; }
+                0xFD => { reg.l |= 128; }
+                0xFE => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v | 128); }
+                0xFF => { reg.a |= 128; }
 
                 _ => {
                     panic!("Unsupported opcode at 0x{:04X}: 0x{:02X}{:02X}", reg.pc, op, op2);

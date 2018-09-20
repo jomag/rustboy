@@ -21,7 +21,7 @@ Currently the following tests has been tried:
  * `07-jr,jp,call,ret,rst.gb`: **passes!**
  * `08-misc instrs.gb`: fails
  * `09-op r,r.gb`: crashes
- * `10-bit ops.gb`: crashes
+ * `10-bit ops.gb`: **passes!**
  * `11-op a,(hl).gb`: crashes
 
 Graphics
