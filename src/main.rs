@@ -94,7 +94,7 @@ fn main() {
     // breakpoints.push(0x0051);
     // breakpoints.push(0x6A);
     // breakpoints.push(0x95);
-    // breakpoints.push(0x100);
+    breakpoints.push(0x100);
     // breakpoints.push(0x40);
 
     let ctrlc_event = Arc::new(AtomicBool::new(false));

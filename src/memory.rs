@@ -116,13 +116,12 @@ impl Memory {
 
         } else if addr >= 0xFF00 {
             if addr >= 0xFF10 && addr <= 0xFF26 {
-                println!("unhandled write to audio register 0x{:04X}: {}", addr, value);
+                // println!("unhandled write to audio register 0x{:04X}: {}", addr, value);
             } else if addr >= 0xFF30 && addr <= 0xFF3F {
-                println!("unhandled write to wave register 0x{:04X}: {}", addr, value);
+                // println!("unhandled write to wave register 0x{:04X}: {}", addr, value);
             } else {
                 match addr {
                     0xFF00 => {}  // P1
-                    
                     0xFF01 => {}
                     0xFF02 => {
                         if value == 0x81 {
@@ -130,7 +129,6 @@ impl Memory {
                             print!("{}", Blue.bold().paint(s))  // SB
                         }
                     }
-                    0xFF02 => {}  // SC
                     0xFF04 => { println!("write to 0xFF04 - DIV: {}", value) }
                     0xFF07 => {}  // TAC
                     0xFF08 => { println!("write to 0xFF08 - undocumented!: {}", value) }
