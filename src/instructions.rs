@@ -301,18 +301,58 @@ pub fn rl_op(reg: &mut Registers, value: u8) -> u8 {
 
 
 fn sla_op(reg: &mut Registers, value: u8) -> u8 {
+    reg.f &= !(Z_BIT | H_BIT | N_BIT | C_BIT);
     reg.set_carry(value & 128 != 0);
     let result = (value << 1) & 0xFF;
     reg.set_z_flag(result == 0);
     result
 }
 
+fn sra_op(reg: &mut Registers, value: u8) -> u8 {
+    reg.f &= !(Z_BIT | H_BIT | N_BIT | C_BIT);
+    reg.set_carry(value & 1 == 1);
+    let result = (value >> 1);
+    reg.set_z_flag(result == 0);
+    result
+}
+
 fn srl_op(reg: &mut Registers, value: u8) -> u8 {
     // Shift n right into Carry. MSB set to 0.
+    reg.f &= !(Z_BIT | H_BIT | N_BIT | C_BIT);
     reg.set_carry(value & 1 != 0);
     let result = value >> 1;
     reg.set_z_flag(result == 0);
     result
+}
+
+fn daa_op(reg: &mut Registers) {
+    let mut a: i32 = reg.a as i32;
+
+    if !reg.n_flag() {
+        if reg.h_flag() || (a & 0xF) > 9 {
+            a += 0x06;
+        }
+
+        if reg.c_flag() || a > 0x9F {
+            a += 0x60;
+        }
+    } else {
+        if reg.h_flag() {
+            a = (a - 6) & 0xFF;
+        }
+
+        if reg.c_flag() {
+            a -= 0x60;
+        }
+    }
+
+    reg.set_half_carry(false);
+    reg.set_carry(a & 0x100 == 0x100);
+
+    a = a & 0xFF;
+    reg.set_z_flag(a == 0);
+
+    reg.a = a as u8;
 }
 
 pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
@@ -336,9 +376,10 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0x37 => {
             reg.set_carry(true);
             reg.set_half_carry(false);
-            
         }
 
+        // DAA: ...
+        0x27 => { daa_op(reg) }
 
         // LD rr, d16: load immediate (d16) into 16-bit register rr
         // Length: 3
@@ -1230,6 +1271,20 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 }
                 0x27 => { let a = reg.b; reg.b = sla_op(reg, a) }
 
+                // SRA r
+                0x28 => { let b = reg.b; reg.b = sra_op(reg, b) }
+                0x29 => { let c = reg.c; reg.c = sra_op(reg, c) }
+                0x2A => { let d = reg.d; reg.d = sra_op(reg, d) }
+                0x2B => { let e = reg.e; reg.e = sra_op(reg, e) }
+                0x2C => { let h = reg.h; reg.h = sra_op(reg, h) }
+                0x2D => { let l = reg.l; reg.l = sra_op(reg, l) }
+                0x2E => {
+                    let v = mem.read(reg.hl());
+                    let result = sra_op(reg, v);
+                    mem.write(reg.hl(), result);
+                }
+                0x2F => { let a = reg.b; reg.b = sra_op(reg, a) }
+
                 // SWAP r
                 0x30 => { let b = reg.b; reg.b = swap_op(reg, b) }
                 0x31 => { let c = reg.c; reg.c = swap_op(reg, c) }
@@ -1371,7 +1426,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0x9B => { reg.e &= !8; }
                 0x9C => { reg.h &= !8; }
                 0x9D => { reg.l &= !8; }
-                0x9D => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v & !8); }
+                0x9E => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v & !8); }
                 0x9F => { reg.a &= !8; }
 
                 0xA0 => { reg.b &= !16; }
@@ -1447,7 +1502,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
                 0xDB => { reg.e |= 8; }
                 0xDC => { reg.h |= 8; }
                 0xDD => { reg.l |= 8; }
-                0xDD => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v | 8); }
+                0xDE => { let hl = reg.hl(); let v = mem.read(hl); mem.write(hl, v | 8); }
                 0xDF => { reg.a |= 8; }
 
                 0xE0 => { reg.b |= 16; }

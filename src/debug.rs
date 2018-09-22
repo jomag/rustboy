@@ -11,6 +11,21 @@ fn add_i8_to_u16(a: u16, b: i8) -> u16 {
     }
 }
 
+pub fn print_stack(mem: &Memory, sp: u16) {
+    let mut a: u16 = 0xDFFF;
+
+    if sp == a {
+        println!("  stack: empty");
+    } else {
+        print!("  stack: ");
+        while a >= sp {
+            print!(" 0x{:04X}", mem.read_u16(a));
+            a -= 2;
+        }
+        println!();
+    }
+}
+
 pub fn print_registers(reg: &Registers) {
     print!("  A: 0x{:02X} B: 0x{:02X} C: 0x{:02X} D: 0x{:02X} ", reg.a, reg.b, reg.c, reg.d);
     println!("E: 0x{:02X} F: 0x{:02X} H: 0x{:02X} L: 0x{:02X}", reg.e, reg.f, reg.h, reg.l);
@@ -24,7 +39,7 @@ pub fn print_registers(reg: &Registers) {
     )
 }
 
-const simple_mnemonics: [&str; 256] = [
+const SIMPLE_MNEMONICS: [&str; 256] = [
     // 0x00
     "NOP", "", "LD   (BC), A", "INC  BC", "INC  B", "DEC  B", "", "RLCA",
 
@@ -141,7 +156,7 @@ const simple_mnemonics: [&str; 256] = [
 pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
     let op: u8 = mem.read(addr);
 
-    let easy = simple_mnemonics[op as usize];
+    let easy = SIMPLE_MNEMONICS[op as usize];
 
     if !easy.is_empty() {
         return easy.to_string();
@@ -195,6 +210,7 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
             format!("LD   SP, ${:02X}{:02X}", hi, lo)
         }
 
+        0xC2 => { format!("JP   NZ, 0x{:04X}", mem.read_u16(addr + 1)) }
         0xC3 => { format!("JP   0x{:04X}", mem.read_u16(addr + 1)) }
         0xC4 => { format!("CALL  NZ, ${:04X}", mem.read_u16(addr + 1)) }
 
@@ -217,6 +233,7 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
         0xE6 => { format!("AND  ${:02X}", mem.read(addr + 1)) }
 
         0xF0 => { format!("LD   A, ($FF00+${:02X})", mem.read(addr + 1)) }
+        0xFA => { format!("LD   A, (${:04X})", mem.read_u16(addr + 1)) }
         0xFE => { format!("CP   ${:02X}", mem.read(addr + 1)) }
 
         _ => {

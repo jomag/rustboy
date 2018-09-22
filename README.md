@@ -19,7 +19,7 @@ Currently the following tests has been tried:
  * `05-op rp.gb`: **passes!**
  * `06-ld r,r.gb`: **passes!**
  * `07-jr,jp,call,ret,rst.gb`: **passes!**
- * `08-misc instrs.gb`: fails
+ * `08-misc instrs.gb`: **passes!**
  * `09-op r,r.gb`: crashes
  * `10-bit ops.gb`: **passes!**
  * `11-op a,(hl).gb`: crashes

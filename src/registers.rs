@@ -30,12 +30,20 @@ impl Registers {
         }
     }
 
-    pub fn c_flag(&self) -> bool {
-        (self.f & C_BIT) != 0
-    }
-
     pub fn z_flag(&self) -> bool {
         (self.f & Z_BIT) != 0
+    }
+
+    pub fn n_flag(&self) -> bool {
+        (self.f & N_BIT) != 0
+    }
+
+    pub fn h_flag(&self) -> bool {
+        (self.f & H_BIT) != 0
+    }
+
+    pub fn c_flag(&self) -> bool {
+        (self.f & C_BIT) != 0
     }
 
     pub fn set_z_flag(&mut self, val: bool) {
@@ -98,8 +106,14 @@ impl Registers {
     }
 
     pub fn set_af(&mut self, value: u16) {
+        // Note that this one is special:
+        // The lower 4 bits of register F are not usable.
+        // They should always remain zero.
+        // Note that it's still possible to write to
+        // self.f directly, so we should probably
+        // not allow that either.
         self.a = ((value >> 8) & 0xFF) as u8;
-        self.f = (value & 0xFF) as u8;
+        self.f = (value & 0xF0) as u8;
     }
 
     pub fn set_carry(&mut self, en: bool) {
