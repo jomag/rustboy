@@ -308,7 +308,10 @@ fn daa_op(reg: &mut Registers) {
         }
     } else {
         if reg.half_carry {
-            a = (a - 6) & 0xFF;
+            a = a - 6;
+            if !reg.carry {
+                a = a & 0xFF;
+            }
         }
 
         if reg.carry {
@@ -317,11 +320,9 @@ fn daa_op(reg: &mut Registers) {
     }
 
     reg.half_carry = false;
-    reg.carry = a & 0x100 == 0x100;
-
-    a = a & 0xFF;
-    reg.zero = a == 0;
-    reg.a = a as u8;
+    reg.carry = a & 0x100 != 0;
+    reg.a = (a & 0xFF) as u8;
+    reg.zero = reg.a == 0;
 }
 
 pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
@@ -509,16 +510,18 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Flags: 0 0 H C
         // TODO: this is very similar to the add_hl_op. could they be combined?
         0xE8 => {
-            let d8 = mem.read(reg.pc + 1) as u32;
-            let sp: u32 = reg.sp as u32;
+            let d8 = mem.read_i8(reg.pc + 1) as i16 as u16;
 
-            let hc = ((sp & 0x0FFF) + (d8 & 0xFFF)) & 0x1000 == 0x1000;
+            reg.sp.wrapping_add(d8);
+            let mut sp = reg.sp;
+
+            let hc = ((sp & 0x0F) + (d8 & 0x0F) as u16) > 0x0F;
             reg.half_carry = hc;
 
-            let sp = sp + d8;
-            reg.carry = sp > 0xFFFF;
+            reg.carry = (sp & 0xFF) + (d8 & 0xFF) as u16 > 0xFF;
+
             reg.zero = false;
-            reg.sp = (sp & 0xFFFF) as u16;
+            reg.neg = false;
         }
 
         // SUB r, SUB (hl): subtract register r or value at (hl) from accumulator
