@@ -11,6 +11,30 @@ fn add_i8_to_u16(a: u16, b: i8) -> u16 {
     }
 }
 
+pub fn log_state(reg: &Registers, mem: &Memory) {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
+    match OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(true)
+        .open("log.txt") {
+            Ok(ref mut file) => {
+                let f = reg.get_f();
+                file.write_fmt(format_args!(
+                    "A:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} F:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} Op: {:02x} {:02x}\n",
+                    reg.a, reg.b, reg.c, reg.d,
+                    reg.e, f, reg.h, reg.l,
+                    reg.sp, reg.pc, mem.read(reg.pc), mem.read(reg.pc + 1)
+                ));
+            },
+            Err(err) => {
+                panic!("Failed to open log file: {}", err);
+            }
+        }
+}
+
 pub fn print_stack(mem: &Memory, sp: u16) {
     let mut a: u16 = 0xDFFF;
 
@@ -28,14 +52,14 @@ pub fn print_stack(mem: &Memory, sp: u16) {
 
 pub fn print_registers(reg: &Registers) {
     print!("  A: 0x{:02X} B: 0x{:02X} C: 0x{:02X} D: 0x{:02X} ", reg.a, reg.b, reg.c, reg.d);
-    println!("E: 0x{:02X} F: 0x{:02X} H: 0x{:02X} L: 0x{:02X}", reg.e, reg.f, reg.h, reg.l);
+    println!("E: 0x{:02X} F: 0x{:02X} H: 0x{:02X} L: 0x{:02X}", reg.e, reg.get_f(), reg.h, reg.l);
     println!("  SP: 0x{:04X} PC: 0x{:04X}", reg.sp, reg.pc);
     println!(
         "  Flags: Z={}, N={}, H={}, C={}",
-        if (reg.f & Z_BIT) == 0 { 0 } else { 1 },
-        if (reg.f & N_BIT) == 0 { 0 } else { 1 },
-        if (reg.f & H_BIT) == 0 { 0 } else { 1 },
-        if (reg.f & C_BIT) == 0 { 0 } else { 1 },
+        if reg.zero { 1 } else { 0 },
+        if reg.neg { 1 } else { 0 },
+        if reg.half_carry { 1 } else { 0 },
+        if reg.carry { 1 } else { 0 },
     )
 }
 
@@ -167,6 +191,7 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
 
         // LD n, d: load immediate into register n
         0x06 => { format!("LD   B, ${:02X}", mem.read(addr + 1)) }
+        0x08 => { format!("LD   ${:02X}, SP", mem.read(addr + 1)) }
         0x0E => { format!("LD   C, ${:02X}", mem.read(addr + 1)) }
         0x16 => { format!("LD   D, ${:02X}", mem.read(addr + 1)) }
         0x1E => { format!("LD   E, ${:02X}", mem.read(addr + 1)) }
