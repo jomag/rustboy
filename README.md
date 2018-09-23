@@ -20,9 +20,9 @@ Currently the following tests has been tried:
  * `06-ld r,r.gb`: **passes!**
  * `07-jr,jp,call,ret,rst.gb`: **passes!**
  * `08-misc instrs.gb`: **passes!**
- * `09-op r,r.gb`: crashes
+ * `09-op r,r.gb`: fails
  * `10-bit ops.gb`: **passes!**
- * `11-op a,(hl).gb`: crashes
+ * `11-op a,(hl).gb`: fails
 
 Graphics
 --------

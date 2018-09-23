@@ -5,16 +5,24 @@ pub const H_BIT:  u8 = 1 << 5;   // half carry flag
 pub const C_BIT:  u8 = 1 << 4;   // carry flag
 
 pub struct Registers {
+    // Registers
     pub a: u8,
     pub b: u8,
     pub c: u8,
     pub d: u8,
     pub e: u8,
-    pub f: u8,
     pub h: u8,
     pub l: u8,
     pub sp: u16,
     pub pc: u16,
+
+    // Flags (the F register)
+    pub zero: bool,
+    pub neg: bool,
+    pub half_carry: bool,
+    pub carry: bool,
+
+    // Inner state
     pub ime: bool,
     pub stopped: bool
 }
@@ -23,56 +31,34 @@ impl Registers {
     pub fn new() -> Self {
         Registers {
             a: 0, b: 0, c: 0, d: 0,
-            e: 0, f: 0, h: 0, l: 0,
+            e: 0, h: 0, l: 0,
             sp: 0, pc: 0,
+
+            zero: false, neg: false,
+            half_carry: false, carry: false,
+
             ime: false,
             stopped: false
         }
     }
 
-    pub fn z_flag(&self) -> bool {
-        (self.f & Z_BIT) != 0
-    }
-
-    pub fn n_flag(&self) -> bool {
-        (self.f & N_BIT) != 0
-    }
-
-    pub fn h_flag(&self) -> bool {
-        (self.f & H_BIT) != 0
-    }
-
-    pub fn c_flag(&self) -> bool {
-        (self.f & C_BIT) != 0
-    }
-
-    pub fn set_z_flag(&mut self, val: bool) {
-        if val {
-            self.f |= Z_BIT;
-        } else {
-           self.f &= !Z_BIT;
-        }
-    }
-
-    pub fn set_zero_from_a(&mut self) {
-        if self.a == 0 {
-            self.f |= Z_BIT;
-        } else {
-            self.f &= !Z_BIT;
-        }
-    }
-
-    pub fn set_n_flag(&mut self) {
-        self.f |= N_BIT;
-    }
-
-    pub fn clear_n_flag(&mut self) {
-        self.f &= !N_BIT;
-    }
-
     pub fn af(&self) -> u16 {
         // Return 16-bit value of registers A and F
-        return (self.a as u16) << 8 | self.f as u16;
+        let mut f: u8 = 0;
+        if self.zero { f |= Z_BIT };
+        if self.neg { f |= N_BIT };
+        if self.half_carry { f |= H_BIT };
+        if self.carry { f |= C_BIT };
+        return (self.a as u16) << 8 | f as u16;
+    }
+
+    pub fn get_f(&self) -> u8 {
+        let mut f: u8 = 0;
+        if self.zero { f |= Z_BIT };
+        if self.neg { f |= N_BIT };
+        if self.half_carry { f |= H_BIT };
+        if self.carry { f |= C_BIT };
+        f
     }
 
     pub fn bc(&self) -> u16 {
@@ -113,21 +99,16 @@ impl Registers {
         // self.f directly, so we should probably
         // not allow that either.
         self.a = ((value >> 8) & 0xFF) as u8;
-        self.f = (value & 0xF0) as u8;
+        self.zero = value & (Z_BIT as u16) != 0;
+        self.neg = value & (N_BIT as u16) != 0;
+        self.half_carry = value & (H_BIT as u16) != 0;
+        self.carry = value & (C_BIT as u16) != 0;
     }
 
-    pub fn set_carry(&mut self, en: bool) {
-        if en {
-            self.f |= C_BIT;
-        } else {
-            self.f &= !C_BIT;
-        }
-    }
-    pub fn set_half_carry(&mut self, en: bool) {
-        if en {
-            self.f |= H_BIT;
-        } else {
-            self.f &= !H_BIT;
-        }
+    pub fn set_znhc(&mut self, z: bool, n: bool, h: bool, c: bool) {
+        self.zero = z;
+        self.neg = n;
+        self.half_carry = h;
+        self.carry = c;
     }
 }

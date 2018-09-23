@@ -61,53 +61,49 @@ fn pop_op(reg: &mut Registers, mem: &Memory) -> u16 {
 // Flags: Z 0 1 0
 pub fn and_op(reg: &mut Registers, value: u8) {
     reg.a = reg.a & value;
-    if reg.a == 0 {
-        reg.f |= Z_BIT | H_BIT;
-        reg.f &= !(N_BIT | C_BIT);
-    } else {
-        reg.f |= H_BIT;
-        reg.f &= !(Z_BIT | N_BIT | C_BIT);
-    }
+
+    reg.zero = reg.a == 0;
+    reg.half_carry = true;
+    reg.neg = false;
+    reg.carry = false;
 }
 
 // Bitwise OR operation
 // Flags: Z 0 0 0
 pub fn or_op(reg: &mut Registers, value: u8) {
     reg.a = reg.a | value;
-    reg.set_zero_from_a();
-    reg.f &= !(N_BIT | H_BIT | C_BIT);
+
+    reg.zero = reg.a == 0;
+    reg.neg = false;
+    reg.half_carry = false;
+    reg.carry = false;
 }
 
 // Bitwise XOR operation
 // Flags: Z 0 0 0
 pub fn xor_op(reg: &mut Registers, value: u8) {
     reg.a = reg.a ^ value;
-    reg.set_zero_from_a();
-    reg.f &= !(N_BIT | H_BIT | C_BIT);
+
+    reg.zero = reg.a == 0;
+    reg.neg = false;
+    reg.half_carry = false;
+    reg.carry = false;
 }
 
 // Bit test operation
 // Flags: Z 0 1 -
 pub fn bit_op(reg: &mut Registers, bit: u8, value: u8) {
-    // Test if bit in register is set
-    if value & (1 << bit) == 0 {
-        reg.f &= !N_BIT;
-        reg.f |= Z_BIT | H_BIT;
-    } else {
-        reg.f &= !(Z_BIT | N_BIT);
-        reg.f |= H_BIT;
-    }
+    reg.zero = value & (1 << bit) == 0;
+    reg.neg = false;
+    reg.half_carry = true;
 }
 
 // Increment value operation
 // Flags: Z 0 H -
 pub fn inc_op(reg: &mut Registers, value: u8) -> u8 {
     let result = if value == 255 { 0 } else { value + 1 };
-    reg.set_z_flag(result == 0);
-    reg.set_carry(value == 255);
     let hc = ((value & 0xF) + (result & 0xF)) & 0x10 == 0x10;
-    reg.set_half_carry(hc);
-    reg.clear_n_flag();
+    reg.set_znhc(result == 0, false, hc, value == 255);
     result
 }
 
@@ -118,14 +114,14 @@ pub fn inc16_op(value: u16) -> u16 {
 }
 
 // Add 8-bit value to accumulator
-// Flags: Z - - -
+// Flags: Z 0 H C
 pub fn add_op(reg: &mut Registers, value: u8) {
     let a32: u32 = reg.a as u32 + value as u32;
     let hc = ((reg.a & 0xF) + (value & 0xF)) & 0x10 == 0x10;
-    reg.set_half_carry(hc);
-    reg.set_carry(a32 > 0xFF);
-    reg.set_z_flag((a32 & 0xFF) == 0);
-    reg.f &= !N_BIT;
+    reg.half_carry = hc;
+    reg.carry = a32 > 0xFF;
+    reg.zero = (a32 & 0xFF) == 0;
+    reg.neg = false;
     reg.a = (a32 & 0xFF) as u8;
 }
 
@@ -134,92 +130,86 @@ pub fn add_hl_op(reg: &mut Registers, value: u16) {
     // Flags: - 0 H C
     let sum: u32 = reg.hl() as u32 + value as u32;
     let hc = ((reg.hl() & 0x0FFF) + (value & 0xFFF)) & 0x1000 == 0x1000;
-    reg.set_half_carry(hc);
-    reg.set_carry(sum > 0xFFFF);
-    reg.f &= !N_BIT;
+    reg.half_carry = hc;
+    reg.carry = sum > 0xFFFF;
+    reg.neg = false;
     reg.set_hl((sum & 0xFFFF) as u16);
 }
 
 pub fn adc_op(reg: &mut Registers, value: u8) {
     // ADC A, n: add sum of n and carry to A
     // Flags: Z 0 H C
-    let carry: u32 = if reg.c_flag() { 1 } else { 0 };
+    let carry: u32 = if reg.carry { 1 } else { 0 };
     let sum: u32 = (reg.a as u32) + (value as u32) + carry;
     let hc = ((reg.a as u32 & 0x0F) + ((value as u32 + carry) & 0x0F)) & 0x10 == 0x10;
-    reg.set_half_carry(hc);
-    reg.set_carry(sum > 0xFF);
+    reg.half_carry = hc;
+    reg.carry = sum > 0xFF;
     reg.a = (sum & 0xFF) as u8;
-    reg.set_zero_from_a();
-    reg.clear_n_flag();
+    reg.zero = reg.a == 0;
+    reg.neg = false;
 }
 
 pub fn dec_op(reg: &mut Registers, value: u8) -> u8 {
     // Flags: Z 1 H -
     let dec_value = if value == 0 { 255 } else { value - 1 };
-    reg.set_z_flag(dec_value == 0);
+    reg.zero = dec_value == 0;
     // reg.set_carry(value == 0);
-    reg.set_n_flag();
-    reg.set_half_carry((dec_value ^ 0x01 ^ value) & 0x10 == 0x10);
+    reg.neg = true;
+    reg.half_carry = (dec_value ^ 0x01 ^ value) & 0x10 == 0x10;
     dec_value
 }
 
 pub fn sub_op(reg: &mut Registers, value: u8) {
     // Flags: Z 1 H C
-    let hc = reg.a & 0xF < value & 0xF;
-    reg.set_half_carry(hc);
+    reg.half_carry = reg.a & 0xF < value & 0xF;
 
     if reg.a >= value {
-        reg.set_carry(false);
+        reg.carry = false;
         reg.a = reg.a - value;
     } else {
-        reg.set_carry(true);
+        reg.carry = true;
         reg.a = (reg.a as u32 + 256 - value as u32) as u8;
     }
 
-    reg.set_zero_from_a();
-    reg.set_n_flag();
+    reg.zero = reg.a == 0;
+    reg.neg = true;
 }
 
 pub fn sbc_op(reg: &mut Registers, value: u8) {
     // SBC A, n: subtract sum of n and carry to A
     // Flags: Z 1 H C
-    let carry: u32 = if reg.c_flag() { 1 } else { 0 };
+    let carry: u32 = if reg.carry { 1 } else { 0 };
 
     let hc = (reg.a & 0xF) < ((value as u32 + carry) & 0xF) as u8;
-    reg.set_half_carry(hc);
+    reg.half_carry = hc;
 
     let mut a: u32 = reg.a as u32;
     if a >= (value as u32) + carry {
         a = a - value as u32 - carry;
-        reg.set_carry(false);
+        reg.carry = false;
     } else {
         a = a + 256 - value as u32 - carry;
-        reg.set_carry(true);
+        reg.carry = true;
     }
 
     reg.a = (a & 0xFF) as u8;
-    reg.set_zero_from_a();
-    reg.set_n_flag();
+    reg.zero = reg.a == 0;
+    reg.neg = true;
 }
 
 pub fn cp_op(reg: &mut Registers, value: u8) {
     // Flags: Z 1 H C
-    //panic!("no half carry in cp_op!");
-    let a = reg.a;
-    reg.set_z_flag(a == value);
-    reg.set_carry(a < value);
-    reg.set_half_carry(a & 0xF < value & 0xF);
-    reg.f |= N_BIT;
+    reg.zero = reg.a == value;
+    reg.carry = reg.a < value;
+    reg.half_carry = reg.a & 0xF < value & 0xF;
+    reg.neg = true;
 }
 
 // Swap upper and lower 4 bits
 // Flags: Z 0 0 0
 pub fn swap_op(reg: &mut Registers, value: u8) -> u8 {
     let res = ((value >> 4) & 0x0F) | (value << 4);
-
-    reg.f &= !(N_BIT | H_BIT | C_BIT);
-    reg.set_z_flag(res == 0);
-
+    reg.set_znhc(res == 0, false, false, false);
     res
 }
 
@@ -232,18 +222,14 @@ pub fn rst_op(reg: &mut Registers, mem: &mut Memory, address: u16) {
 pub fn rrc_op(reg: &mut Registers, value: u8) -> u8 {
     let bit0 = value & 1;
     let rotated = (value >> 1) | (bit0 << 7);
-    reg.f &= !(N_BIT | H_BIT);
-    reg.set_z_flag(rotated == 0);
-    reg.set_carry(bit0 != 0);
+    reg.set_znhc(rotated == 0, false, false, bit0 != 0);
     rotated
 }
 
 pub fn rlc_op(reg: &mut Registers, value: u8) -> u8 {
     let bit7 = value & 128;
     let rotated = (value << 1) | (bit7 >> 7);
-    reg.f &= !(N_BIT | H_BIT);
-    reg.set_z_flag(rotated == 0);
-    reg.set_carry(bit7 != 0);
+    reg.set_znhc(rotated == 0, false, false, bit7 != 0);
     rotated
 }
 
@@ -262,18 +248,12 @@ pub fn rr_op(reg: &mut Registers, value: u8) -> u8 {
     res = value >> 1;
 
     // Copy carry to it 7
-    if reg.f & C_BIT != 0 {
+    if reg.carry {
         res = res | 128;
     }
 
-    // Put bit 0 in carry
-    reg.set_carry(bit0 != 0);
-
     // Update flags (note that RRA should always clear Z)
-    reg.f &= !(Z_BIT | N_BIT | H_BIT);
-    if res == 0 {
-        reg.f |= Z_BIT;
-    }
+    reg.set_znhc(res == 0, false, false, bit0 != 0);
 
     res
 }
@@ -283,75 +263,64 @@ pub fn rl_op(reg: &mut Registers, value: u8) -> u8 {
 
     if t & 0x100 != 0 {
         t |= 1;
-        reg.f |= C_BIT;
+        reg.carry = true;
     } else {
-        reg.f &= !C_BIT;
+        reg.carry = false;
     }
 
-    reg.f &= !(N_BIT | H_BIT);
-
-    if t & 0xFF == 0 {
-        reg.f |= Z_BIT;
-    } else {
-        reg.f &= !Z_BIT;
-    }
+    reg.neg = false;
+    reg.half_carry = false;
+    reg.zero = t & 0xFF == 0;
 
     return (t & 0xFF) as u8;
 }
 
 
 fn sla_op(reg: &mut Registers, value: u8) -> u8 {
-    reg.f &= !(Z_BIT | H_BIT | N_BIT | C_BIT);
-    reg.set_carry(value & 128 != 0);
     let result = (value << 1) & 0xFF;
-    reg.set_z_flag(result == 0);
+    reg.set_znhc(result == 0, false, false, value & 128 != 0);
     result
 }
 
 fn sra_op(reg: &mut Registers, value: u8) -> u8 {
-    reg.f &= !(Z_BIT | H_BIT | N_BIT | C_BIT);
-    reg.set_carry(value & 1 == 1);
     let result = (value >> 1);
-    reg.set_z_flag(result == 0);
+    reg.set_znhc(result == 0, false, false, value & 1 == 1);
     result
 }
 
 fn srl_op(reg: &mut Registers, value: u8) -> u8 {
     // Shift n right into Carry. MSB set to 0.
-    reg.f &= !(Z_BIT | H_BIT | N_BIT | C_BIT);
-    reg.set_carry(value & 1 != 0);
     let result = value >> 1;
-    reg.set_z_flag(result == 0);
+    reg.set_znhc(result == 0, false, false, value & 1 != 0);
     result
 }
 
 fn daa_op(reg: &mut Registers) {
     let mut a: i32 = reg.a as i32;
 
-    if !reg.n_flag() {
-        if reg.h_flag() || (a & 0xF) > 9 {
+    if !reg.neg {
+        if reg.half_carry || (a & 0xF) > 9 {
             a += 0x06;
         }
 
-        if reg.c_flag() || a > 0x9F {
+        if reg.carry || a > 0x9F {
             a += 0x60;
         }
     } else {
-        if reg.h_flag() {
+        if reg.half_carry {
             a = (a - 6) & 0xFF;
         }
 
-        if reg.c_flag() {
+        if reg.carry {
             a -= 0x60;
         }
     }
 
-    reg.set_half_carry(false);
-    reg.set_carry(a & 0x100 == 0x100);
+    reg.half_carry = false;
+    reg.carry = a & 0x100 == 0x100;
 
     a = a & 0xFF;
-    reg.set_z_flag(a == 0);
-
+    reg.zero = a == 0;
     reg.a = a as u8;
 }
 
@@ -374,8 +343,9 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Cycles: 4
         // Flags: - 0 0 1
         0x37 => {
-            reg.set_carry(true);
-            reg.set_half_carry(false);
+            reg.neg = false;
+            reg.half_carry = false;
+            reg.carry = true;
         }
 
         // DAA: ...
@@ -439,7 +409,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0x03 => { let bc = inc16_op(reg.bc()); reg.set_bc(bc); }
         0x13 => { let de = inc16_op(reg.de()); reg.set_de(de); }
         0x23 => { let hl = inc16_op(reg.hl()); reg.set_hl(hl); }
-        0x33 => { let sp = reg.sp; reg.sp = inc16_op(sp); }
+        0x33 => { reg.sp = inc16_op(reg.sp); }
 
         // DEC n: decrement register n
         // Length: 1
@@ -543,11 +513,11 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             let sp: u32 = reg.sp as u32;
 
             let hc = ((sp & 0x0FFF) + (d8 & 0xFFF)) & 0x1000 == 0x1000;
-            reg.set_half_carry(hc);
+            reg.half_carry = hc;
 
             let sp = sp + d8;
-            reg.set_carry(sp > 0xFFFF);
-            reg.set_z_flag(false);
+            reg.carry = sp > 0xFFFF;
+            reg.zero = false;
             reg.sp = (sp & 0xFFFF) as u16;
         }
 
@@ -609,14 +579,14 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Cycles: 4
         // Flags: 0 0 0 C
         // Note that rrc_op() sets Z flag, but RRCA should always clear Z flag
-        0x0F => { let a = reg.a; reg.a = rrc_op(reg, a); reg.f &= !Z_BIT; }
+        0x0F => { let a = reg.a; reg.a = rrc_op(reg, a); reg.zero = false; }
 
         // RRA: ...
         // Length: 1
         // Cycles: 4
         // Flags: 0 0 0 C
         // Note that rr_op() sets Z flag, but RRA should always clear Z flag
-        0x1F => { let a = reg.a; reg.a = rr_op(reg, a); reg.f &= !Z_BIT }
+        0x1F => { let a = reg.a; reg.a = rr_op(reg, a); reg.zero = false; }
 
         // LD n, d: load immediate into register n
         // Length: 2
@@ -762,10 +732,10 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Length: 1
         // Cycles: 20/8
         // Flags: - - - -
-        0xC8 => { if reg.z_flag() { reg.pc = pop_op(reg, mem); inc_pc = false }}
-        0xD8 => { if reg.c_flag() { reg.pc = pop_op(reg, mem); inc_pc = false }}
-        0xC0 => { if !reg.z_flag() { reg.pc = pop_op(reg, mem); inc_pc = false }}
-        0xD0 => { if !reg.c_flag() { reg.pc = pop_op(reg, mem); inc_pc = false }}
+        0xC8 => { if reg.zero { reg.pc = pop_op(reg, mem); inc_pc = false }}
+        0xD8 => { if reg.carry { reg.pc = pop_op(reg, mem); inc_pc = false }}
+        0xC0 => { if !reg.zero { reg.pc = pop_op(reg, mem); inc_pc = false }}
+        0xD0 => { if !reg.carry { reg.pc = pop_op(reg, mem); inc_pc = false }}
 
         // CALL a16: push address of next instruction on stack
         //           and jump to address a16
@@ -784,7 +754,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Cycles: 24/12
         // Flags: - - - -
         0xC4 => {
-            if !reg.z_flag() {
+            if !reg.zero {
                 let nexti = reg.pc + 3;
                 push_op(reg, mem, nexti);
                 reg.pc = mem.read_u16(reg.pc + 1) ;
@@ -798,7 +768,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Cycles: 24/12
         // Flags: - - - -
         0xD4 => {
-            if !reg.c_flag() {
+            if !reg.carry {
                 let nexti = reg.pc + 3;
                 push_op(reg, mem, nexti);
                 reg.pc = mem.read_u16(reg.pc + 1);
@@ -812,7 +782,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Cycles: 24/12
         // Flags: - - - -
         0xCC => {
-            if reg.z_flag() {
+            if reg.zero {
                 let nexti = reg.pc + 3;
                 push_op(reg, mem, nexti);
                 reg.pc = mem.read_u16(reg.pc + 1);
@@ -826,7 +796,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Cycles: 24/12
         // Flags: - - - -
         0xDC => {
-            if reg.c_flag() {
+            if reg.carry {
                 let nexti = reg.pc + 3;
                 push_op(reg, mem, nexti);
                 reg.pc = mem.read_u16(reg.pc + 1);
@@ -904,7 +874,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Cycles: 12/8
         // Flags: - - - -
         0x20 => {
-            if !reg.z_flag() {
+            if !reg.zero {
                 let offs = mem.read_i8(reg.pc + 1);
                 reg.pc += 2;
                 inc_pc = false;
@@ -921,7 +891,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Cycles: 12/8
         // Flags: - - - -
         0x30 => {
-            if !reg.c_flag() {
+            if !reg.carry {
                 let offs = mem.read_i8(reg.pc + 1);
                 reg.pc += 2;
                 inc_pc = false;
@@ -939,7 +909,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Flags: - - - -
         0x28 => {
             let offs = mem.read_i8(reg.pc + 1);
-            if reg.z_flag() {
+            if reg.zero {
                 reg.pc += 2;
                 inc_pc = false;
                 if offs >= 0 {
@@ -955,7 +925,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             // Length: 2
             // Cycles: 12/8
             // Flags: - - - -
-            if reg.c_flag() {
+            if reg.carry {
                 let offs = mem.read_i8(reg.pc + 1);
                 reg.pc += 2;
                 inc_pc = false;
@@ -972,16 +942,16 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Length: 3
         // Cycles: 16/12
         // Flags: - - - -
-        0xC2 => { if !reg.z_flag() { reg.pc = mem.read_u16(reg.pc + 1); inc_pc = false }}
-        0xCA => { if reg.z_flag() { reg.pc = mem.read_u16(reg.pc + 1); inc_pc = false }}
+        0xC2 => { if !reg.zero { reg.pc = mem.read_u16(reg.pc + 1); inc_pc = false }}
+        0xCA => { if reg.zero { reg.pc = mem.read_u16(reg.pc + 1); inc_pc = false }}
 
         // JP NC, a16: jump to address a16 if C is *not* set
         // JP C, a16: jump to address a16 if C is set
         // Length: 3
         // Cycles: 16/12
         // Flags: - - - -
-        0xD2 => { if !reg.c_flag() { reg.pc = mem.read_u16(reg.pc + 1); inc_pc = false }}
-        0xDA => { if reg.c_flag() { reg.pc = mem.read_u16(reg.pc + 1); inc_pc = false }}
+        0xD2 => { if !reg.carry { reg.pc = mem.read_u16(reg.pc + 1); inc_pc = false }}
+        0xDA => { if reg.carry { reg.pc = mem.read_u16(reg.pc + 1); inc_pc = false }}
 
         // JP a16: jump to immediate address
         // Length: 3
@@ -1039,11 +1009,10 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Cycles: 4
         // Flags: 0 0 0 C
         0x17 => {
-            let b0 = if reg.f & C_BIT == 0 { 0 } else { 1 };
+            let b0 = if reg.carry { 1 } else { 0 };
             let b8 = reg.a & 128 == 0;
             reg.a = reg.a << 1 | b0;
-            reg.set_carry(b8);
-            reg.f &= !(Z_BIT | H_BIT | N_BIT);
+            reg.set_znhc(false, false, false, b8);
         }
 
         // LD (HL+), A: store value of A at (HL) and increment HL
@@ -1115,11 +1084,8 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
             let hl32 = (reg.sp as u32) + v;
 
             let hc = ((reg.sp as u32 & 0x0FFF) + (v & 0xFFF)) & 0x1000 == 0x1000;
-            reg.set_half_carry(hc);
 
-            reg.set_carry(hl32 > 0xFFFF);
-            reg.set_z_flag(false);
-            reg.clear_n_flag();
+            reg.set_znhc(false, false, hc, hl32 > 0xFFFF);
             reg.set_hl((hl32 & 0xFFFF) as u16);
         }
 
@@ -1134,7 +1100,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         0xBC => { let h = reg.h; cp_op(reg, h); }
         0xBD => { let l = reg.l; cp_op(reg, l); }
         0xBE => { let v = mem.read(reg.hl()); cp_op(reg, v); }
-        0xBF => { reg.set_z_flag(true); reg.set_carry(false); reg.f |= N_BIT; }
+        0xBF => { reg.set_znhc(true, true, false, false); }
 
         // CP u8: Compare A with immediate
         // Length: 2
@@ -1160,16 +1126,15 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
 
         0x07 => {
             // RLCA: rotate content of register A left, with carry
+            // FIXME: don't we have multiple impl of this?
             let a = (reg.a as u32) << 1;
             if a > 0xFF {
-                reg.set_carry(true);
                 reg.a = (a & 0xFF) as u8 | 1;
+                reg.set_znhc(false, false, false, true);
             } else {
-                reg.set_carry(false);
                 reg.a = (a & 0xFF) as u8;
+                reg.set_znhc(false, false, false, false);
             }
-            reg.clear_n_flag();
-            reg.set_z_flag(false);
         }
 
         // CPL: complement (bitwise not) register A
@@ -1178,7 +1143,8 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Flags: - 1 1 -
         0x2F => {
             reg.a = !reg.a;
-            reg.set_n_flag();
+            reg.neg = true;
+            reg.half_carry = true;
         }
 
         // CCF: Flip carry flag
@@ -1186,8 +1152,9 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Cycles: 4
         // Flags: - 0 0 C
         0x3F => {
-            let carry = reg.c_flag();
-            reg.set_carry(!carry);
+            reg.carry = !reg.carry;
+            reg.half_carry = false;
+            reg.neg = false;
         }
 
         // STOP 0
