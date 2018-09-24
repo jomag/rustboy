@@ -57,10 +57,6 @@ fn main() {
     println!("Loading cartridge ROM: {}", cartridge_rom);
     mem.load_cartridge(cartridge_rom);
 
-    for a in 0x104..0x133 {
-        print!("{:x},", mem.read(a));
-    }
-
     let mut breakpoints: Vec<u16> = Vec::new();
     let mut stepping = false;
     let mut last_command = "".to_string();
@@ -96,6 +92,10 @@ fn main() {
     // breakpoints.push(0x95);
     breakpoints.push(0x100);
     // breakpoints.push(0x40);
+    // breakpoints.push(0x2A02);
+    // breakpoints.push(0x2A18);
+    breakpoints.push(0xD000);
+    stepping = true;
 
     let ctrlc_event = Arc::new(AtomicBool::new(false));
     let ctrlc_event_clone = ctrlc_event.clone();

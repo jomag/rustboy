@@ -141,7 +141,7 @@ pub fn adc_op(reg: &mut Registers, value: u8) {
     // Flags: Z 0 H C
     let carry: u32 = if reg.carry { 1 } else { 0 };
     let sum: u32 = (reg.a as u32) + (value as u32) + carry;
-    let hc = ((reg.a as u32 & 0x0F) + ((value as u32 + carry) & 0x0F)) & 0x10 == 0x10;
+    let hc = ((reg.a as u32 & 0x0F) + ((value as u32 + carry) & 0x0F)) > 0xF;
     reg.half_carry = hc;
     reg.carry = sum > 0xFF;
     reg.a = (sum & 0xFF) as u8;
@@ -477,7 +477,39 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Length: 2
         // Cycles: 8
         // Flags: Z 0 H C
-        0xCE => { let d8 = mem.read(reg.pc + 1); adc_op(reg, d8) }
+        //0xCE => { let d8 = mem.read(reg.pc + 1); adc_op(reg, d8) }
+        0xCE => {
+            let value = mem.read(reg.pc + 1);
+
+/*
+ int n = programCounter.byteOperand(memory);
+        int a = registers.readA();
+        int result = n + a + (flags.isSet(Flags.Flag.CARRY) ? 1 : 0);
+
+        boolean carry = result > 0xFF;
+        result = result & 0xFF;
+        boolean halfCarry = ((result ^ a ^ n) & 0x10) != 0;
+        boolean zero = result == 0;
+
+        registers.writeA(result);
+
+        flags.set(Flags.Flag.ZERO, zero);
+        flags.set(Flags.Flag.SUBTRACT, false);
+        flags.set(Flags.Flag.HALF_CARRY, halfCarry);
+        flags.set(Flags.Flag.CARRY, carry);
+
+return 8;
+*/
+            let carry: u32 = if reg.carry { 1 } else { 0 };
+
+            reg.half_carry = ((reg.a & 0x0F) + (value.wrapping_add(carry as u8) & 0x0F)) > 0xF;
+            reg.carry = (reg.a as u32) + (value as u32) + carry > 0xFF;
+
+            reg.a = reg.a.wrapping_add(value).wrapping_add(carry as u8);
+
+            reg.zero = reg.a == 0;
+            reg.neg = false;
+        }
 
         // SBC A, r: subtract register r and carry from A
         // Length: 1
@@ -510,18 +542,15 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Flags: 0 0 H C
         // TODO: this is very similar to the add_hl_op. could they be combined?
         0xE8 => {
-            let d8 = mem.read_i8(reg.pc + 1) as i16 as u16;
+            let value = mem.read_i8(reg.pc + 1) as u16;
+            let hc = ((reg.sp & 0x0F) + (value & 0x0F)) > 0x0F;
 
-            reg.sp.wrapping_add(d8);
-            let mut sp = reg.sp;
-
-            let hc = ((sp & 0x0F) + (d8 & 0x0F) as u16) > 0x0F;
             reg.half_carry = hc;
-
-            reg.carry = (sp & 0xFF) + (d8 & 0xFF) as u16 > 0xFF;
-
+            reg.carry = (reg.sp & 0xFF) + (value & 0xFF) > 0xFF;
             reg.zero = false;
             reg.neg = false;
+
+            reg.sp = reg.sp.wrapping_add(value);
         }
 
         // SUB r, SUB (hl): subtract register r or value at (hl) from accumulator
@@ -1083,13 +1112,13 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         // Cycles: 12
         // Flags: 0 0 H C
         0xF8 => {
-            let v = mem.read(reg.pc + 1) as u32;
-            let hl32 = (reg.sp as u32) + v;
-
-            let hc = ((reg.sp as u32 & 0x0FFF) + (v & 0xFFF)) & 0x1000 == 0x1000;
-
-            reg.set_znhc(false, false, hc, hl32 > 0xFFFF);
-            reg.set_hl((hl32 & 0xFFFF) as u16);
+            let value = mem.read_i8(reg.pc + 1) as u16;
+            reg.zero = false;
+            reg.neg = false;
+            reg.half_carry = ((reg.sp & 0x0F) + (value & 0x0F)) > 0x0F;
+            reg.carry = (reg.sp & 0xFF) + (value & 0xFF) > 0xFF;
+            let hl = reg.sp.wrapping_add(value);
+            reg.set_hl(hl);
         }
 
         // CP r, CP (hl): Compare r (or value at (hl)) with A. Same as SUB but throws away the result
@@ -1527,4 +1556,45 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
     }
 
     return cycles
+}
+
+#[cfg(test)]
+mod tests {
+    use instructions::*;
+    use debug::*;
+    
+    #[test]
+    fn test_op_0x38_add_sp_immediate() {
+        let mut reg = Registers::new();
+        let mut mem = Memory::new();
+        reg.pc = 0x1000;
+        reg.sp = 0x2000;
+        mem.mem[reg.pc as usize] = 0xE8;
+        mem.mem[(reg.pc + 1) as usize] = 1 as u8;
+        step(&mut reg, &mut mem);
+        print_registers(&reg);
+        assert!(reg.sp == 0x2001);
+    }
+
+    #[test]
+    fn test_op_0xCE_add_sp_immediate() {
+        let mut reg = Registers::new();
+        let mut mem = Memory::new();
+        reg.a = 100;
+        reg.carry = true;
+        reg.pc = 0x1000;
+        reg.sp = 0x2000;
+        mem.mem[reg.pc as usize] = 0xCE;
+        mem.mem[(reg.pc + 1) as usize] = 10 as u8;
+        step(&mut reg, &mut mem);
+        print_registers(&reg);
+        assert!(reg.a == 111);
+
+        reg.carry = false;
+        mem.mem[reg.pc as usize] = 0xCE;
+        mem.mem[(reg.pc + 1) as usize] = (0 as u8).wrapping_sub(35);
+        step(&mut reg, &mut mem);
+        print_registers(&reg);
+        assert!(reg.a == 111 - 35);
+    }
 }

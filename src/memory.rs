@@ -98,10 +98,10 @@ impl Memory {
     }
 
     pub fn write(&mut self, addr: u16, value: u8) {
-        if addr >= 0xD000 && addr < 0xD100 {
-            println!("Write to watched memory location 0x{:04X}. Current: 0x{:02X}. New value: 0x{:02X}", addr, self.mem[addr as usize], value);
-            self.watch_triggered = true;
-        }
+        //if addr >= 0xD000 && addr < 0xD100 {
+        //    println!("Write to watched memory location 0x{:04X}. Current: 0x{:02X}. New value: 0x{:02X}", addr, self.mem[addr as usize], value);
+        //    self.watch_triggered = true;
+        //}
 
         // println!("WRITE MEM: 0x{:04X} = 0x{:02X} ({})", addr, value, address_type(addr));
         if addr == 0xFF0F {
