@@ -101,9 +101,10 @@ pub fn bit_op(reg: &mut Registers, bit: u8, value: u8) {
 // Increment value operation
 // Flags: Z 0 H -
 pub fn inc_op(reg: &mut Registers, value: u8) -> u8 {
-    let result = if value == 255 { 0 } else { value + 1 };
-    let hc = ((value & 0xF) + (result & 0xF)) & 0x10 == 0x10;
-    reg.set_znhc(result == 0, false, hc, value == 255);
+    let result = value.wrapping_add(1);
+    reg.zero = result == 0;
+    reg.neg = false;
+    reg.half_carry = (value & 0xF) == 0xF;
     result
 }
 
@@ -139,14 +140,13 @@ pub fn add_hl_op(reg: &mut Registers, value: u16) {
 pub fn adc_op(reg: &mut Registers, value: u8) {
     // ADC A, n: add sum of n and carry to A
     // Flags: Z 0 H C
-    let carry: u32 = if reg.carry { 1 } else { 0 };
-    let sum: u32 = (reg.a as u32) + (value as u32) + carry;
-    let hc = ((reg.a as u32 & 0x0F) + ((value as u32 + carry) & 0x0F)) > 0xF;
-    reg.half_carry = hc;
-    reg.carry = sum > 0xFF;
-    reg.a = (sum & 0xFF) as u8;
-    reg.zero = reg.a == 0;
+    let carry: u8 = if reg.carry { 1 } else { 0 };
+    let result = reg.a.wrapping_add(value).wrapping_add(carry);
+    reg.zero = result == 0;
     reg.neg = false;
+    reg.half_carry = (reg.a & 0x0F) + (value & 0x0F) + carry > 0xF;
+    reg.carry = (reg.a as u16 + value as u16 + carry as u16) > 0xFF;
+    reg.a = result
 }
 
 pub fn dec_op(reg: &mut Registers, value: u8) -> u8 {
@@ -178,25 +178,15 @@ pub fn sub_op(reg: &mut Registers, value: u8) {
 pub fn sbc_op(reg: &mut Registers, value: u8) {
     // SBC A, n: subtract sum of n and carry to A
     // Flags: Z 1 H C
-    let carry: u32 = if reg.carry { 1 } else { 0 };
-
-    let hc = (reg.a & 0xF) < ((value as u32 + carry) & 0xF) as u8;
-    reg.half_carry = hc;
-
-    let mut a: u32 = reg.a as u32;
-    if a >= (value as u32) + carry {
-        a = a - value as u32 - carry;
-        reg.carry = false;
-    } else {
-        a = a + 256 - value as u32 - carry;
-        reg.carry = true;
-    }
-
-    reg.a = (a & 0xFF) as u8;
-    reg.zero = reg.a == 0;
+    let carry: u8 = if reg.carry { 1 } else { 0 };
+    let result = reg.a.wrapping_sub(value).wrapping_sub(carry);
+    reg.zero = result == 0;
     reg.neg = true;
+    reg.half_carry = reg.a & 0xF < (value & 0xF) + carry;
+    reg.carry = (reg.a as u16) < (value as u16 + carry as u16);
+    reg.a = result;
 }
-
+    
 pub fn cp_op(reg: &mut Registers, value: u8) {
     // Flags: Z 1 H C
     reg.zero = reg.a == value;
@@ -228,7 +218,7 @@ pub fn rrc_op(reg: &mut Registers, value: u8) -> u8 {
 
 pub fn rlc_op(reg: &mut Registers, value: u8) -> u8 {
     let bit7 = value & 128;
-    let rotated = (value << 1) | (bit7 >> 7);
+    let rotated = value.rotate_left(1);
     reg.set_znhc(rotated == 0, false, false, bit7 != 0);
     rotated
 }
@@ -259,20 +249,10 @@ pub fn rr_op(reg: &mut Registers, value: u8) -> u8 {
 }
 
 pub fn rl_op(reg: &mut Registers, value: u8) -> u8 {
-    let mut t = (value as u32) << 1;
-
-    if t & 0x100 != 0 {
-        t |= 1;
-        reg.carry = true;
-    } else {
-        reg.carry = false;
-    }
-
-    reg.neg = false;
-    reg.half_carry = false;
-    reg.zero = t & 0xFF == 0;
-
-    return (t & 0xFF) as u8;
+    let carry_bit: u8 = if reg.carry { 1 } else { 0 };
+    let rotated = value << 1 | carry_bit;
+    reg.set_znhc(rotated == 0, false, false, value & 128 != 0);
+    rotated
 }
 
 
@@ -283,7 +263,7 @@ fn sla_op(reg: &mut Registers, value: u8) -> u8 {
 }
 
 fn sra_op(reg: &mut Registers, value: u8) -> u8 {
-    let result = (value >> 1);
+    let result = value >> 1 | (value & 128);
     reg.set_znhc(result == 0, false, false, value & 1 == 1);
     result
 }
@@ -296,33 +276,38 @@ fn srl_op(reg: &mut Registers, value: u8) -> u8 {
 }
 
 fn daa_op(reg: &mut Registers) {
-    let mut a: i32 = reg.a as i32;
+    // This implementation is heavily inspired by `mooneye-gb`
+    // https://github.com/Gekkio/mooneye-gb/blob/master/core/src/cpu/mod.rs
+    let mut carry = false;
 
     if !reg.neg {
-        if reg.half_carry || (a & 0xF) > 9 {
-            a += 0x06;
+        if reg.carry || reg.a > 0x99 {
+            reg.a = reg.a.wrapping_add(0x60);
+            carry = true;
         }
 
-        if reg.carry || a > 0x9F {
-            a += 0x60;
+        if reg.half_carry || reg.a & 0xF > 0x9 {
+            reg.a = reg.a.wrapping_add(0x6);
         }
     } else {
-        if reg.half_carry {
-            a = a - 6;
-            if !reg.carry {
-                a = a & 0xFF;
-            }
-        }
-
         if reg.carry {
-            a -= 0x60;
+            carry = true;
+
+            if reg.half_carry {
+                reg.a = reg.a.wrapping_add(0x9A);
+            } else {
+                reg.a = reg.a.wrapping_add(0xA0);
+            }
+        } else {
+            if reg.half_carry {
+                reg.a = reg.a.wrapping_add(0xFA);
+            }
         }
     }
 
-    reg.half_carry = false;
-    reg.carry = a & 0x100 != 0;
-    reg.a = (a & 0xFF) as u8;
     reg.zero = reg.a == 0;
+    reg.carry = carry;
+    reg.half_carry = false;
 }
 
 pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
@@ -480,35 +465,7 @@ pub fn step(reg: &mut Registers, mem: &mut Memory) -> u32 {
         //0xCE => { let d8 = mem.read(reg.pc + 1); adc_op(reg, d8) }
         0xCE => {
             let value = mem.read(reg.pc + 1);
-
-/*
- int n = programCounter.byteOperand(memory);
-        int a = registers.readA();
-        int result = n + a + (flags.isSet(Flags.Flag.CARRY) ? 1 : 0);
-
-        boolean carry = result > 0xFF;
-        result = result & 0xFF;
-        boolean halfCarry = ((result ^ a ^ n) & 0x10) != 0;
-        boolean zero = result == 0;
-
-        registers.writeA(result);
-
-        flags.set(Flags.Flag.ZERO, zero);
-        flags.set(Flags.Flag.SUBTRACT, false);
-        flags.set(Flags.Flag.HALF_CARRY, halfCarry);
-        flags.set(Flags.Flag.CARRY, carry);
-
-return 8;
-*/
-            let carry: u32 = if reg.carry { 1 } else { 0 };
-
-            reg.half_carry = ((reg.a & 0x0F) + (value.wrapping_add(carry as u8) & 0x0F)) > 0xF;
-            reg.carry = (reg.a as u32) + (value as u32) + carry > 0xFF;
-
-            reg.a = reg.a.wrapping_add(value).wrapping_add(carry as u8);
-
-            reg.zero = reg.a == 0;
-            reg.neg = false;
+            adc_op(reg, value);
         }
 
         // SBC A, r: subtract register r and carry from A
@@ -1042,9 +999,9 @@ return 8;
         // Flags: 0 0 0 C
         0x17 => {
             let b0 = if reg.carry { 1 } else { 0 };
-            let b8 = reg.a & 128 == 0;
-            reg.a = reg.a << 1 | b0;
+            let b8 = reg.a & 128 != 0;
             reg.set_znhc(false, false, false, b8);
+            reg.a = reg.a << 1 | b0;
         }
 
         // LD (HL+), A: store value of A at (HL) and increment HL
@@ -1212,7 +1169,7 @@ return 8;
                     let rot = rlc_op(reg, v);
                     mem.write(reg.hl(), rot);
                 }
-                0x07 => { let b = reg.b; reg.b = rlc_op(reg, b); }
+                0x07 => { let a = reg.a; reg.a = rlc_op(reg, a); }
 
                 // RLC n: rotate register n right
                 0x08 => { let b = reg.b; reg.b = rrc_op(reg, b); }
@@ -1226,7 +1183,7 @@ return 8;
                     let rot = rrc_op(reg, v);
                     mem.write(reg.hl(), rot);
                 }
-                0x0F => { let b = reg.b; reg.b = rrc_op(reg, b); }
+                0x0F => { let a = reg.a; reg.a = rrc_op(reg, a); }
 
                 // RL n: rotate register n left with carry flag
                 0x10 => { let b = reg.b; reg.b = rl_op(reg, b); }
@@ -1268,7 +1225,7 @@ return 8;
                     let result = sla_op(reg, v);
                     mem.write(reg.hl(), result);
                 }
-                0x27 => { let a = reg.b; reg.b = sla_op(reg, a) }
+                0x27 => { let a = reg.a; reg.a = sla_op(reg, a) }
 
                 // SRA r
                 0x28 => { let b = reg.b; reg.b = sra_op(reg, b) }
@@ -1282,7 +1239,7 @@ return 8;
                     let result = sra_op(reg, v);
                     mem.write(reg.hl(), result);
                 }
-                0x2F => { let a = reg.b; reg.b = sra_op(reg, a) }
+                0x2F => { let a = reg.a; reg.a = sra_op(reg, a) }
 
                 // SWAP r
                 0x30 => { let b = reg.b; reg.b = swap_op(reg, b) }

@@ -12,17 +12,17 @@ Currently the following tests has been tried:
 
 ### CPU instructions
 
- * `01-special.gb`: fails
+ * `01-special.gb`: **passes!**
  * `02-interrupts.gb`: fails
- * `03-op sp,hl.gb`: fails
- * `04-op r,imm.gb`: fails
+ * `03-op sp,hl.gb`: **passes!**
+ * `04-op r,imm.gb`: **passes!**
  * `05-op rp.gb`: **passes!**
  * `06-ld r,r.gb`: **passes!**
  * `07-jr,jp,call,ret,rst.gb`: **passes!**
  * `08-misc instrs.gb`: **passes!**
- * `09-op r,r.gb`: fails
+ * `09-op r,r.gb`: **passes!**
  * `10-bit ops.gb`: **passes!**
- * `11-op a,(hl).gb`: fails
+ * `11-op a,(hl).gb`: **passes!**
 
 Graphics
 --------
