@@ -28,8 +28,10 @@ impl Timer {
         let tac = mem.mem[TAC_REG as usize];
 
         if tac & 4 == 0 {
+            // Timer not enabled. Just count cycles.
             self.cycle += cycles
         } else {
+            // Timer enabled
             for _ in 0..(cycles / 4) {
                 if self.cycle & clock_selection[(tac & 3) as usize] == 0 {
                     let mut tima: u32 = (mem.mem[TIMA_REG as usize] as u32) + 4;
@@ -45,6 +47,7 @@ impl Timer {
                     }
                     mem.mem[TIMA_REG as usize] = tima as u8;
                 }
+                self.cycle += 1
             }
         }
     }

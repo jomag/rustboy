@@ -130,7 +130,8 @@ impl Memory {
                         }
                     }
                     0xFF04 => { println!("write to 0xFF04 - DIV: {}", value) }
-                    0xFF07 => {}  // TAC
+                    0xFF05 => { println!("Write to 0xFF05 - TIMA: {}", value) }  // TIMA
+                    0xFF07 => { println!("Write to 0xFF07 - TAC: {}", value) }  // TAC
                     0xFF08 => { println!("write to 0xFF08 - undocumented!: {}", value) }
 
                     0xFF40 => {}
