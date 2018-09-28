@@ -53,3 +53,6 @@ https://www.youtube.com/watch?v=HyzD8pNlpwI&t=29m12s
 
 Emulating the Gameboy:
 http://www.codeslinger.co.uk/pages/projects/gameboy.html
+
+The Cycle-Accurate Game Boy Docs:
+https://github.com/AntonioND/giibiiadvance/blob/master/docs/TCAGBD.pdf

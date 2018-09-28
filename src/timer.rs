@@ -1,11 +1,16 @@
 
-use memory::{ TAC_REG, TIMA_REG, TMA_REG, IF_REG, Memory };
+// References:
+// http://gbdev.gg8.se/wiki/articles/Timer_and_Divider_Registers
+// http://gbdev.gg8.se/wiki/articles/Timer_Obscure_Behaviour
+
+use memory::{ DIV_REG, TAC_REG, TIMA_REG, TMA_REG, IF_REG };
 use interrupt::TMR_BIT;
 
-const clock_selection: [u32; 4] = [ 4095, 262143, 65535, 16383 ];
+const CLOCK_SELECTION: [u16; 4] = [ 1023, 15, 63, 255 ];
 
 pub struct Timer {
-    cycle: u32
+    // The internal 16-bit counter. DIV is the top 8 bits.
+    cycle: u16
 }
 
 impl Timer {
@@ -15,7 +20,30 @@ impl Timer {
         }
     }
 
+    pub fn write_div(&mut self, value: u8) {
+        // Value is ignored: no matter what value is written
+        // the cycle counter is always reset to zero
+        self.cycle = 0;
+    }
+
+    pub fn read_div(&self) -> u8 {
+        self.cycle
+    }
+
     pub fn update(&mut self, mem: &mut Memory, cycles: u32) {
+        for _ in 0..cycles {
+            self.one_cycle(mem);
+        }
+    }
+
+    fn one_cycle(&mut self, mem: &mut Memory) {
+        self.cycle.wrapping_add(1);
+
+        // Update DIV register. DIV is the upper 8 bits
+        // of a 16 bit counter that increments on each
+        // clock cycle.
+        mem.mem[DIV_REG as usize] = (self.cycle >> 8) as u8;
+
         // TAC register:
         // Bit 2: 0 = stop timer, 1 = start timer
         // Bit 1-0: Clock select
@@ -27,27 +55,18 @@ impl Timer {
         // 11: 16 384 Hz
         let tac = mem.mem[TAC_REG as usize];
 
-        if tac & 4 == 0 {
-            // Timer not enabled. Just count cycles.
-            self.cycle += cycles
-        } else {
+        if tac & 4 != 0 {
             // Timer enabled
-            for _ in 0..(cycles / 4) {
-                if self.cycle & clock_selection[(tac & 3) as usize] == 0 {
-                    let mut tima: u32 = (mem.mem[TIMA_REG as usize] as u32) + 4;
-                    if tima > 0xFF {
-                        // On overflow, set TIMA to the value of the
-                        // timer modulo (TMA).
-                        // FIXME: if TMA has a very high value
-                        //        it could cause TIMA to immediately
-                        //        overflow again! This is only because
-                        //        we add 4 cycles at once.
-                        tima = tima & 0xFF + (mem.mem[TMA_REG as usize] as u32);
-                        mem.mem[IF_REG as usize] |= TMR_BIT;
-                    }
-                    mem.mem[TIMA_REG as usize] = tima as u8;
+            if self.cycle & CLOCK_SELECTION[(tac & 3) as usize] == 0 {
+                let mut tima = mem.mem[TIMA_REG as usize];
+                if tima == 0xFF {
+                    //println!("TIMER INTERRUPT!");
+                    mem.mem[IF_REG as usize] |= TMR_BIT;
+                    tima = 0
+                } else {
+                    tima = tima + 1;
                 }
-                self.cycle += 1
+                mem.mem[TIMA_REG as usize] = tima;
             }
         }
     }

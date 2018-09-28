@@ -229,6 +229,12 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
             format!("JR   Z, {}        ; jump to 0x{:04X}", rel, abs)
         }
 
+        0x30 => {
+            let rel = mem.read_i8(addr + 1);
+            let abs = add_i8_to_u16(addr + 2, rel);
+            format!("JR   NC, {}    ; jump to 0x{:04X}", rel, abs)
+        }
+
         0x31 => {
             let lo = mem.read(addr + 1);
             let hi = mem.read(addr + 2);
@@ -238,6 +244,8 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
         0xC2 => { format!("JP   NZ, 0x{:04X}", mem.read_u16(addr + 1)) }
         0xC3 => { format!("JP   0x{:04X}", mem.read_u16(addr + 1)) }
         0xC4 => { format!("CALL  NZ, ${:04X}", mem.read_u16(addr + 1)) }
+
+        0xCA => { format!("JP   Z, 0x{:04X}", mem.read_u16(addr + 1)) }
 
         0xCB => {
             let op2 = mem.read(addr + 1);
@@ -252,6 +260,9 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
         }
 
         0xCD => { format!("CALL ${:04X}", mem.read_u16(addr + 1)) }
+        0xCE => { format!("ADC  A, 0x{:02X}", mem.read(addr + 1)) }
+
+        0xD6 => { format!("SUB  0x{:02X}", mem.read(addr + 1)) }
 
         0xE0 => { format!("LD   ($FF00+${:02X}), A", mem.read(addr + 1)) }
         0xEA => { format!("LD   (${:04X}), A", mem.read_u16(addr + 1)) }
@@ -259,6 +270,7 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
 
         0xF0 => { format!("LD   A, ($FF00+${:02X})", mem.read(addr + 1)) }
         0xFA => { format!("LD   A, (${:04X})", mem.read_u16(addr + 1)) }
+        0xF8 => { format!("LD   HL, SP + ${:02X}", mem.read(addr + 1)) }
         0xFE => { format!("CP   ${:02X}", mem.read(addr + 1)) }
 
         _ => {

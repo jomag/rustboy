@@ -21,7 +21,7 @@ fn interrupt(reg: &mut Registers, mem: &mut Memory, bit: u8, addr: u16) {
     mem.mem[IF_REG as usize] &= !bit;
     let pc = reg.pc;
     push_op(reg, mem, pc);
-    reg.pc = 0x40;
+    reg.pc = addr;
     reg.ime = false;
 }
 

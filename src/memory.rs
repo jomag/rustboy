@@ -6,6 +6,7 @@ use std::fs::File;
 use memory::ansi_term::Colour::Blue;
 
 use debug::address_type;
+use timer::Timer;
 
 // Port/Mode registers
 pub const P1_REG:   u16 = 0xFF00;
@@ -39,7 +40,8 @@ pub struct Memory {
     pub mem: [u8; 0x10000],
     bootstrap: [u8; 0x100],
     pub bootstrap_mode: bool,
-    pub watch_triggered: bool
+    pub watch_triggered: bool,
+    pub timer: Timer
 }
 
 impl Memory {
@@ -48,7 +50,8 @@ impl Memory {
             mem: [0; 0x10000],
             bootstrap: [0; 0x100],
             bootstrap_mode: true,
-            watch_triggered: false
+            watch_triggered: false,
+            timer: Timer::new()
         }
     }
 
@@ -77,7 +80,11 @@ impl Memory {
         if addr < 0x100 && self.bootstrap_mode {
             return self.bootstrap[addr as usize];
         } else {
-            return self.mem[addr as usize];
+            match addr {
+            DIV_REG => return self.timer.read_div()
+            _ => {
+                return self.mem[addr as usize];
+            }
         }
     }
 
@@ -129,7 +136,7 @@ impl Memory {
                             print!("{}", Blue.bold().paint(s))  // SB
                         }
                     }
-                    0xFF04 => { println!("write to 0xFF04 - DIV: {}", value) }
+                    0xFF04 => { self.timer.write_div(value) }
                     0xFF05 => { println!("Write to 0xFF05 - TIMA: {}", value) }  // TIMA
                     0xFF07 => { println!("Write to 0xFF07 - TAC: {}", value) }  // TAC
                     0xFF08 => { println!("write to 0xFF08 - undocumented!: {}", value) }
@@ -159,6 +166,10 @@ impl Memory {
         }
 
         self.mem[addr as usize] = value;
+    }
+
+    pub fn update_timer(cycles: u32) {
+        self.timer.update(cycles);
     }
 }
 
