@@ -22,6 +22,7 @@ mod lcd;
 mod sound;
 mod timer;
 mod interrupt;
+mod cpu;
 
 use debug::{ print_listing, print_registers, format_mnemonic };
 use memory::Memory;
@@ -30,6 +31,7 @@ use lcd::LCD;
 use sound::{ sound_test };
 use timer::Timer;
 use interrupt::handle_interrupts;
+use cpu::Cpu;
 
 fn main() {
     let bootstrap_rom ="rom/boot.gb";
@@ -44,6 +46,8 @@ fn main() {
     let mut reg = Registers::new();
     let mut mem = Memory::new();
     let mut lcd = LCD::new();
+
+    let mut cpu = Cpu::new();
 
     println!();
     println!("Starting RustBoy (GameBoy Emulator written in Rust)");
@@ -89,15 +93,10 @@ fn main() {
     // breakpoints.push(0x0051);
     // breakpoints.push(0x6A);
     // breakpoints.push(0x95);
-    breakpoints.push(0x100);
+    // breakpoints.push(0x100);
     // breakpoints.push(0x40);
     // breakpoints.push(0x2A02);
     // breakpoints.push(0x2A18);
-    breakpoints.push(0xD000);
-    //breakpoints.push(0xC326);
-    //breakpoints.push(0xC326 + 3);
-    //breakpoints.push(0xC339);
-    stepping = false;
 
     let ctrlc_event = Arc::new(AtomicBool::new(false));
     let ctrlc_event_clone = ctrlc_event.clone();
@@ -200,8 +199,8 @@ fn main() {
         let op_cycles = instructions::step(&mut reg, &mut mem);
         cycles += op_cycles;
 
-        mem.update_timer(op_cycles);
-        mem.timer.update(&mut mem, op_cycles);
+        let tmr = mem.timer;
+        tmr.update(&mut mem, op_cycles);
 
         let refresh = lcd.update(op_cycles, &mut mem, &mut texture);
         handle_interrupts(&mut reg, &mut mem);

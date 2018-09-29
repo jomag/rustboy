@@ -35,6 +35,7 @@ pub const OBP1_REG: u16 = 0xFF49;
 pub const WY_REG:   u16 = 0xFF4A;
 pub const WX_REG:   u16 = 0xFF4B;
 
+ 
 
 pub struct Memory {
     pub mem: [u8; 0x10000],
@@ -81,9 +82,8 @@ impl Memory {
             return self.bootstrap[addr as usize];
         } else {
             match addr {
-            DIV_REG => return self.timer.read_div()
-            _ => {
-                return self.mem[addr as usize];
+            DIV_REG => { return self.timer.read_div() }
+            _ => { return self.mem[addr as usize]; }
             }
         }
     }
@@ -166,10 +166,6 @@ impl Memory {
         }
 
         self.mem[addr as usize] = value;
-    }
-
-    pub fn update_timer(cycles: u32) {
-        self.timer.update(cycles);
     }
 }
 
