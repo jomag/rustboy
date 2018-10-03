@@ -87,7 +87,7 @@ impl LCD {
         }
     }
 
-    pub fn update(&mut self, cycles: u32, mem: &mut Memory, txt: &mut Texture) -> bool {
+    pub fn update(&mut self, cycles: u32, mem: &mut Memory) -> bool {
         self.scanline_cycles += cycles;
 
         if cycles > 16 {

@@ -43,10 +43,6 @@ fn main() {
     // sound_test();
     // return;
 
-    let mut reg = Registers::new();
-    let mut mem = Memory::new();
-    let mut lcd = LCD::new();
-
     let mut cpu = Cpu::new();
 
     println!();
@@ -55,10 +51,10 @@ fn main() {
     println!();
 
     println!("Loading bootstrap ROM: {}", bootstrap_rom);
-    mem.load_bootstrap(bootstrap_rom);
+    cpu.mem.load_bootstrap(bootstrap_rom);
 
     println!("Loading cartridge ROM: {}", cartridge_rom);
-    mem.load_cartridge(cartridge_rom);
+    cpu.mem.load_cartridge(cartridge_rom);
 
     let mut breakpoints: Vec<u16> = Vec::new();
     let mut stepping = false;
@@ -92,11 +88,13 @@ fn main() {
     // breakpoints.push(0x0040);
     // breakpoints.push(0x0051);
     // breakpoints.push(0x6A);
-    // breakpoints.push(0x95);
-    // breakpoints.push(0x100);
+    // breakpoints.push(0x27);
+    breakpoints.push(0x100);
     // breakpoints.push(0x40);
     // breakpoints.push(0x2A02);
     // breakpoints.push(0x2A18);
+
+    stepping = true;
 
     let ctrlc_event = Arc::new(AtomicBool::new(false));
     let ctrlc_event_clone = ctrlc_event.clone();
@@ -122,36 +120,44 @@ fn main() {
             }
         }
         */
-        if mem.mem[reg.pc as usize] == 0xFB {
+
+        /*
+        if cpu.mem.mem[cpu.reg.pc as usize] == 0xFB {
             stepping = true;
         }
-        if mem.mem[reg.pc as usize] == 0xF3 {
+        if cpu.mem.mem[cpu.reg.pc as usize] == 0xF3 {
             stepping = true;
         }
-        if mem.mem[reg.pc as usize] == 0xCA {
+        if cpu.mem.mem[cpu.reg.pc as usize] == 0xCA {
             stepping = true;
+        }
+        */
+
+        if cpu.reg.pc > 0x5000 { 
+            //stepping = true;
         }
 
         if ctrlc_event.load(Ordering::SeqCst) {
+            ctrlc_event.store(false, Ordering::SeqCst);
             stepping = true;
         }
 
-        if breakpoints.contains(&reg.pc) {
-            println!("- at breakpoint (PC: 0x{:04X})", reg.pc);
+        if breakpoints.contains(&cpu.reg.pc) {
+            println!("- at breakpoint (PC: 0x{:04X})", cpu.reg.pc);
             stepping = true;
         }
 
-        if mem.watch_triggered {
-            println!("Break: watched memory change (PC 0x{:04X})", reg.pc);
-            mem.watch_triggered = false;
+        if cpu.mem.watch_triggered {
+            println!("Break: watched memory change (PC 0x{:04X})", cpu.reg.pc);
+            cpu.mem.watch_triggered = false;
             stepping = true;
         }
 
         if stepping {
-            print_registers(&reg);
-            let pc = reg.pc;
+            print_registers(&cpu);
+            let pc = cpu.reg.pc;
             let mut list_offset = pc;
-            println!("0x{:04X}: {}", pc, format_mnemonic(&mem, pc));
+            println!("0x{:04X}: {}", pc, format_mnemonic(&cpu.mem, pc));
 
             loop {
                 print!("(debug) ");
@@ -175,7 +181,7 @@ fn main() {
                         if args.len() > 1 {
                             list_offset = args[1].parse::<u16>().unwrap();
                         }
-                        list_offset = print_listing(&mem, list_offset, 10);
+                        list_offset = print_listing(&cpu.mem, list_offset, 10);
                     }
                     "q" => { break 'running; }
                     "" => {}
@@ -184,38 +190,21 @@ fn main() {
             }
         }
 
-        if reg.stopped {
+        if cpu.reg.stopped {
             println!("Stopped! Press enter to continue");
             let mut inp: String = String::new();
             stdin().read_line(&mut inp).expect("invalid command");
-            reg.stopped = false;
+            cpu.reg.stopped = false;
         }
 
-        if !mem.bootstrap_mode {
-            let op = mem.read(reg.pc);
-            op_usage[op as usize] += 1;
-        }
+        cpu.exec_op();
 
-        let op_cycles = instructions::step(&mut reg, &mut mem);
-        cycles += op_cycles;
-
-        let tmr = mem.timer;
-        tmr.update(&mut mem, op_cycles);
-
-        let refresh = lcd.update(op_cycles, &mut mem, &mut texture);
-        handle_interrupts(&mut reg, &mut mem);
-
-        if refresh {
-            lcd.copy_to_texture(&mut texture);
+        if cpu.display_updated {
+            cpu.display_updated = false;
+            cpu.lcd.copy_to_texture(&mut texture);
             canvas.clear();
             canvas.copy(&texture, None, Some(Rect::new(2, 2, 320, 288))).unwrap();
             canvas.present();
-        }
-    }
-
-    for n in 0..255 {
-        if op_usage[n as usize] > 0 {
-            println!("Op 0x{:02X}: {} uses", n, op_usage[n as usize])
         }
     }
 

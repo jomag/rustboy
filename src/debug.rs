@@ -1,7 +1,8 @@
 
 use instructions::op_length;
 use memory::Memory;
-use registers::{ Registers, Z_BIT, H_BIT, N_BIT, C_BIT };
+use cpu::Cpu;
+use registers::{ Registers };
 
 fn add_i8_to_u16(a: u16, b: i8) -> u16 {
     if b > 0 {
@@ -50,16 +51,16 @@ pub fn print_stack(mem: &Memory, sp: u16) {
     }
 }
 
-pub fn print_registers(reg: &Registers) {
-    print!("  A: 0x{:02X} B: 0x{:02X} C: 0x{:02X} D: 0x{:02X} ", reg.a, reg.b, reg.c, reg.d);
-    println!("E: 0x{:02X} F: 0x{:02X} H: 0x{:02X} L: 0x{:02X}", reg.e, reg.get_f(), reg.h, reg.l);
-    println!("  SP: 0x{:04X} PC: 0x{:04X}", reg.sp, reg.pc);
+pub fn print_registers(cpu: &Cpu) {
+    print!("  A: 0x{:02X} B: 0x{:02X} C: 0x{:02X} D: 0x{:02X} ", cpu.reg.a, cpu.reg.b, cpu.reg.c, cpu.reg.d);
+    println!("E: 0x{:02X} F: 0x{:02X} H: 0x{:02X} L: 0x{:02X}", cpu.reg.e, cpu.reg.get_f(), cpu.reg.h, cpu.reg.l);
+    println!("  SP: 0x{:04X} PC: 0x{:04X} Cycle: 0x{:04X}/{}", cpu.reg.sp, cpu.reg.pc, cpu.mem.timer.cycle, cpu.mem.timer.cycle);
     println!(
         "  Flags: Z={}, N={}, H={}, C={}",
-        if reg.zero { 1 } else { 0 },
-        if reg.neg { 1 } else { 0 },
-        if reg.half_carry { 1 } else { 0 },
-        if reg.carry { 1 } else { 0 },
+        if cpu.reg.zero { 1 } else { 0 },
+        if cpu.reg.neg { 1 } else { 0 },
+        if cpu.reg.half_carry { 1 } else { 0 },
+        if cpu.reg.carry { 1 } else { 0 }
     )
 }
 

@@ -82,8 +82,11 @@ impl Memory {
             return self.bootstrap[addr as usize];
         } else {
             match addr {
-            DIV_REG => { return self.timer.read_div() }
-            _ => { return self.mem[addr as usize]; }
+            DIV_REG => { self.timer.read_div() }
+            TIMA_REG => { self.timer.tima }
+            TMA_REG => { self.timer.tma }
+            TAC_REG => { self.timer.tac }
+            _ => { self.mem[addr as usize] }
             }
         }
     }
@@ -112,20 +115,20 @@ impl Memory {
 
         // println!("WRITE MEM: 0x{:04X} = 0x{:02X} ({})", addr, value, address_type(addr));
         if addr == 0xFF0F {
-            println!("Write to IF register 0xFF0F: {}", value);
+            // println!("Write to IF register 0xFF0F: {}", value);
         }
         
         else if addr == 0xFFFF {
-            println!("Write to IE register 0xFFFF: {}", value);
+            // println!("Write to IE register 0xFFFF: {}", value);
         }
         
         else if addr >= 0xFF80 && addr <= 0xFFFE {
 
         } else if addr >= 0xFF00 {
             if addr >= 0xFF10 && addr <= 0xFF26 {
-                // println!("unhandled write to audio register 0x{:04X}: {}", addr, value);
+                println!("unhandled write to audio register 0x{:04X}: {}", addr, value);
             } else if addr >= 0xFF30 && addr <= 0xFF3F {
-                // println!("unhandled write to wave register 0x{:04X}: {}", addr, value);
+                println!("unhandled write to wave register 0x{:04X}: {}", addr, value);
             } else {
                 match addr {
                     0xFF00 => {}  // P1
@@ -137,8 +140,9 @@ impl Memory {
                         }
                     }
                     0xFF04 => { self.timer.write_div(value) }
-                    0xFF05 => { println!("Write to 0xFF05 - TIMA: {}", value) }  // TIMA
-                    0xFF07 => { println!("Write to 0xFF07 - TAC: {}", value) }  // TAC
+                    0xFF05 => { self.timer.tima = value }  // TIMA
+                    0xFF06 => { self.timer.tma = value }  // TMA
+                    0xFF07 => { self.timer.tac = value }  // TAC
                     0xFF08 => { println!("write to 0xFF08 - undocumented!: {}", value) }
 
                     0xFF40 => {}
@@ -152,7 +156,6 @@ impl Memory {
                     0xFF4A => {}  // WY
                     0xFF4B => {}  // WX
                     0xFF4D => { println!("write to 0xFF4D - KEY1 (CGB only): {}", value) }
-                    0xFF06 => { println!("write to 0xFF06 - TMA: {}", value) }  // TMA
 
                     // Invalid registers, that are still used by for example Tetris
                     // https://www.reddit.com/r/EmuDev/comments/5nixai/gb_tetris_writing_to_unused_memory/
