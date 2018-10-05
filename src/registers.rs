@@ -23,7 +23,7 @@ pub struct Registers {
     pub carry: bool,
 
     // Inner state
-    pub ime: bool,
+    pub ime: u8, // 0 = disabled, 1 = enable after next op, 2 = enabled
     pub stopped: bool
 }
 
@@ -37,7 +37,7 @@ impl Registers {
             zero: false, neg: false,
             half_carry: false, carry: false,
 
-            ime: false,
+            ime: 0,
             stopped: false
         }
     }

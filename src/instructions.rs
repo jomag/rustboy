@@ -78,7 +78,7 @@ pub fn push_op(cpu: &mut Cpu, value: u16) {
 fn pop_op(cpu: &mut Cpu) -> u16 {
     let sp = cpu.reg.sp;
     let v = cpu.read_u16(sp);
-    cpu.reg.sp += 2;
+    cpu.reg.sp = cpu.reg.sp.wrapping_add(2);
     v
 }
 
@@ -795,12 +795,12 @@ pub fn step(cpu: &mut Cpu) {
         // Length: 1
         // Cycles: 16
         // Flags: - - - -
-        // TODO: placement of cpu.tick()?
-        // TODO: why is RET 16 cycles when POP BC is 12 cycles?
+        // This function is really EI followed by RET
         0xD9 => {
-            cpu.reg.pc = pop_op(cpu);
-            cpu.reg.ime = true;
+            cpu.reg.ime = 1;
             cpu.tick(4);
+            cpu.reg.pc = pop_op(cpu);
+            cpu.reg.ime = 2;
         }
 
         // RET Z: set PC to 16-bit value popped from stack if Z-flag is set
@@ -1244,15 +1244,17 @@ pub fn step(cpu: &mut Cpu) {
             // Length: 1
             // Cycles: 4
             // Flags: - - - -
-            cpu.reg.ime = false;
+            cpu.reg.ime = 0;
         }
 
         0xFB => {
-            // DI: Enable Interrupt Master Enable Flag
+            // EI: Enable Interrupt Master Enable Flag
             // Length: 1
             // Cycles: 4
             // Flags: - - - -
-            cpu.reg.ime = true;
+            if cpu.reg.ime == 0 {
+                cpu.reg.ime = 1;
+            }
         }
 
         // RLCA: rotate content of register A left, with carry

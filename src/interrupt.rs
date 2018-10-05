@@ -22,11 +22,16 @@ fn interrupt(cpu: &mut Cpu, bit: u8, addr: u16) {
     let pc = cpu.reg.pc;
     push_op(cpu, pc);
     cpu.reg.pc = addr;
-    cpu.reg.ime = false;
+    cpu.reg.ime = 0;
 }
 
 pub fn handle_interrupts(cpu: &mut Cpu) {
-    if cpu.reg.ime {
+    if cpu.reg.ime == 1 {
+        cpu.reg.ime = 2;
+        return;
+    }
+
+    if cpu.reg.ime == 2 {
         let if_reg = cpu.mem.mem[IF_REG as usize];
         let ie_reg = cpu.mem.mem[IE_REG as usize];
         let masked = if_reg & ie_reg;
