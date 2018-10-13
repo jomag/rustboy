@@ -38,9 +38,9 @@ includes a number of tests as well. Here's current state of some:
 * `acceptance/div_timing`: **passes!**
 * `acceptance/ei_sequence`: **passes!**
 * `acceptance/ei_timing`: **passes!**
-* `acceptance/oam_dma_restart`: fails (register C)
-* `acceptance/oam_dma_start`: fails (register C)
-* `acceptance/oam_dma_timing`: fails (register C)
+* `acceptance/oam_dma_restart`: **passes!**
+* `acceptance/oam_dma_start`: **passes!**
+* `acceptance/oam_dma_timing`: **passes!**
 * `acceptance/rapid_di_ei`: never finishes
 * `acceptance/rst_timing`: fails
 

@@ -105,12 +105,12 @@ impl MMU {
             self.display_updated = true;
         }
 
-        for c in 0..cycles {
-            if self.dma.state == 2 {
-                let offset = self.dma.start_address;
+        for c in 0..(cycles/4) {
+            if self.dma.is_active() {
+                let offset = self.dma.start_address.unwrap();
                 let idx = self.dma.step;
                 let b = self.direct_read(offset + idx);
-                self.direct_write(OAM_OFFSET + idx, b);
+                self.dma.oam[idx as usize] = b;
                 println!("DMA stuff.. from {:x} to {:x}", offset + idx, OAM_OFFSET + idx);
             }
             self.dma.update();
@@ -171,6 +171,8 @@ impl MMU {
             SCX_REG => { self.lcd.scx }
             LY_REG => { self.lcd.scanline }
             LYC_REG => { self.lcd.lyc }
+
+            DMA_REG => { 0xFF }
 
             _ => { self.mem[addr as usize] }
             }
