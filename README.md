@@ -22,6 +22,28 @@ Currently the following tests has been tried:
 * `10-bit ops.gb`: **passes!**
 * `11-op a,(hl).gb`: **passes!**
 
+## Mooneye GB
+
+The Mooneye GB emulator (which also happens to be written in Rust)
+includes a number of tests as well. Here's current state of some:
+
+* `acceptance/oam_dma/basic`: **passes!**
+* `acceptance/oam_dma/reg_read`: **passes!**
+* `acceptance/oam_dma/sources-dmgABCmgbS`: fails
+
+* `acceptance/add_sp_e_timing`: fails
+* `acceptance/boot_regs-dmgABC.gb`: **passes!**
+* `acceptance/call_timing`: fails
+* `acceptance/call_timing2`: fails
+* `acceptance/div_timing`: **passes!**
+* `acceptance/ei_sequence`: **passes!**
+* `acceptance/ei_timing`: **passes!**
+* `acceptance/oam_dma_restart`: fails (register C)
+* `acceptance/oam_dma_start`: fails (register C)
+* `acceptance/oam_dma_timing`: fails (register C)
+* `acceptance/rapid_di_ei`: never finishes
+* `acceptance/rst_timing`: fails
+
 ## Graphics
 
 Resolution: 160 x 144

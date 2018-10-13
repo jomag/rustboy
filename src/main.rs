@@ -12,10 +12,11 @@ use sdl2::rect::Rect;
 use std::io::stdin;
 use std::io::stdout;
 use std::env;
+use std::fs::File;
 
 mod ui;
 mod registers;
-mod memory;
+mod mmu;
 mod instructions;
 mod debug;
 mod lcd;
@@ -23,15 +24,15 @@ mod sound;
 mod timer;
 mod interrupt;
 mod cpu;
+mod dma;
 
-use debug::{ print_listing, print_registers, format_mnemonic };
-use memory::Memory;
+use debug::{ print_listing, print_registers, format_mnemonic, log_state };
 use registers::Registers;
 use lcd::LCD;
 use sound::{ sound_test };
 use timer::Timer;
 use interrupt::handle_interrupts;
-use cpu::Cpu;
+use mmu::MMU;
 
 fn main() {
     let bootstrap_rom ="rom/boot.gb";
@@ -40,10 +41,23 @@ fn main() {
 
     let cartridge_rom = if args.len() > 1 { &args[1] } else { "rom/tetris.gb" };
 
+    /*
+    let state_log = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(true)
+        .open("log.txt")?;
+        */
+    let mut state_log = match File::create("log.txt") {
+        Err(reason) => { panic!("Failed to create log"); },
+        Ok(file) => { file } 
+    };
+
     // sound_test();
     // return;
 
-    let mut cpu = Cpu::new();
+    let mut mmu = MMU::new();
+    mmu.init();
 
     println!();
     println!("Starting RustBoy (GameBoy Emulator written in Rust)");
@@ -51,10 +65,10 @@ fn main() {
     println!();
 
     println!("Loading bootstrap ROM: {}", bootstrap_rom);
-    cpu.mem.load_bootstrap(bootstrap_rom);
+    mmu.load_bootstrap(bootstrap_rom);
 
     println!("Loading cartridge ROM: {}", cartridge_rom);
-    cpu.mem.load_cartridge(cartridge_rom);
+    mmu.load_cartridge(cartridge_rom);
 
     let mut breakpoints: Vec<u16> = Vec::new();
     let mut stepping = false;
@@ -133,7 +147,7 @@ fn main() {
         }
         */
 
-        if cpu.reg.pc > 0x5000 { 
+        if mmu.reg.pc > 0x5000 { 
             //stepping = true;
         }
 
@@ -142,22 +156,24 @@ fn main() {
             stepping = true;
         }
 
-        if breakpoints.contains(&cpu.reg.pc) {
-            println!("- at breakpoint (PC: 0x{:04X})", cpu.reg.pc);
+        if breakpoints.contains(&mmu.reg.pc) {
+            println!("- at breakpoint (PC: 0x{:04X})", mmu.reg.pc);
             stepping = true;
         }
 
-        if cpu.mem.watch_triggered {
+        /*
+        if mmu.cpu.mem.watch_triggered {
             println!("Break: watched memory change (PC 0x{:04X})", cpu.reg.pc);
             cpu.mem.watch_triggered = false;
             stepping = true;
         }
+        */
 
         if stepping {
-            print_registers(&cpu);
-            let pc = cpu.reg.pc;
+            print_registers(&mmu);
+            let pc = mmu.reg.pc;
             let mut list_offset = pc;
-            println!("0x{:04X}: {}", pc, format_mnemonic(&cpu.mem, pc));
+            println!("0x{:04X}: {}", pc, format_mnemonic(&mmu, pc));
 
             loop {
                 print!("(debug) ");
@@ -181,7 +197,7 @@ fn main() {
                         if args.len() > 1 {
                             list_offset = args[1].parse::<u16>().unwrap();
                         }
-                        list_offset = print_listing(&cpu.mem, list_offset, 10);
+                        list_offset = print_listing(&mmu, list_offset, 10);
                     }
                     "q" => { break 'running; }
                     "" => {}
@@ -190,18 +206,19 @@ fn main() {
             }
         }
 
-        if cpu.reg.stopped {
+        if mmu.reg.stopped {
             println!("Stopped! Press enter to continue");
             let mut inp: String = String::new();
             stdin().read_line(&mut inp).expect("invalid command");
-            cpu.reg.stopped = false;
+            mmu.reg.stopped = false;
         }
 
-        cpu.exec_op();
+        // log_state(&mut state_log, &mmu);
+        mmu.exec_op();
 
-        if cpu.display_updated {
-            cpu.display_updated = false;
-            cpu.lcd.copy_to_texture(&mut texture);
+        if mmu.display_updated {
+            mmu.display_updated = false;
+            mmu.lcd.copy_to_texture(&mut texture);
             canvas.clear();
             canvas.copy(&texture, None, Some(Rect::new(2, 2, 320, 288))).unwrap();
             canvas.present();

@@ -3,7 +3,7 @@
 // http://gbdev.gg8.se/wiki/articles/Timer_and_Divider_Registers
 // http://gbdev.gg8.se/wiki/articles/Timer_Obscure_Behaviour
 
-use memory::{ Memory, TIMA_REG, IF_REG };
+use mmu::{ MMU, TIMA_REG, IF_REG };
 
 const CLOCK_SELECTION: [u16; 4] = [ 1023, 15, 63, 255 ];
 

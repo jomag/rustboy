@@ -3,10 +3,15 @@ extern crate ansi_term;
 
 use std::io::Read;
 use std::fs::File;
-use memory::ansi_term::Colour::Blue;
+use mmu::ansi_term::Colour::Blue;
 
 use debug::address_type;
 use timer::Timer;
+use dma::DMA;
+use registers::Registers;
+use lcd::LCD;
+use instructions;
+use interrupt::handle_interrupts;
 
 // Port/Mode registers
 pub const P1_REG:   u16 = 0xFF00;
@@ -35,24 +40,80 @@ pub const OBP1_REG: u16 = 0xFF49;
 pub const WY_REG:   u16 = 0xFF4A;
 pub const WX_REG:   u16 = 0xFF4B;
 
- 
+// Memory areas
+pub const OAM_OFFSET: u16 = 0xFE00;
 
-pub struct Memory {
+pub struct MMU {
+    pub reg: Registers,
     pub mem: [u8; 0x10000],
     bootstrap: [u8; 0x100],
     pub bootstrap_mode: bool,
     pub watch_triggered: bool,
-    pub timer: Timer
+
+    pub timer: Timer,
+    pub dma: DMA,
+    pub lcd: LCD,
+
+    pub display_updated: bool
 }
 
-impl Memory {
+impl MMU {
     pub fn new() -> Self {
-        Memory {
+        MMU {
+            reg: Registers::new(),
             mem: [0; 0x10000],
             bootstrap: [0; 0x100],
             bootstrap_mode: true,
             watch_triggered: false,
-            timer: Timer::new()
+            timer: Timer::new(),
+            dma: DMA::new(),
+            lcd: LCD::new(),
+            display_updated: false
+        }
+    }
+
+    pub fn init(&mut self) {
+        self.mem[0xFF00] = 0xCF;
+        self.mem[0xFF01] = 0x00;
+        self.mem[0xFF02] = 0x7E;
+
+        // Undocumented, but should be initialized to 0xFF
+        self.mem[0xFF03] = 0xFF;
+    }
+
+    pub fn get_if_reg(&self) -> u8 {
+        return self.lcd.irq
+    }
+
+    pub fn set_if_reg(&mut self, value: u8) {
+        self.lcd.irq = value;
+    }
+
+    pub fn clear_if_reg_bits(&mut self, mask: u8) {
+        self.lcd.irq &= !mask
+    }
+
+    pub fn exec_op(&mut self) {
+        instructions::step(self);
+        handle_interrupts(self);
+    }
+
+    pub fn tick(&mut self, cycles: u32) {
+        self.timer.update(cycles);
+
+        if self.lcd.update(cycles, &mut self.mem) {
+            self.display_updated = true;
+        }
+
+        for c in 0..cycles {
+            if self.dma.state == 2 {
+                let offset = self.dma.start_address;
+                let idx = self.dma.step;
+                let b = self.direct_read(offset + idx);
+                self.direct_write(OAM_OFFSET + idx, b);
+                println!("DMA stuff.. from {:x} to {:x}", offset + idx, OAM_OFFSET + idx);
+            }
+            self.dma.update();
         }
     }
 
@@ -71,34 +132,70 @@ impl Memory {
             .expect("failed to read content of cartridge rom");
     }
 
-    pub fn read(&self, addr: u16) -> u8 {
-        // Read byte (u8) from memory
+    pub fn fetch(&mut self) -> u8 {
+        let pc = self.reg.pc;
+        let value = self.read(pc);
+        self.reg.pc = pc.wrapping_add(1);
+        value
+    }
 
-        // if addr >= 0xFF00 {
-        //     println!("READ MEM: 0x{:04X} ({})", addr, address_type(addr));
-        // }
+    pub fn fetch_u16(&mut self) -> u16 {
+        let lo = self.fetch();
+        let hi = self.fetch();
+        return ((hi as u16) << 8) | (lo as u16);
+    }
 
+    pub fn read(&mut self, addr: u16) -> u8 {
+        self.tick(4);
+        self.direct_read(addr)
+    }
+
+    pub fn direct_read(&self, addr: u16) -> u8 {
         if addr < 0x100 && self.bootstrap_mode {
             return self.bootstrap[addr as usize];
+        } else if addr >= 0x8000 && addr < 0xA000 {
+            return self.lcd.read_display_ram(addr);
+        } else if addr >= 0xFE00 && addr < 0xFEA0 {
+            return self.dma.read(addr - 0xFE00);
         } else {
             match addr {
+            IF_REG => { self.get_if_reg() }
             DIV_REG => { self.timer.read_div() }
             TIMA_REG => { self.timer.tima }
             TMA_REG => { self.timer.tma }
             TAC_REG => { self.timer.tac }
+
+            LCDC_REG => { self.lcd.lcdc }
+            STAT_REG => { self.lcd.get_stat_reg() }
+            SCY_REG => { self.lcd.scy }
+            SCX_REG => { self.lcd.scx }
+            LY_REG => { self.lcd.scanline }
+            LYC_REG => { self.lcd.lyc }
+
             _ => { self.mem[addr as usize] }
             }
         }
     }
 
-    pub fn read_i8(&self, addr: u16) -> i8 {
+    pub fn read_i8(&mut self, addr: u16) -> i8 {
         let v = self.read(addr);
         return (0 as i8).wrapping_add(v as i8);
     }
 
-    pub fn read_u16(&self, addr: u16) -> u16 {
+    pub fn direct_read_i8(&self, addr: u16) -> i8 {
+        let v = self.direct_read(addr);
+        return (0 as i8).wrapping_add(v as i8);
+    }
+
+    pub fn read_u16(&mut self, addr: u16) -> u16 {
         let lo = self.read(addr);
         let hi = self.read(addr + 1);
+        return ((hi as u16) << 8) | (lo as u16);
+    }
+
+    pub fn direct_read_u16(&self, addr: u16) -> u16 {
+        let lo = self.direct_read(addr);
+        let hi = self.direct_read(addr + 1);
         return ((hi as u16) << 8) | (lo as u16);
     }
 
@@ -108,14 +205,23 @@ impl Memory {
     }
 
     pub fn write(&mut self, addr: u16, value: u8) {
+        self.tick(4);
+        self.direct_write(addr, value)
+    }
+
+    pub fn direct_write(&mut self, addr: u16, value: u8) {
         //if addr >= 0xD000 && addr < 0xD100 {
         //    println!("Write to watched memory location 0x{:04X}. Current: 0x{:02X}. New value: 0x{:02X}", addr, self.mem[addr as usize], value);
         //    self.watch_triggered = true;
         //}
 
         // println!("WRITE MEM: 0x{:04X} = 0x{:02X} ({})", addr, value, address_type(addr));
-        if addr == 0xFF0F {
-            // println!("Write to IF register 0xFF0F: {}", value);
+        if addr >= 0x8000 && addr < 0xA000 {
+            self.lcd.write_display_ram(addr, value)
+        } else if addr >= 0xFE00 && addr < 0xFEA0 {
+            self.dma.write(addr - 0xFE00, value);
+        } else if addr == 0xFF0F {
+            self.set_if_reg(value)
         }
         
         else if addr == 0xFFFF {
@@ -145,11 +251,13 @@ impl Memory {
                     0xFF07 => { self.timer.tac = value }  // TAC
                     0xFF08 => { println!("write to 0xFF08 - undocumented!: {}", value) }
 
-                    0xFF40 => {}
-                    0xFF41 => {}  // STAT
-                    0xFF42 => {}
-                    0xFF43 => {}  // SCX
-                    0xFF46 => {}  // DMA
+                    0xFF40 => { self.lcd.lcdc = value }
+                    0xFF41 => { self.lcd.set_stat_reg(value) }  // STAT
+                    0xFF42 => { self.lcd.scy = value }
+                    0xFF43 => { self.lcd.scx = value }  // SCX
+                    0xFF44 => { self.lcd.scanline = value }
+                    0xFF45 => { self.lcd.lyc = value }
+                    0xFF46 => { self.dma.start(value) }  // DMA
                     0xFF47 => {}  // BGP
                     0xFF48 => {}  // OBP0
                     0xFF49 => {}  // OBP1
@@ -169,6 +277,13 @@ impl Memory {
         }
 
         self.mem[addr as usize] = value;
+    }
+
+    pub fn pop(&mut self) -> u16 {
+        let sp = self.reg.sp;
+        let v = self.read_u16(sp);
+        self.reg.sp = sp.wrapping_add(2);
+        v
     }
 }
 

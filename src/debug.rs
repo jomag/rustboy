@@ -1,8 +1,10 @@
 
 use instructions::op_length;
-use memory::Memory;
+use mmu::MMU;
 use cpu::Cpu;
 use registers::{ Registers };
+use std::fs::File;
+use std::io::Write;
 
 fn add_i8_to_u16(a: u16, b: i8) -> u16 {
     if b > 0 {
@@ -12,31 +14,18 @@ fn add_i8_to_u16(a: u16, b: i8) -> u16 {
     }
 }
 
-pub fn log_state(reg: &Registers, mem: &Memory) {
-    use std::fs::OpenOptions;
-    use std::io::Write;
-
-    match OpenOptions::new()
-        .create(true)
-        .write(true)
-        .append(true)
-        .open("log.txt") {
-            Ok(ref mut file) => {
-                let f = reg.get_f();
-                file.write_fmt(format_args!(
-                    "A:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} F:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} Op: {:02x} {:02x}\n",
-                    reg.a, reg.b, reg.c, reg.d,
-                    reg.e, f, reg.h, reg.l,
-                    reg.sp, reg.pc, mem.read(reg.pc), mem.read(reg.pc + 1)
-                ));
-            },
-            Err(err) => {
-                panic!("Failed to open log file: {}", err);
-            }
-        }
+pub fn log_state(file: &mut File, mmu: &MMU) {
+    let f = mmu.reg.get_f();
+    file.write_fmt(format_args!(
+        "A:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} F:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} Op: {:02x} {:02x} DIV: {:02x}\n",
+        mmu.reg.a, mmu.reg.b, mmu.reg.c, mmu.reg.d,
+        mmu.reg.e, f, mmu.reg.h, mmu.reg.l,
+        mmu.reg.sp, mmu.reg.pc, mmu.direct_read(mmu.reg.pc), mmu.direct_read(mmu.reg.pc + 1),
+        mmu.timer.read_div()
+    ));
 }
 
-pub fn print_stack(mem: &Memory, sp: u16) {
+pub fn print_stack(mmu: &MMU, sp: u16) {
     let mut a: u16 = 0xDFFF;
 
     if sp == a {
@@ -44,23 +33,23 @@ pub fn print_stack(mem: &Memory, sp: u16) {
     } else {
         print!("  stack: ");
         while a >= sp {
-            print!(" 0x{:04X}", mem.read_u16(a));
+            print!(" 0x{:04X}", mmu.direct_read_u16(a));
             a -= 2;
         }
         println!();
     }
 }
 
-pub fn print_registers(cpu: &Cpu) {
-    print!("  A: 0x{:02X} B: 0x{:02X} C: 0x{:02X} D: 0x{:02X} ", cpu.reg.a, cpu.reg.b, cpu.reg.c, cpu.reg.d);
-    println!("E: 0x{:02X} F: 0x{:02X} H: 0x{:02X} L: 0x{:02X}", cpu.reg.e, cpu.reg.get_f(), cpu.reg.h, cpu.reg.l);
-    println!("  SP: 0x{:04X} PC: 0x{:04X} Cycle: 0x{:04X}/{}", cpu.reg.sp, cpu.reg.pc, cpu.mem.timer.cycle, cpu.mem.timer.cycle);
+pub fn print_registers(mmu: &MMU) {
+    print!("  A: 0x{:02X} B: 0x{:02X} C: 0x{:02X} D: 0x{:02X} ", mmu.reg.a, mmu.reg.b, mmu.reg.c, mmu.reg.d);
+    println!("E: 0x{:02X} F: 0x{:02X} H: 0x{:02X} L: 0x{:02X}", mmu.reg.e, mmu.reg.get_f(), mmu.reg.h, mmu.reg.l);
+    println!("  SP: 0x{:04X} PC: 0x{:04X} Cycle: 0x{:04X}/{}", mmu.reg.sp, mmu.reg.pc, mmu.timer.cycle, mmu.timer.cycle);
     println!(
         "  Flags: Z={}, N={}, H={}, C={}",
-        if cpu.reg.zero { 1 } else { 0 },
-        if cpu.reg.neg { 1 } else { 0 },
-        if cpu.reg.half_carry { 1 } else { 0 },
-        if cpu.reg.carry { 1 } else { 0 }
+        if mmu.reg.zero { 1 } else { 0 },
+        if mmu.reg.neg { 1 } else { 0 },
+        if mmu.reg.half_carry { 1 } else { 0 },
+        if mmu.reg.carry { 1 } else { 0 }
     )
 }
 
@@ -178,8 +167,8 @@ const SIMPLE_MNEMONICS: [&str; 256] = [
     "", "LD   SP, HL", "", "EI", "", "", "", "RST  38H"
 ];
 
-pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
-    let op: u8 = mem.read(addr);
+pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
+    let op: u8 = mmu.direct_read(addr);
 
     let easy = SIMPLE_MNEMONICS[op as usize];
 
@@ -188,68 +177,68 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
     }
 
     match op {
-        0x01 => { format!("LD  BC, ${:04X}", mem.read_u16(addr + 1)) }
+        0x01 => { format!("LD  BC, ${:04X}", mmu.direct_read_u16(addr + 1)) }
 
         // LD n, d: load immediate into register n
-        0x06 => { format!("LD   B, ${:02X}", mem.read(addr + 1)) }
-        0x08 => { format!("LD   ${:02X}, SP", mem.read(addr + 1)) }
-        0x0E => { format!("LD   C, ${:02X}", mem.read(addr + 1)) }
-        0x16 => { format!("LD   D, ${:02X}", mem.read(addr + 1)) }
-        0x1E => { format!("LD   E, ${:02X}", mem.read(addr + 1)) }
-        0x26 => { format!("LD   H, ${:02X}", mem.read(addr + 1)) }
-        0x2E => { format!("LD   L, ${:02X}", mem.read(addr + 1)) }
-        0x3E => { format!("LD   A, ${:02X}", mem.read(addr + 1)) }
+        0x06 => { format!("LD   B, ${:02X}", mmu.direct_read(addr + 1)) }
+        0x08 => { format!("LD   ${:02X}, SP", mmu.direct_read(addr + 1)) }
+        0x0E => { format!("LD   C, ${:02X}", mmu.direct_read(addr + 1)) }
+        0x16 => { format!("LD   D, ${:02X}", mmu.direct_read(addr + 1)) }
+        0x1E => { format!("LD   E, ${:02X}", mmu.direct_read(addr + 1)) }
+        0x26 => { format!("LD   H, ${:02X}", mmu.direct_read(addr + 1)) }
+        0x2E => { format!("LD   L, ${:02X}", mmu.direct_read(addr + 1)) }
+        0x3E => { format!("LD   A, ${:02X}", mmu.direct_read(addr + 1)) }
 
         0x11 => {
-            let lo = mem.read(addr + 1);
-            let hi = mem.read(addr + 2);
+            let lo = mmu.direct_read(addr + 1);
+            let hi = mmu.direct_read(addr + 2);
             format!("LD   DE, ${:02X}{:02X}", hi, lo)
         }
 
         0x18 => {
-            let rel = mem.read_i8(addr + 1);
+            let rel = mmu.direct_read_i8(addr + 1);
             let abs = add_i8_to_u16(addr + 2, rel);
             format!("JR   {}  ; jump to 0x{:04X}", rel, abs)
         }
 
         0x20 => {
-            let rel = mem.read_i8(addr + 1);
+            let rel = mmu.direct_read_i8(addr + 1);
             let abs = add_i8_to_u16(addr + 2, rel);
             format!("JR   NZ, {}    ; jump to 0x{:04X}", rel, abs)
         }
 
         0x21 => {
-            let lo = mem.read(addr + 1);
-            let hi = mem.read(addr + 2);
+            let lo = mmu.direct_read(addr + 1);
+            let hi = mmu.direct_read(addr + 2);
             format!("LD   HL, ${:02X}{:02X}", hi, lo)
         }
 
         0x28 => {
-            let rel = mem.read_i8(addr + 1);
+            let rel = mmu.direct_read_i8(addr + 1);
             let abs = add_i8_to_u16(addr + 2, rel);
             format!("JR   Z, {}        ; jump to 0x{:04X}", rel, abs)
         }
 
         0x30 => {
-            let rel = mem.read_i8(addr + 1);
+            let rel = mmu.direct_read_i8(addr + 1);
             let abs = add_i8_to_u16(addr + 2, rel);
             format!("JR   NC, {}    ; jump to 0x{:04X}", rel, abs)
         }
 
         0x31 => {
-            let lo = mem.read(addr + 1);
-            let hi = mem.read(addr + 2);
+            let lo = mmu.direct_read(addr + 1);
+            let hi = mmu.direct_read(addr + 2);
             format!("LD   SP, ${:02X}{:02X}", hi, lo)
         }
 
-        0xC2 => { format!("JP   NZ, 0x{:04X}", mem.read_u16(addr + 1)) }
-        0xC3 => { format!("JP   0x{:04X}", mem.read_u16(addr + 1)) }
-        0xC4 => { format!("CALL  NZ, ${:04X}", mem.read_u16(addr + 1)) }
+        0xC2 => { format!("JP   NZ, 0x{:04X}", mmu.direct_read_u16(addr + 1)) }
+        0xC3 => { format!("JP   0x{:04X}", mmu.direct_read_u16(addr + 1)) }
+        0xC4 => { format!("CALL  NZ, ${:04X}", mmu.direct_read_u16(addr + 1)) }
 
-        0xCA => { format!("JP   Z, 0x{:04X}", mem.read_u16(addr + 1)) }
+        0xCA => { format!("JP   Z, 0x{:04X}", mmu.direct_read_u16(addr + 1)) }
 
         0xCB => {
-            let op2 = mem.read(addr + 1);
+            let op2 = mmu.direct_read(addr + 1);
             match op2 {
                 0x11 => { "RL   C".to_string() }
                 0x7C => { "BIT 7, h".to_string() }
@@ -260,19 +249,19 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
             }
         }
 
-        0xCD => { format!("CALL ${:04X}", mem.read_u16(addr + 1)) }
-        0xCE => { format!("ADC  A, 0x{:02X}", mem.read(addr + 1)) }
+        0xCD => { format!("CALL ${:04X}", mmu.direct_read_u16(addr + 1)) }
+        0xCE => { format!("ADC  A, 0x{:02X}", mmu.direct_read(addr + 1)) }
 
-        0xD6 => { format!("SUB  0x{:02X}", mem.read(addr + 1)) }
+        0xD6 => { format!("SUB  0x{:02X}", mmu.direct_read(addr + 1)) }
 
-        0xE0 => { format!("LD   ($FF00+${:02X}), A", mem.read(addr + 1)) }
-        0xEA => { format!("LD   (${:04X}), A", mem.read_u16(addr + 1)) }
-        0xE6 => { format!("AND  ${:02X}", mem.read(addr + 1)) }
+        0xE0 => { format!("LD   ($FF00+${:02X}), A", mmu.direct_read(addr + 1)) }
+        0xEA => { format!("LD   (${:04X}), A", mmu.direct_read_u16(addr + 1)) }
+        0xE6 => { format!("AND  ${:02X}", mmu.direct_read(addr + 1)) }
 
-        0xF0 => { format!("LD   A, ($FF00+${:02X})", mem.read(addr + 1)) }
-        0xFA => { format!("LD   A, (${:04X})", mem.read_u16(addr + 1)) }
-        0xF8 => { format!("LD   HL, SP + ${:02X}", mem.read(addr + 1)) }
-        0xFE => { format!("CP   ${:02X}", mem.read(addr + 1)) }
+        0xF0 => { format!("LD   A, ($FF00+${:02X})", mmu.direct_read(addr + 1)) }
+        0xFA => { format!("LD   A, (${:04X})", mmu.direct_read_u16(addr + 1)) }
+        0xF8 => { format!("LD   HL, SP + ${:02X}", mmu.direct_read(addr + 1)) }
+        0xFE => { format!("CP   ${:02X}", mmu.direct_read(addr + 1)) }
 
         _ => {
             panic!("invalid instruction op code at 0x{:04X}: 0x{:02X}", addr, op);
@@ -280,11 +269,11 @@ pub fn format_mnemonic(mem: &Memory, addr: u16) -> String {
     }
 }
 
-pub fn print_listing(mem: &Memory, addr: u16, line_count: i32) -> u16 {
+pub fn print_listing(mmu: &MMU, addr: u16, line_count: i32) -> u16 {
     let mut a = addr;
     for _n in 0..line_count {
-        println!("0x{:04X}: {}", a, format_mnemonic(&mem, a));
-        a = a + (op_length(mem.read(addr)) as u16);
+        println!("0x{:04X}: {}", a, format_mnemonic(&mmu, a));
+        a = a + (op_length(mmu.direct_read(addr)) as u16);
     }
     a
 }
