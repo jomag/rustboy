@@ -31,17 +31,27 @@ includes a number of tests as well. Here's current state of some:
 * `acceptance/oam_dma/reg_read`: **passes!**
 * `acceptance/oam_dma/sources-dmgABCmgbS`: fails
 
-* `acceptance/add_sp_e_timing`: fails
+* `acceptance/add_sp_e_timing`: **passes!*
 * `acceptance/boot_regs-dmgABC.gb`: **passes!**
-* `acceptance/call_timing`: fails
+* `acceptance/call_timing`: **passes!**
 * `acceptance/call_timing2`: fails
 * `acceptance/div_timing`: **passes!**
 * `acceptance/ei_sequence`: **passes!**
 * `acceptance/ei_timing`: **passes!**
+* `acceptance/intr_timing`: fails
+* `acceptance/jp_cc_timing`: **passes!**
+* `acceptance/jp_timing`: **passes!**
+* `acceptance/ld_hl_sp_e_timing`: **passes!**
 * `acceptance/oam_dma_restart`: **passes!**
 * `acceptance/oam_dma_start`: **passes!**
 * `acceptance/oam_dma_timing`: **passes!**
-* `acceptance/rapid_di_ei`: never finishes
+* `acceptance/pop_timing`: **passes!**
+* `acceptance/push_timing`: fails
+* `acceptance/rapid_di_ei`: **passes!**
+* `acceptance/ret_cc_timing`: **passes!**
+* `acceptance/reti_intr_timing`: **passes!**
+* `acceptance/reti_timing`: fails
+* `acceptance/ret_timing`: **passes!**
 * `acceptance/rst_timing`: fails
 
 ## Graphics
