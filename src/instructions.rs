@@ -69,8 +69,13 @@ pub fn op_length(op: u8) -> u32 {
 // 16-bit push operation
 // Flags: - - - -
 pub fn push_op(mmu: &mut MMU, value: u16) {
-    let sp = mmu.reg.sp.wrapping_sub(2);
-    mmu.write_u16(sp, value);
+
+    // For correct emulation the high byte is pushed first, then the low byte
+    let sp = mmu.reg.sp.wrapping_sub(1);
+    mmu.write(sp, ((value >> 8) & 0xFF) as u8);
+    let sp = sp.wrapping_sub(1);
+    mmu.write(sp, (value & 0xFF) as u8);
+
     mmu.reg.sp = sp;
 }
 
@@ -80,9 +85,11 @@ pub fn push_op(mmu: &mut MMU, value: u16) {
 // Note that flags are still affected by POP AF
 fn pop_op(mmu: &mut MMU) -> u16 {
     let sp = mmu.reg.sp;
-    let v = mmu.read_u16(sp);
-    mmu.reg.sp = mmu.reg.sp.wrapping_add(2);
-    v
+    let lo = mmu.read(sp);
+    let sp = sp.wrapping_add(1);
+    let hi = mmu.read(sp);
+    mmu.reg.sp = sp.wrapping_add(1);
+    ((hi as u16) << 8) | (lo as u16)
 }
 
 // Bitwise AND operation
@@ -232,9 +239,9 @@ pub fn swap_op(reg: &mut Registers, value: u8) -> u8 {
 
 pub fn rst_op(mmu: &mut MMU, address: u16) {
     let pc = mmu.reg.pc;
+    mmu.tick(4);
     push_op(mmu, pc);
     mmu.reg.pc = address;
-    mmu.tick(4);
 }
 
 pub fn rrc_op(reg: &mut Registers, value: u8) -> u8 {
@@ -801,8 +808,8 @@ pub fn step(mmu: &mut MMU) {
         // This function is really EI followed by RET
         0xD9 => {
             mmu.reg.ime = 1;
-            mmu.tick(4);
             mmu.reg.pc = pop_op(mmu);
+            mmu.tick(4);
             mmu.reg.ime = 2;
         }
 
@@ -843,9 +850,9 @@ pub fn step(mmu: &mut MMU) {
             let to = mmu.fetch_u16();
             if !mmu.reg.zero {
                 let pc = mmu.reg.pc;
+                mmu.tick(4);
                 push_op(mmu, pc);
                 mmu.reg.pc = to;
-                mmu.tick(4);
             }
         }
 
@@ -859,9 +866,9 @@ pub fn step(mmu: &mut MMU) {
             let to = mmu.fetch_u16();
             if !mmu.reg.carry {
                 let pc = mmu.reg.pc;
+                mmu.tick(4);
                 push_op(mmu, pc);
                 mmu.reg.pc = to;
-                mmu.tick(4);
             }
         }
 
@@ -874,9 +881,9 @@ pub fn step(mmu: &mut MMU) {
             let to = mmu.fetch_u16();
             if mmu.reg.zero {
                 let pc = mmu.reg.pc;
+                mmu.tick(4);
                 push_op(mmu, pc);
                 mmu.reg.pc = to;
-                mmu.tick(4);
             }
         }
 
@@ -889,9 +896,9 @@ pub fn step(mmu: &mut MMU) {
             let to = mmu.fetch_u16();
             if mmu.reg.carry {
                 let pc = mmu.reg.pc;
+                mmu.tick(4);
                 push_op(mmu, pc);
                 mmu.reg.pc = to;
-                mmu.tick(4);
             }
         }
 
@@ -912,10 +919,10 @@ pub fn step(mmu: &mut MMU) {
         // Length: 1
         // Cycles: 16
         // Flags: - - - -
-        0xC5 => { let bc = mmu.reg.bc(); push_op(mmu, bc); mmu.tick(4); }
-        0xD5 => { let de = mmu.reg.de(); push_op(mmu, de); mmu.tick(4); }
-        0xE5 => { let hl = mmu.reg.hl(); push_op(mmu, hl); mmu.tick(4); }
-        0xF5 => { let af = mmu.reg.af(); push_op(mmu, af); mmu.tick(4); }
+        0xC5 => { let bc = mmu.reg.bc(); mmu.tick(4); push_op(mmu, bc);  }
+        0xD5 => { let de = mmu.reg.de(); mmu.tick(4); push_op(mmu, de);  }
+        0xE5 => { let hl = mmu.reg.hl(); mmu.tick(4); push_op(mmu, hl);  }
+        0xF5 => { let af = mmu.reg.af(); mmu.tick(4); push_op(mmu, af);  }
 
         // POP nn: pop value from stack and store in 16-bit register nn
         // Length: 1

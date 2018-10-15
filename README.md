@@ -27,17 +27,31 @@ Currently the following tests has been tried:
 The Mooneye GB emulator (which also happens to be written in Rust)
 includes a number of tests as well. Here's current state of some:
 
+* `acceptance/bits/mem_oam`: **passes!**
+* `acceptance/bits/reg_f`: **passes!**
+
+* `acceptance/instr/daa`: **passes!**
+
 * `acceptance/oam_dma/basic`: **passes!**
 * `acceptance/oam_dma/reg_read`: **passes!**
 * `acceptance/oam_dma/sources-dmgABCmgbS`: fails
 
-* `acceptance/add_sp_e_timing`: **passes!*
+* `acceptance/timer/div_write`: **passes!**
+* `acceptance/timer/rapid_toggle`: fails
+* `acceptance/timer/tim00`: **passes!**
+* `acceptance/timer/tim00_div_trigger`: fails
+* `acceptance/timer/tim01s`: **passes!**
+
+* `acceptance/add_sp_e_timing`: **passes!**
 * `acceptance/boot_regs-dmgABC.gb`: **passes!**
+* `acceptance/call_cc_timing`: **passes!**
+* `acceptance/call_cc_timing2`: **passes!**
 * `acceptance/call_timing`: **passes!**
-* `acceptance/call_timing2`: fails
+* `acceptance/call_timing2`: **passes!**
 * `acceptance/div_timing`: **passes!**
 * `acceptance/ei_sequence`: **passes!**
 * `acceptance/ei_timing`: **passes!**
+* `acceptance/if_ei_registers`: fails (because serial interrupt not impl.)
 * `acceptance/intr_timing`: fails
 * `acceptance/jp_cc_timing`: **passes!**
 * `acceptance/jp_timing`: **passes!**
@@ -46,13 +60,13 @@ includes a number of tests as well. Here's current state of some:
 * `acceptance/oam_dma_start`: **passes!**
 * `acceptance/oam_dma_timing`: **passes!**
 * `acceptance/pop_timing`: **passes!**
-* `acceptance/push_timing`: fails
+* `acceptance/push_timing`: **passes!**
 * `acceptance/rapid_di_ei`: **passes!**
 * `acceptance/ret_cc_timing`: **passes!**
 * `acceptance/reti_intr_timing`: **passes!**
-* `acceptance/reti_timing`: fails
+* `acceptance/reti_timing`: **passes!**
 * `acceptance/ret_timing`: **passes!**
-* `acceptance/rst_timing`: fails
+* `acceptance/rst_timing`: **passes!**
 
 ## Graphics
 
