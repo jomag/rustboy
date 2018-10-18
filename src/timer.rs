@@ -5,13 +5,21 @@
 
 use mmu::{ MMU, TIMA_REG, IF_REG };
 
-const CLOCK_SELECTION: [u16; 4] = [ 1023, 15, 63, 255 ];
+const CLOCK_SELECTION: [u16; 4] = [ 4096, 64, 256, 1024 ];
 
 const TAC_ENABLE_BIT: u8 = 4;
 
 pub struct Timer {
     // The internal 16-bit counter. DIV is the top 8 bits.
     pub cycle: u16,
+
+    // TIMA is incremented when one specific bit goes
+    // from high to low. Therefore we need to store
+    // the previous cycle to compare with, because
+    // the bit might have gone low because DIV has
+    // been written to, and TIMA should be incremented
+    // in that case as well.
+    pub prev_cycle: u16,
 
     // TAC register: controller register
     // Bit 2: 0 = stop timer, 1 = start timer
@@ -36,9 +44,10 @@ pub struct Timer {
 }
 
 impl Timer {
-    pub fn new() -> Self {
+            pub fn new() -> Self {
         Timer {
             cycle: 0,
+            prev_cycle: 0,
             tac: 0,
             tima: 0,
             tma: 0,
@@ -63,11 +72,12 @@ impl Timer {
     }
 
     fn one_cycle(&mut self) {
+        self.prev_cycle = self.cycle;
         self.cycle = self.cycle.wrapping_add(1);
 
         if self.tac & TAC_ENABLE_BIT != 0 {
-            // Timer enabled
-            if self.cycle & CLOCK_SELECTION[(self.tac & 3) as usize] == 0 {
+            let bit = CLOCK_SELECTION[(self.tac & 3) as usize];
+            if (self.prev_cycle & bit) != 0 && (self.cycle & bit) == 0 {
                 if self.tima == 0xFF {
                     //println!("TIMER INTERRUPT!");
                     self.interrupt = true;
