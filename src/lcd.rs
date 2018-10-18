@@ -190,9 +190,7 @@ impl LCD {
                         }
 
                         let scanline = self.scanline;
-                        if scanline < 144 {
-                            self.render_line(scanline);
-                        }
+                        self.render_line(scanline);
                     }
                     self.scanline_cycles += 1;
                 }
@@ -200,9 +198,6 @@ impl LCD {
                 456 => {
                     // End of line. Start next.
                     self.scanline += 1;
-                    if self.scanline == 154 {
-                        self.scanline = 0;
-                    }
                     self.scanline_cycles = 0;
                 }
 
@@ -211,16 +206,17 @@ impl LCD {
                 }
             }
         } else {
-            if self.scanline_cycles == 0 {
-                self.irq |= IF_VBLANK_BIT;
-                display_update = true
-            }
+            self.scanline_cycles += 1;
 
-            if self.scanline_cycles == 4560 {
-                self.scanline = 0;
+            if self.scanline_cycles == 456 {
+                self.scanline += 1;
                 self.scanline_cycles = 0;
-            } else {
-                self.scanline_cycles += 1;
+
+                if self.scanline == 154 {
+                    self.irq |= IF_VBLANK_BIT;
+                    display_update = true;
+                    self.scanline = 0;
+                }
             }
         }
 
