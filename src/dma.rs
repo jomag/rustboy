@@ -8,8 +8,6 @@
 // The transfer will begin 4 clock cycles after the write.
 // During a transfer all reads of OAM memory will return 0xFF.
 
-use mmu::{ MMU, OAM_OFFSET };
-
 pub struct DMA {
     pub start_request: Option<u16>,
     pub start_request_delay: Option<u16>,

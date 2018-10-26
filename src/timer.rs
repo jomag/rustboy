@@ -3,8 +3,6 @@
 // http://gbdev.gg8.se/wiki/articles/Timer_and_Divider_Registers
 // http://gbdev.gg8.se/wiki/articles/Timer_Obscure_Behaviour
 
-use mmu::{ MMU, TIMA_REG, IF_REG };
-
 const CLOCK_SELECTION: [u16; 4] = [ 4096, 64, 256, 1024 ];
 
 const TAC_ENABLE_BIT: u8 = 4;

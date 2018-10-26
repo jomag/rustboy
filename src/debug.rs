@@ -1,8 +1,7 @@
 
 use instructions::op_length;
 use mmu::MMU;
-use cpu::Cpu;
-use registers::{ Registers };
+use timer::Timer;
 use std::fs::File;
 use std::io::Write;
 
@@ -50,7 +49,12 @@ pub fn print_registers(mmu: &MMU) {
         if mmu.reg.neg { 1 } else { 0 },
         if mmu.reg.half_carry { 1 } else { 0 },
         if mmu.reg.carry { 1 } else { 0 }
-    )
+    );
+    print_timer_state(&mmu.timer);
+}
+
+pub fn print_timer_state(timer: &Timer) {
+    println!("  TAC: 0x{:02X} TIMA: 0x{:02X} TMA: 0x{:02X}", timer.tac, timer.tima, timer.tma);
 }
 
 const SIMPLE_MNEMONICS: [&str; 256] = [
@@ -243,6 +247,9 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
                 0x11 => { "RL   C".to_string() }
                 0x7C => { "BIT 7, h".to_string() }
                 0x37 => { "SWAP A".to_string() }
+                0x7E => { "SET 4, A".to_string() }
+                0xE6 => { "SET 4, (HL)".to_string() }
+                0xEE => { "SET 5, (HL)".to_string() }
                 _ => {
                     panic!("invalid instruction op code: 0x{:02X}{:02X}", op, op2);
                 }

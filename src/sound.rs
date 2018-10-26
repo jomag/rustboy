@@ -1,10 +1,8 @@
 
-extern crate sdl2;
-
-use sdl2::audio::{AudioSpecDesired, AudioQueue};
+use sdl2::init;
+use sdl2::audio::{ AudioSpecDesired, AudioQueue};
 use std::time::Duration;
 use std::thread::sleep;
-use std::option::Option;
 
 pub struct SquareWaveSoundGenerator {
     duty: u32,
@@ -31,7 +29,7 @@ impl SquareWaveSoundGenerator {
             self.ctr += 1;
 
             if self.ctr % 10 == 0 {
-                if (volume > 5) {
+                if volume > 5 {
                     volume = volume - 20;
                 }
             }
@@ -82,7 +80,7 @@ impl AudioProcessingUnit {
 }
 
 pub fn sound_test() {
-    let sdl_context = sdl2::init().unwrap();
+    let sdl_context = init().unwrap();
     let audio_subsystem = sdl_context.audio().unwrap();
 
     let desired_spec = AudioSpecDesired {

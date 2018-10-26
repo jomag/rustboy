@@ -5,7 +5,6 @@ use std::io::Read;
 use std::fs::File;
 use mmu::ansi_term::Colour::Blue;
 
-use debug::address_type;
 use timer::Timer;
 use dma::DMA;
 use registers::Registers;

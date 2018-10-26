@@ -1,6 +1,5 @@
 
 use sdl2::render::Texture;
-use mmu::{ LCDC_REG, LY_REG, SCY_REG, IF_REG, MMU };
 use interrupt::{ IF_VBLANK_BIT, IF_LCDC_BIT };
 
 // Bits of LCDC register:

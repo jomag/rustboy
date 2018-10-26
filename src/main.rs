@@ -5,14 +5,9 @@ extern crate sdl2;
 use std::io::prelude::*;
 use std::sync::Arc;
 use std::sync::atomic::{ AtomicBool, Ordering };
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::pixels::PixelFormatEnum;
-use sdl2::rect::Rect;
 use std::io::stdin;
 use std::io::stdout;
 use std::env;
-use std::fs::File;
 
 mod ui;
 mod registers;
@@ -25,14 +20,10 @@ mod timer;
 mod interrupt;
 mod cpu;
 mod dma;
+mod emu;
 
-use debug::{ print_listing, print_registers, format_mnemonic, log_state };
-use registers::Registers;
-use lcd::LCD;
-use sound::{ sound_test };
-use timer::Timer;
-use interrupt::handle_interrupts;
-use mmu::MMU;
+use debug::{ print_listing, print_registers, format_mnemonic };
+use emu::EmuSDL;
 
 fn main() {
     let bootstrap_rom ="rom/boot.gb";
@@ -48,54 +39,35 @@ fn main() {
         .append(true)
         .open("log.txt")?;
         */
+
+    /*
     let mut state_log = match File::create("log.txt") {
         Err(reason) => { panic!("Failed to create log"); },
         Ok(file) => { file } 
     };
+    */
 
     // sound_test();
     // return;
 
-    let mut mmu = MMU::new();
-    mmu.init();
-
+    
     println!();
     println!("Starting RustBoy (GameBoy Emulator written in Rust)");
     println!("---------------------------------------------------");
     println!();
 
+    let emu = EmuSDL::new();
+    emu.init();
+
     println!("Loading bootstrap ROM: {}", bootstrap_rom);
-    mmu.load_bootstrap(bootstrap_rom);
+    emu.load_bootstrap(bootstrap_rom);
 
     println!("Loading cartridge ROM: {}", cartridge_rom);
-    mmu.load_cartridge(cartridge_rom);
+    emu.load_cartridge(cartridge_rom);
 
     let mut breakpoints: Vec<u16> = Vec::new();
     let mut stepping = false;
     let mut last_command = "".to_string();
-
-    // Initialize UI
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
-
-    let window = video_subsystem
-        .window("rustboy", 320 + 4, 288 + 4)
-        // .position_centered()
-        .position(100, 100)
-        .opengl()
-        .build()
-        .unwrap();
-
-    let mut canvas = window.into_canvas().build().unwrap();
-    let texture_creator = canvas.texture_creator();
-    let fmt = PixelFormatEnum::RGB24;
-    let mut texture = texture_creator.create_texture_streaming(fmt, 160, 144).unwrap();
-
-    canvas.clear();
-    canvas.copy(&texture, None, Some(Rect::new(2, 2, 320, 288))).unwrap();
-    canvas.present();
-
-    let mut event_pump = sdl_context.event_pump().unwrap();
 
     // breakpoints.push(0x000C);
     // breakpoints.push(0x0034);
@@ -103,12 +75,14 @@ fn main() {
     // breakpoints.push(0x0051);
     // breakpoints.push(0x6A);
     // breakpoints.push(0x27);
-    breakpoints.push(0x100);
+    breakpoints.push(0x150);
+    //breakpoints.push(0x55);
+    //breakpoints.push(0x6A);
     // breakpoints.push(0x40);
     // breakpoints.push(0x2A02);
     // breakpoints.push(0x2A18);
 
-    stepping = true;
+    stepping = false;
 
     let ctrlc_event = Arc::new(AtomicBool::new(false));
     let ctrlc_event_clone = ctrlc_event.clone();
@@ -121,6 +95,7 @@ fn main() {
     let mut cycles: u32 = 0;
 
     let mut op_usage: [u32; 256] = [0; 256];
+
 
     'running: loop {
         /* THIS SLOWS DOWN THE CODE! NOT SURE WHY!*/
@@ -147,7 +122,7 @@ fn main() {
         }
         */
 
-        if mmu.reg.pc > 0x5000 { 
+        if emu.mmu.reg.pc > 0x5000 { 
             //stepping = true;
         }
 
@@ -156,8 +131,8 @@ fn main() {
             stepping = true;
         }
 
-        if breakpoints.contains(&mmu.reg.pc) {
-            println!("- at breakpoint (PC: 0x{:04X})", mmu.reg.pc);
+        if breakpoints.contains(&emu.mmu.reg.pc) {
+            println!("- at breakpoint (PC: 0x{:04X})", emu.mmu.reg.pc);
             stepping = true;
         }
 
@@ -170,10 +145,10 @@ fn main() {
         */
 
         if stepping {
-            print_registers(&mmu);
-            let pc = mmu.reg.pc;
+            print_registers(&emu.mmu);
+            let pc = emu.mmu.reg.pc;
             let mut list_offset = pc;
-            println!("0x{:04X}: {}", pc, format_mnemonic(&mmu, pc));
+            println!("0x{:04X}: {}", pc, format_mnemonic(&emu.mmu, pc));
 
             loop {
                 print!("(debug) ");
@@ -197,7 +172,7 @@ fn main() {
                         if args.len() > 1 {
                             list_offset = args[1].parse::<u16>().unwrap();
                         }
-                        list_offset = print_listing(&mmu, list_offset, 10);
+                        list_offset = print_listing(&emu.mmu, list_offset, 10);
                     }
                     "q" => { break 'running; }
                     "" => {}
@@ -206,23 +181,14 @@ fn main() {
             }
         }
 
-        if mmu.reg.stopped {
+        if emu.mmu.reg.stopped {
             println!("Stopped! Press enter to continue");
             let mut inp: String = String::new();
             stdin().read_line(&mut inp).expect("invalid command");
-            mmu.reg.stopped = false;
+            emu.mmu.reg.stopped = false;
         }
 
-        // log_state(&mut state_log, &mmu);
-        mmu.exec_op();
-
-        if mmu.display_updated {
-            mmu.display_updated = false;
-            mmu.lcd.copy_to_texture(&mut texture);
-            canvas.clear();
-            canvas.copy(&texture, None, Some(Rect::new(2, 2, 320, 288))).unwrap();
-            canvas.present();
-        }
+        emu.step();
     }
 
     println!("Clean shutdown. Bye!");
