@@ -1,8 +1,7 @@
-
-pub const Z_BIT:  u8 = 1 << 7;   // zero flag
-pub const N_BIT:  u8 = 1 << 6;   // subtract flag
-pub const H_BIT:  u8 = 1 << 5;   // half carry flag
-pub const C_BIT:  u8 = 1 << 4;   // carry flag
+pub const Z_BIT: u8 = 1 << 7; // zero flag
+pub const N_BIT: u8 = 1 << 6; // subtract flag
+pub const H_BIT: u8 = 1 << 5; // half carry flag
+pub const C_BIT: u8 = 1 << 4; // carry flag
 
 pub struct Registers {
     // Registers
@@ -24,40 +23,66 @@ pub struct Registers {
 
     // Inner state
     pub ime: u8, // 0 = disabled, 1 = enable after next op, 2 = enabled
-    pub stopped: bool
+    pub stopped: bool,
+    pub halted: bool,
 }
 
 impl Registers {
     pub fn new() -> Self {
         Registers {
-            a: 0, b: 0, c: 0, d: 0,
-            e: 0, h: 0, l: 0,
-            sp: 0, pc: 0,
+            a: 0,
+            b: 0,
+            c: 0,
+            d: 0,
+            e: 0,
+            h: 0,
+            l: 0,
+            sp: 0,
+            pc: 0,
 
-            zero: false, neg: false,
-            half_carry: false, carry: false,
+            zero: false,
+            neg: false,
+            half_carry: false,
+            carry: false,
 
             ime: 0,
-            stopped: false
+            stopped: false,
+            halted: false,
         }
     }
 
     pub fn af(&self) -> u16 {
         // Return 16-bit value of registers A and F
         let mut f: u8 = 0;
-        if self.zero { f |= Z_BIT };
-        if self.neg { f |= N_BIT };
-        if self.half_carry { f |= H_BIT };
-        if self.carry { f |= C_BIT };
+        if self.zero {
+            f |= Z_BIT
+        };
+        if self.neg {
+            f |= N_BIT
+        };
+        if self.half_carry {
+            f |= H_BIT
+        };
+        if self.carry {
+            f |= C_BIT
+        };
         return (self.a as u16) << 8 | f as u16;
     }
 
     pub fn get_f(&self) -> u8 {
         let mut f: u8 = 0;
-        if self.zero { f |= Z_BIT };
-        if self.neg { f |= N_BIT };
-        if self.half_carry { f |= H_BIT };
-        if self.carry { f |= C_BIT };
+        if self.zero {
+            f |= Z_BIT
+        };
+        if self.neg {
+            f |= N_BIT
+        };
+        if self.half_carry {
+            f |= H_BIT
+        };
+        if self.carry {
+            f |= C_BIT
+        };
         f
     }
 

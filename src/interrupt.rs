@@ -1,6 +1,5 @@
-
-use mmu::{ MMU, IF_REG, IE_REG };
 use instructions::push_op;
+use mmu::{IE_REG, IF_REG, MMU};
 
 pub const IF_VBLANK_BIT: u8 = 1;
 pub const IF_LCDC_BIT: u8 = 2;
@@ -16,7 +15,15 @@ pub const SERIAL_ADDR: u16 = 0x58;
 pub const INP_ADDR: u16 = 0x60;
 
 fn interrupt(mmu: &mut MMU, bit: u8, addr: u16) {
-    println!("INTERRUPT! bit {}, addr 0x{:04X}", bit, addr);
+    println!(
+        "INTERRUPT! bit {}, addr 0x{:04X}, IE: {:02X}, halted: {}",
+        bit,
+        addr,
+        mmu.direct_read(IE_REG),
+        mmu.reg.halted
+    );
+
+    mmu.wakeup_if_halted();
     mmu.clear_if_reg_bits(bit);
     let pc = mmu.reg.pc;
     push_op(mmu, pc);

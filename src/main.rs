@@ -1,5 +1,6 @@
 extern crate clap;
 extern crate ctrlc;
+extern crate png;
 extern crate sdl2;
 extern crate serde;
 
@@ -28,13 +29,15 @@ mod ui;
 
 use debug::{format_mnemonic, print_listing, print_registers};
 use emu::Emu;
-use lcd::{SCREEN_HEIGHT, SCREEN_WIDTH, LCD};
+use lcd::{LCD, SCREEN_HEIGHT, SCREEN_WIDTH};
 
 const APPNAME: &str = "Rustboy?";
 const VERSION: &str = "0.0.0";
 const AUTHOR: &str = "Jonatan Magnusson <jonatan.magnusson@gmail.com>";
 const BOOTSTRAP_ROM: &str = "rom/boot.gb";
 const CARTRIDGE_ROM: &str = "rom/tetris.gb";
+const WINDOW_WIDTH: u32 = (SCREEN_WIDTH * 2) as u32;
+const WINDOW_HEIGHT: u32 = (SCREEN_HEIGHT * 2) as u32;
 
 fn should_enter_stepping(emu: &mut Emu, breakpoints: &Vec<u16>) -> bool {
     if emu.mmu.timer.trigger_debug {
@@ -76,11 +79,30 @@ fn parse<T: FromStr>(value: Option<&str>, default: T) -> T {
     }
 }
 
-fn capture_frame(lcd: LCD) -> Result<(), E> {
-    
+fn capture_frame(filename: &str, frame: u32, lcd: &LCD) -> Result<(), std::io::Error> {
+    // For reading and opening files
+    use std::fs::File;
+    use std::io::BufWriter;
+    use std::path::Path;
+
+    // To use encoder.set()
+    use png::HasParameters;
+
+    let path = Path::new(filename);
+    let file = File::create(path).unwrap();
+    let ref mut w = BufWriter::new(file);
+
+    let mut encoder = png::Encoder::new(w, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32);
+    encoder.set(png::ColorType::RGB).set(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap();
+
+    writer.write_image_data(&lcd.buf_rgb8).unwrap();
+
+    println!("Captured frame {}", frame);
+    return Ok(());
 }
 
-fn main() {
+fn main() -> Result<(), String> {
     let matches = clap::App::new(APPNAME)
         .version(VERSION)
         .author(AUTHOR)
@@ -97,6 +119,7 @@ fn main() {
             -R, --record=[PATH] 'Record into directory'
             -s, --skip=[N]      'Frames to skip while recording'
             -C, --capture=[N]   'Capture screen at frame N'
+            --capture-to=[FILE] 'Capture filename'
             ",
         )
         .get_matches();
@@ -111,7 +134,10 @@ fn main() {
     let break_at_frame: Option<u32> = parse_optional(matches.value_of("break-frame"));
     let exit_at_cycle: Option<u32> = parse_optional(matches.value_of("exit-cycle"));
     let exit_at_frame: Option<u32> = parse_optional(matches.value_of("exit-frame"));
-    let capture_frame: Option<u32> = parse_optional(matches.value_of("capture"));
+    let capture_at_frame: Option<u32> = parse_optional(matches.value_of("capture"));
+    let capture_filename: &str = matches
+        .value_of("capture-to")
+        .unwrap_or("capture-frame-#.png");
 
     let mut emu = Emu::new();
     emu.init();
@@ -146,44 +172,36 @@ fn main() {
     let mut frame_counter: u32 = 0;
 
     // Setup SDL2
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
+    let sdl_context = sdl2::init()?;
+    let video_subsystem = sdl_context.video()?;
     let window = video_subsystem
-        .window("rustboy", 320, 288)
+        .window("rustboy", WINDOW_WIDTH, WINDOW_HEIGHT)
         .position(100, 100)
         .opengl()
         .build()
-        .map_err(|msg| println!("SDL2 failure: {}", msg))
-        .unwrap();
+        .map_err(|msg| msg.to_string())?;
 
-    let mut canvas = window
-        .into_canvas()
-        .build()
-        .map_err(|e| println!("error: {}", e))
-        .unwrap();
+    let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
+
     let texture_creator = canvas.texture_creator();
     let fmt = PixelFormatEnum::RGB24;
+
     let mut texture = texture_creator
         .create_texture_streaming(fmt, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)
-        .unwrap();
+        .map_err(|e| e.to_string())?;
 
     canvas.clear();
-    canvas
-        .copy(&texture, None, Some(Rect::new(150, 150, 320, 288)))
-        .unwrap();
+    canvas.copy(&texture, None, Some(Rect::new(150, 150, 320, 288)))?;
     canvas.present();
 
-    let mut event_pump = sdl_context
-        .event_pump()
-        .map_err(|msg| println!("SDL2 event pump failure: {}", msg))
-        .unwrap();
+    let mut event_pump = sdl_context.event_pump().map_err(|msg| msg.to_string())?;
 
     'running: loop {
         /* THIS SLOWS DOWN THE CODE! NOT SURE WHY!*/
         for event in event_pump.poll_iter() {
             match event {
                 _ => {
-                    println!("unhandled event");
+                    println!("unhandled event: {:?}", event);
                 }
             }
             /*
@@ -270,15 +288,17 @@ fn main() {
         }
 
         if emu.mmu.display_updated {
-            canvas.clear();
-
-            if let Some(frm) = capture_frame && frm == frame_counter {
-                capture_frame(capture_filename, &emu.mmu.lcd);
+            if let Some(frm) = capture_at_frame {
+                if frm == frame_counter {
+                    capture_frame(capture_filename, frame_counter, &emu.mmu.lcd).unwrap();
+                }
             }
 
+            /*
             let mut texture = texture_creator
                 .create_texture_streaming(fmt, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)
                 .unwrap();
+                */
 
             texture
                 .with_lock(None, |buffer: &mut [u8], pitch: usize| {
@@ -286,14 +306,40 @@ fn main() {
                 })
                 .unwrap();
 
+            canvas.clear();
+
+            // This currently works on MacOS
+            /*
             canvas
-                .copy(&texture, None, Rect::new(0, 288, 320, 288))
+                .copy(
+                    &texture,
+                    None,
+                    Rect::new(0, WINDOW_HEIGHT as i32, WINDOW_WIDTH, WINDOW_HEIGHT),
+                )
                 .unwrap();
+                */
+
+            // ... but this on Linux
+            canvas.copy(
+                &texture,
+                None,
+                Some(Rect::new(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)),
+            )?;
+
             canvas.present();
+
+            if let Some(frm) = exit_at_frame {
+                if frm == frame_counter {
+                    println!("Exit at frame {}", frame_counter);
+                    break 'running;
+                }
+            }
+
             emu.mmu.display_updated = false;
             frame_counter = frame_counter + 1;
         }
     }
 
     println!("Clean shutdown. Bye!");
+    return Ok(());
 }

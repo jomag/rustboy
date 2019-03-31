@@ -1,28 +1,17 @@
-
+use mmu::{IE_REG, IF_REG, MMU};
 use registers::Registers;
-use mmu::MMU;
 
 pub fn op_cycles(op: u8) -> u32 {
-    const OP_CYCLES: [u32;256] = [
-        1, 3, 2, 2,  1, 1, 2, 1,  5, 2, 2, 2,  1, 1, 2, 1,
-        0, 3, 2, 2,  1, 1, 2, 1,  3, 2, 2, 2,  1, 1, 2, 1,
-        2, 3, 2, 2,  1, 1, 2, 1,  2, 2, 2, 2,  1, 1, 2, 1,
-        2, 3, 2, 2,  3, 3, 3, 1,  2, 2, 2, 2,  1, 1, 2, 1,
-
-        1, 1, 1, 1,  1, 1, 2, 1,  1, 1, 1, 1,  1, 1, 2, 1,
-        1, 1, 1, 1,  1, 1, 2, 1,  1, 1, 1, 1,  1, 1, 2, 1,
-        1, 1, 1, 1,  1, 1, 2, 1,  1, 1, 1, 1,  1, 1, 2, 1,
-        2, 2, 2, 2,  2, 2, 0, 2,  1, 1, 1, 1,  1, 1, 2, 1,
-
-        1, 1, 1, 1,  1, 1, 2, 1,  1, 1, 1, 1,  1, 1, 2, 1,
-        1, 1, 1, 1,  1, 1, 2, 1,  1, 1, 1, 1,  1, 1, 2, 1,
-        1, 1, 1, 1,  1, 1, 2, 1,  1, 1, 1, 1,  1, 1, 2, 1,
-        1, 1, 1, 1,  1, 1, 2, 1,  1, 1, 1, 1,  1, 1, 2, 1,
-
-	    2, 3, 3, 4,  3, 4, 2, 4,  2, 4, 3, 0,  3, 6, 2, 4,
-	    2, 3, 3, 0,  3, 4, 2, 4,  2, 4, 3, 0,  3, 0, 2, 4,
-	    3, 3, 2, 0,  0, 4, 2, 4,  4, 1, 4, 0,  0, 0, 2, 4,
-	    3, 3, 2, 1,  0, 4, 2, 4,  3, 2, 4, 1,  0, 0, 2, 4
+    const OP_CYCLES: [u32; 256] = [
+        1, 3, 2, 2, 1, 1, 2, 1, 5, 2, 2, 2, 1, 1, 2, 1, 0, 3, 2, 2, 1, 1, 2, 1, 3, 2, 2, 2, 1, 1,
+        2, 1, 2, 3, 2, 2, 1, 1, 2, 1, 2, 2, 2, 2, 1, 1, 2, 1, 2, 3, 2, 2, 3, 3, 3, 1, 2, 2, 2, 2,
+        1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1,
+        1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 2, 2, 2, 2, 2, 0, 2,
+        1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1,
+        2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1,
+        1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 3, 3, 4, 3, 4, 2, 4, 2, 4, 3, 0, 3, 6, 2, 4, 2, 3,
+        3, 0, 3, 4, 2, 4, 2, 4, 3, 0, 3, 0, 2, 4, 3, 3, 2, 0, 0, 4, 2, 4, 4, 1, 4, 0, 0, 0, 2, 4,
+        3, 3, 2, 1, 0, 4, 2, 4, 3, 2, 4, 1, 0, 0, 2, 4,
     ];
 
     return OP_CYCLES[op as usize] * 4;
@@ -30,25 +19,15 @@ pub fn op_cycles(op: u8) -> u32 {
 
 pub fn op_length(op: u8) -> u32 {
     const INSTRUCTION_LENGTH: [u32; 256] = [
-        1, 3, 1, 1,  1, 1, 2, 1,  3, 1, 1, 1,  1, 1, 2, 1,
-        1, 3, 1, 1,  1, 1, 2, 1,  2, 1, 1, 1,  1, 1, 2, 1,
-        2, 3, 1, 1,  1, 1, 2, 1,  2, 1, 1, 1,  1, 1, 2, 1,
-        2, 3, 1, 1,  1, 1, 2, 1,  2, 1, 1, 1,  1, 1, 2, 1,
-
-        1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,
-        1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,
-        1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,
-        1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,
-
-        1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,
-        1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,
-        1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,
-        1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,
-
-        1, 1, 3, 3,  3, 1, 2, 1,  1, 1, 3, 1,  3, 3, 2, 1,
-        1, 1, 3, 0,  3, 1, 2, 1,  1, 1, 3, 0,  3, 0, 2, 1,
-        2, 1, 1, 0,  0, 1, 2, 1,  2, 1, 3, 0,  0, 0, 2, 1,
-        2, 1, 1, 1,  0, 1, 2, 1,  2, 1, 3, 1,  0, 0, 2, 1
+        1, 3, 1, 1, 1, 1, 2, 1, 3, 1, 1, 1, 1, 1, 2, 1, 1, 3, 1, 1, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1,
+        2, 1, 2, 3, 1, 1, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 2, 1, 2, 3, 1, 1, 1, 1, 2, 1, 2, 1, 1, 1,
+        1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 1, 2, 1, 1, 1, 3, 1, 3, 3, 2, 1, 1, 1,
+        3, 0, 3, 1, 2, 1, 1, 1, 3, 0, 3, 0, 2, 1, 2, 1, 1, 0, 0, 1, 2, 1, 2, 1, 3, 0, 0, 0, 2, 1,
+        2, 1, 1, 1, 0, 1, 2, 1, 2, 1, 3, 1, 0, 0, 2, 1,
     ];
 
     if op == 0xCB {
@@ -65,11 +44,9 @@ pub fn op_length(op: u8) -> u32 {
     return len;
 }
 
-
 // 16-bit push operation
 // Flags: - - - -
 pub fn push_op(mmu: &mut MMU, value: u16) {
-
     // For correct emulation the high byte is pushed first, then the low byte
     let sp = mmu.reg.sp.wrapping_sub(1);
     mmu.write(sp, ((value >> 8) & 0xFF) as u8);
@@ -220,7 +197,7 @@ pub fn sbc_op(reg: &mut Registers, value: u8) {
     reg.carry = (reg.a as u16) < (value as u16 + carry as u16);
     reg.a = result;
 }
-    
+
 pub fn cp_op(reg: &mut Registers, value: u8) {
     // Flags: Z 1 H C
     reg.zero = reg.a == value;
@@ -354,6 +331,27 @@ pub fn step(mmu: &mut MMU) {
         // Flags: - - - -
         0x00 => {}
 
+        // HALT: ...
+        // Length: 1
+        // Cycles: 4
+        // Flags: - - - -
+        0x76 => {
+            if mmu.reg.ime != 0 {
+                println!("HALTED!");
+                mmu.reg.halted = true;
+            } else {
+                let if_reg = mmu.direct_read(IF_REG);
+                let ie_reg = mmu.direct_read(IE_REG);
+                if if_reg & ie_reg & 0x1F == 0 {
+                    println!("HALTED 2!");
+                    mmu.reg.halted = true;
+                } else {
+                    // FIXME: Emulate HALT bug: next op is executed twice
+                    // if a single byte op. If a multi byte op, it's even worse.
+                }
+            }
+        }
+
         // SCF: Set Carry Flag
         // Length: 1
         // Cycles: 4
@@ -362,13 +360,14 @@ pub fn step(mmu: &mut MMU) {
             mmu.reg.neg = false;
             mmu.reg.half_carry = false;
             mmu.reg.carry = true;
+            mmu.tick(4);
         }
 
         // DAA: ...
         // Length: 1
         // Cycles: 4
         // Flags: Z - 0 C
-        0x27 => { daa_op(&mut mmu.reg) }
+        0x27 => daa_op(&mut mmu.reg),
 
         // LD rr, d16: load immediate (d16) into 16-bit register rr
         // Length: 3
@@ -399,10 +398,10 @@ pub fn step(mmu: &mut MMU) {
             let a = mmu.reg.a;
             mmu.write(bc, a);
         }
-        0x12 => { 
+        0x12 => {
             let de = mmu.reg.de();
             let a = mmu.reg.a;
-            mmu.write(de, a);  
+            mmu.write(de, a);
         }
 
         // LD A, (nn): loads value stored in memory at address nn (immediate)
@@ -418,13 +417,34 @@ pub fn step(mmu: &mut MMU) {
         // Length: 1
         // Cycles: 4
         // Flags: Z 0 H -
-        0x04 => { let b = mmu.reg.b; mmu.reg.b = inc_op(&mut mmu.reg, b); }
-        0x0C => { let c = mmu.reg.c; mmu.reg.c = inc_op(&mut mmu.reg, c); }
-        0x14 => { let d = mmu.reg.d; mmu.reg.d = inc_op(&mut mmu.reg, d); }
-        0x1C => { let e = mmu.reg.e; mmu.reg.e = inc_op(&mut mmu.reg, e); }
-        0x24 => { let h = mmu.reg.h; mmu.reg.h = inc_op(&mut mmu.reg, h); }
-        0x2C => { let l = mmu.reg.l; mmu.reg.l = inc_op(&mut mmu.reg, l); }
-        0x3C => { let a = mmu.reg.a; mmu.reg.a = inc_op(&mut mmu.reg, a); }
+        0x04 => {
+            let b = mmu.reg.b;
+            mmu.reg.b = inc_op(&mut mmu.reg, b);
+        }
+        0x0C => {
+            let c = mmu.reg.c;
+            mmu.reg.c = inc_op(&mut mmu.reg, c);
+        }
+        0x14 => {
+            let d = mmu.reg.d;
+            mmu.reg.d = inc_op(&mut mmu.reg, d);
+        }
+        0x1C => {
+            let e = mmu.reg.e;
+            mmu.reg.e = inc_op(&mut mmu.reg, e);
+        }
+        0x24 => {
+            let h = mmu.reg.h;
+            mmu.reg.h = inc_op(&mut mmu.reg, h);
+        }
+        0x2C => {
+            let l = mmu.reg.l;
+            mmu.reg.l = inc_op(&mut mmu.reg, l);
+        }
+        0x3C => {
+            let a = mmu.reg.a;
+            mmu.reg.a = inc_op(&mut mmu.reg, a);
+        }
 
         // INC (HL): increment memory stored at HL
         // Length: 1
@@ -466,13 +486,34 @@ pub fn step(mmu: &mut MMU) {
         // Length: 1
         // Cycles: 4
         // Flags: Z 1 H -
-        0x05 => { let b = mmu.reg.b; mmu.reg.b = dec_op(&mut mmu.reg, b); }
-        0x0D => { let c = mmu.reg.c; mmu.reg.c = dec_op(&mut mmu.reg, c); }
-        0x15 => { let d = mmu.reg.d; mmu.reg.d = dec_op(&mut mmu.reg, d); }
-        0x1D => { let e = mmu.reg.e; mmu.reg.e = dec_op(&mut mmu.reg, e); }
-        0x25 => { let h = mmu.reg.h; mmu.reg.h = dec_op(&mut mmu.reg, h); }
-        0x2D => { let l = mmu.reg.l; mmu.reg.l = dec_op(&mut mmu.reg, l); }
-        0x3D => { let a = mmu.reg.a; mmu.reg.a = dec_op(&mut mmu.reg, a); }
+        0x05 => {
+            let b = mmu.reg.b;
+            mmu.reg.b = dec_op(&mut mmu.reg, b);
+        }
+        0x0D => {
+            let c = mmu.reg.c;
+            mmu.reg.c = dec_op(&mut mmu.reg, c);
+        }
+        0x15 => {
+            let d = mmu.reg.d;
+            mmu.reg.d = dec_op(&mut mmu.reg, d);
+        }
+        0x1D => {
+            let e = mmu.reg.e;
+            mmu.reg.e = dec_op(&mut mmu.reg, e);
+        }
+        0x25 => {
+            let h = mmu.reg.h;
+            mmu.reg.h = dec_op(&mut mmu.reg, h);
+        }
+        0x2D => {
+            let l = mmu.reg.l;
+            mmu.reg.l = dec_op(&mut mmu.reg, l);
+        }
+        0x3D => {
+            let a = mmu.reg.a;
+            mmu.reg.a = dec_op(&mut mmu.reg, a);
+        }
 
         // DEC rr: decrement register pair rr
         // Length: 1
@@ -514,70 +555,166 @@ pub fn step(mmu: &mut MMU) {
         // Length: 1
         // Cycles: 4 (8 for op 0x86)
         // Flags: Z 0 H C
-        0x80 => { let b = mmu.reg.b; add_op(&mut mmu.reg, b); }
-        0x81 => { let c = mmu.reg.c; add_op(&mut mmu.reg, c); }
-        0x82 => { let d = mmu.reg.d; add_op(&mut mmu.reg, d); }
-        0x83 => { let e = mmu.reg.e; add_op(&mut mmu.reg, e); }
-        0x84 => { let h = mmu.reg.h; add_op(&mut mmu.reg, h); }
-        0x85 => { let l = mmu.reg.l; add_op(&mut mmu.reg, l); }
+        0x80 => {
+            let b = mmu.reg.b;
+            add_op(&mut mmu.reg, b);
+        }
+        0x81 => {
+            let c = mmu.reg.c;
+            add_op(&mut mmu.reg, c);
+        }
+        0x82 => {
+            let d = mmu.reg.d;
+            add_op(&mut mmu.reg, d);
+        }
+        0x83 => {
+            let e = mmu.reg.e;
+            add_op(&mut mmu.reg, e);
+        }
+        0x84 => {
+            let h = mmu.reg.h;
+            add_op(&mut mmu.reg, h);
+        }
+        0x85 => {
+            let l = mmu.reg.l;
+            add_op(&mut mmu.reg, l);
+        }
         0x86 => {
             let hl = mmu.reg.hl();
             let v = mmu.read(hl);
             add_op(&mut mmu.reg, v);
         }
-        0x87 => { let a = mmu.reg.a; add_op(&mut mmu.reg, a) }
+        0x87 => {
+            let a = mmu.reg.a;
+            add_op(&mut mmu.reg, a)
+        }
 
         // ADD A, d8: add immediate value d8 to A
         // Length: 2
         // Cycles: 8
         // Flags: Z 0 H C
-        0xC6 => { let v = mmu.fetch(); add_op(&mut mmu.reg, v); }
+        0xC6 => {
+            let v = mmu.fetch();
+            add_op(&mut mmu.reg, v);
+        }
 
         // ADC A, r: add register r + carry to A
         // Length: 1
         // Cycles: 4 (8 for op 0x8E)
         // Flags: Z 0 H C
-        0x88 => { let b = mmu.reg.b; adc_op(&mut mmu.reg, b); }
-        0x89 => { let c = mmu.reg.c; adc_op(&mut mmu.reg, c); }
-        0x8A => { let d = mmu.reg.d; adc_op(&mut mmu.reg, d); }
-        0x8B => { let e = mmu.reg.e; adc_op(&mut mmu.reg, e); }
-        0x8C => { let h = mmu.reg.h; adc_op(&mut mmu.reg, h); }
-        0x8D => { let l = mmu.reg.l; adc_op(&mut mmu.reg, l); }
-        0x8E => { let hl = mmu.reg.hl(); let v = mmu.read(hl); adc_op(&mut mmu.reg, v); }
-        0x8F => { let a = mmu.reg.a; adc_op(&mut mmu.reg, a); }
+        0x88 => {
+            let b = mmu.reg.b;
+            adc_op(&mut mmu.reg, b);
+        }
+        0x89 => {
+            let c = mmu.reg.c;
+            adc_op(&mut mmu.reg, c);
+        }
+        0x8A => {
+            let d = mmu.reg.d;
+            adc_op(&mut mmu.reg, d);
+        }
+        0x8B => {
+            let e = mmu.reg.e;
+            adc_op(&mut mmu.reg, e);
+        }
+        0x8C => {
+            let h = mmu.reg.h;
+            adc_op(&mut mmu.reg, h);
+        }
+        0x8D => {
+            let l = mmu.reg.l;
+            adc_op(&mut mmu.reg, l);
+        }
+        0x8E => {
+            let hl = mmu.reg.hl();
+            let v = mmu.read(hl);
+            adc_op(&mut mmu.reg, v);
+        }
+        0x8F => {
+            let a = mmu.reg.a;
+            adc_op(&mut mmu.reg, a);
+        }
 
         // ADC A, d8: add immediate value + carry to A
         // Length: 2
         // Cycles: 8
         // Flags: Z 0 H C
         //0xCE => { let d8 = mem.read(reg.pc + 1); adc_op(reg, d8) }
-        0xCE => { let v = mmu.fetch(); adc_op(&mut mmu.reg, v); }
+        0xCE => {
+            let v = mmu.fetch();
+            adc_op(&mut mmu.reg, v);
+        }
 
         // SBC A, r: subtract register r and carry from A
         // Length: 1
         // Cycles: 4 (8)
         // Flags: Z 1 H C
-        0x98 => { let b = mmu.reg.b; sbc_op(&mut mmu.reg, b) }
-        0x99 => { let c = mmu.reg.c; sbc_op(&mut mmu.reg, c) }
-        0x9A => { let d = mmu.reg.d; sbc_op(&mut mmu.reg, d) }
-        0x9B => { let e = mmu.reg.e; sbc_op(&mut mmu.reg, e) }
-        0x9C => { let h = mmu.reg.h; sbc_op(&mut mmu.reg, h) }
-        0x9D => { let l = mmu.reg.l; sbc_op(&mut mmu.reg, l) }
-        0x9E => { let hl = mmu.reg.hl(); let v = mmu.read(hl); sbc_op(&mut mmu.reg, v) }
-        0x9F => { let a = mmu.reg.a; sbc_op(&mut mmu.reg, a) }
+        0x98 => {
+            let b = mmu.reg.b;
+            sbc_op(&mut mmu.reg, b)
+        }
+        0x99 => {
+            let c = mmu.reg.c;
+            sbc_op(&mut mmu.reg, c)
+        }
+        0x9A => {
+            let d = mmu.reg.d;
+            sbc_op(&mut mmu.reg, d)
+        }
+        0x9B => {
+            let e = mmu.reg.e;
+            sbc_op(&mut mmu.reg, e)
+        }
+        0x9C => {
+            let h = mmu.reg.h;
+            sbc_op(&mut mmu.reg, h)
+        }
+        0x9D => {
+            let l = mmu.reg.l;
+            sbc_op(&mut mmu.reg, l)
+        }
+        0x9E => {
+            let hl = mmu.reg.hl();
+            let v = mmu.read(hl);
+            sbc_op(&mut mmu.reg, v)
+        }
+        0x9F => {
+            let a = mmu.reg.a;
+            sbc_op(&mut mmu.reg, a)
+        }
 
         // SBC A, d8: subtract immediate value and carry from A
-        0xDE => { let d8 = mmu.fetch(); sbc_op(&mut mmu.reg, d8) }
+        0xDE => {
+            let d8 = mmu.fetch();
+            sbc_op(&mut mmu.reg, d8)
+        }
 
         // ADD HL, rr: adds value of register pair rr to HL and stores result in HL
         // Length: 1
         // Cycles: 8
         // Flags: - 0 H C
         // TODO: placement of mmu.tick()?
-        0x09 => { let bc = mmu.reg.bc(); add_hl_op(&mut mmu.reg, bc); mmu.tick(4); }
-        0x19 => { let de = mmu.reg.de(); add_hl_op(&mut mmu.reg, de); mmu.tick(4); }
-        0x29 => { let hl = mmu.reg.hl(); add_hl_op(&mut mmu.reg, hl); mmu.tick(4); }
-        0x39 => { let sp = mmu.reg.sp; add_hl_op(&mut mmu.reg, sp); mmu.tick(4); }
+        0x09 => {
+            let bc = mmu.reg.bc();
+            add_hl_op(&mut mmu.reg, bc);
+            mmu.tick(4);
+        }
+        0x19 => {
+            let de = mmu.reg.de();
+            add_hl_op(&mut mmu.reg, de);
+            mmu.tick(4);
+        }
+        0x29 => {
+            let hl = mmu.reg.hl();
+            add_hl_op(&mut mmu.reg, hl);
+            mmu.tick(4);
+        }
+        0x39 => {
+            let sp = mmu.reg.sp;
+            add_hl_op(&mut mmu.reg, sp);
+            mmu.tick(4);
+        }
 
         // ADD SP, d8: add immediate value d8 to SP
         // Length: 2
@@ -603,161 +740,272 @@ pub fn step(mmu: &mut MMU) {
         // Length: 1
         // Cycles: 4 (8 for op 0x96)
         // Flags: Z 1 H C
-        0x90 => { let b = mmu.reg.b; sub_op(&mut mmu.reg, b) }
-        0x91 => { let c = mmu.reg.c; sub_op(&mut mmu.reg, c) }
-        0x92 => { let d = mmu.reg.d; sub_op(&mut mmu.reg, d) }
-        0x93 => { let e = mmu.reg.e; sub_op(&mut mmu.reg, e) }
-        0x94 => { let h = mmu.reg.h; sub_op(&mut mmu.reg, h) }
-        0x95 => { let l = mmu.reg.l; sub_op(&mut mmu.reg, l) }
+        0x90 => {
+            let b = mmu.reg.b;
+            sub_op(&mut mmu.reg, b)
+        }
+        0x91 => {
+            let c = mmu.reg.c;
+            sub_op(&mut mmu.reg, c)
+        }
+        0x92 => {
+            let d = mmu.reg.d;
+            sub_op(&mut mmu.reg, d)
+        }
+        0x93 => {
+            let e = mmu.reg.e;
+            sub_op(&mut mmu.reg, e)
+        }
+        0x94 => {
+            let h = mmu.reg.h;
+            sub_op(&mut mmu.reg, h)
+        }
+        0x95 => {
+            let l = mmu.reg.l;
+            sub_op(&mut mmu.reg, l)
+        }
         0x96 => {
             let hl = mmu.reg.hl();
             let v = mmu.read(hl);
             sub_op(&mut mmu.reg, v);
         }
-        0x97 => { let a = mmu.reg.a; sub_op(&mut mmu.reg, a) }
+        0x97 => {
+            let a = mmu.reg.a;
+            sub_op(&mut mmu.reg, a)
+        }
 
         // SUB d8: subtract immediate value d8 from A
         // Length: 2
         // Cycles: 8
         // Flags: Z 1 H C
-        0xD6 => { let v = mmu.fetch(); sub_op(&mut mmu.reg, v); }
+        0xD6 => {
+            let v = mmu.fetch();
+            sub_op(&mut mmu.reg, v);
+        }
 
         // AND r, AND (hl), AND d8: set A to "A AND r", or "A AND (hl)""
         // Length: 1 (2 for op 0xE6)
         // Cycles: 4 (8 for op 0xA6 and 0xE6)
         // Flags: Z 0 1 0
-        0xA0 => { let b = mmu.reg.b; and_op(&mut mmu.reg, b) }
-        0xA1 => { let c = mmu.reg.c; and_op(&mut mmu.reg, c) }
-        0xA2 => { let d = mmu.reg.d; and_op(&mut mmu.reg, d) }
-        0xA3 => { let e = mmu.reg.e; and_op(&mut mmu.reg, e) }
-        0xA4 => { let h = mmu.reg.h; and_op(&mut mmu.reg, h) }
-        0xA5 => { let l = mmu.reg.l; and_op(&mut mmu.reg, l) }
+        0xA0 => {
+            let b = mmu.reg.b;
+            and_op(&mut mmu.reg, b)
+        }
+        0xA1 => {
+            let c = mmu.reg.c;
+            and_op(&mut mmu.reg, c)
+        }
+        0xA2 => {
+            let d = mmu.reg.d;
+            and_op(&mut mmu.reg, d)
+        }
+        0xA3 => {
+            let e = mmu.reg.e;
+            and_op(&mut mmu.reg, e)
+        }
+        0xA4 => {
+            let h = mmu.reg.h;
+            and_op(&mut mmu.reg, h)
+        }
+        0xA5 => {
+            let l = mmu.reg.l;
+            and_op(&mut mmu.reg, l)
+        }
         0xA6 => {
             let hl = mmu.reg.hl();
             let v = mmu.read(hl);
             and_op(&mut mmu.reg, v);
         }
-        0xA7 => { let a = mmu.reg.a; and_op(&mut mmu.reg, a) }
-        0xE6 => { let v = mmu.fetch(); and_op(&mut mmu.reg, v) }
+        0xA7 => {
+            let a = mmu.reg.a;
+            and_op(&mut mmu.reg, a)
+        }
+        0xE6 => {
+            let v = mmu.fetch();
+            and_op(&mut mmu.reg, v)
+        }
 
         // OR r, OR (hl): set A to "A OR r", or "A OR (hl)""
         // Length: 1 (2 for 0xF6)
         // Cycles: 4 (8 for op 0xB6 and 0xF6)
         // Flags: Z 0 0 0
-        0xB0 => { let b = mmu.reg.b; or_op(&mut mmu.reg, b) }
-        0xB1 => { let c = mmu.reg.c; or_op(&mut mmu.reg, c) }
-        0xB2 => { let d = mmu.reg.d; or_op(&mut mmu.reg, d) }
-        0xB3 => { let e = mmu.reg.e; or_op(&mut mmu.reg, e) }
-        0xB4 => { let h = mmu.reg.h; or_op(&mut mmu.reg, h) }
-        0xB5 => { let l = mmu.reg.l; or_op(&mut mmu.reg, l) }
-        0xB6 => { let hl = mmu.reg.hl(); let v = mmu.read(hl); or_op(&mut mmu.reg, v); }
-        0xB7 => { let a = mmu.reg.a; or_op(&mut mmu.reg, a) }
-        0xF6 => { let v = mmu.fetch(); or_op(&mut mmu.reg, v) }
+        0xB0 => {
+            let b = mmu.reg.b;
+            or_op(&mut mmu.reg, b)
+        }
+        0xB1 => {
+            let c = mmu.reg.c;
+            or_op(&mut mmu.reg, c)
+        }
+        0xB2 => {
+            let d = mmu.reg.d;
+            or_op(&mut mmu.reg, d)
+        }
+        0xB3 => {
+            let e = mmu.reg.e;
+            or_op(&mut mmu.reg, e)
+        }
+        0xB4 => {
+            let h = mmu.reg.h;
+            or_op(&mut mmu.reg, h)
+        }
+        0xB5 => {
+            let l = mmu.reg.l;
+            or_op(&mut mmu.reg, l)
+        }
+        0xB6 => {
+            let hl = mmu.reg.hl();
+            let v = mmu.read(hl);
+            or_op(&mut mmu.reg, v);
+        }
+        0xB7 => {
+            let a = mmu.reg.a;
+            or_op(&mut mmu.reg, a)
+        }
+        0xF6 => {
+            let v = mmu.fetch();
+            or_op(&mut mmu.reg, v)
+        }
 
         // RRCA: ...
         // Length: 1
         // Cycles: 4
         // Flags: 0 0 0 C
         // Note that rrc_op() sets Z flag, but RRCA should always clear Z flag
-        0x0F => { let a = mmu.reg.a; mmu.reg.a = rrc_op(&mut mmu.reg, a); mmu.reg.zero = false; }
+        0x0F => {
+            let a = mmu.reg.a;
+            mmu.reg.a = rrc_op(&mut mmu.reg, a);
+            mmu.reg.zero = false;
+        }
 
         // RRA: ...
         // Length: 1
         // Cycles: 4
         // Flags: 0 0 0 C
         // Note that rr_op() sets Z flag, but RRA should always clear Z flag
-        0x1F => { let a = mmu.reg.a; mmu.reg.a = rr_op(&mut mmu.reg, a); mmu.reg.zero = false; }
+        0x1F => {
+            let a = mmu.reg.a;
+            mmu.reg.a = rr_op(&mut mmu.reg, a);
+            mmu.reg.zero = false;
+        }
 
         // LD n, d: load immediate into register n
         // Length: 2
         // Cycles: 8
         // Flags: - - - -
-        0x06 => { mmu.reg.b = mmu.fetch() }
-        0x0E => { mmu.reg.c = mmu.fetch() }
-        0x16 => { mmu.reg.d = mmu.fetch() }
-        0x1E => { mmu.reg.e = mmu.fetch() }
-        0x26 => { mmu.reg.h = mmu.fetch() }
-        0x2E => { mmu.reg.l = mmu.fetch() }
-        0x3E => { mmu.reg.a = mmu.fetch() }
+        0x06 => mmu.reg.b = mmu.fetch(),
+        0x0E => mmu.reg.c = mmu.fetch(),
+        0x16 => mmu.reg.d = mmu.fetch(),
+        0x1E => mmu.reg.e = mmu.fetch(),
+        0x26 => mmu.reg.h = mmu.fetch(),
+        0x2E => mmu.reg.l = mmu.fetch(),
+        0x3E => mmu.reg.a = mmu.fetch(),
 
         // LD n, m: load value of register m into register n
         // Length: 1
         // Cycles: 4
         // Flags: - - - -
-        0x7F => {}                 // LD A,A
-        0x78 => { mmu.reg.a = mmu.reg.b }  // LD A,B
-        0x79 => { mmu.reg.a = mmu.reg.c }  // LD A,C
-        0x7A => { mmu.reg.a = mmu.reg.d }  // LD A,D
-        0x7B => { mmu.reg.a = mmu.reg.e }  // LD A,E
-        0x7C => { mmu.reg.a = mmu.reg.h }  // LD A,H
-        0x7D => { mmu.reg.a = mmu.reg.l }  // LD A,L
+        0x7F => {}                     // LD A,A
+        0x78 => mmu.reg.a = mmu.reg.b, // LD A,B
+        0x79 => mmu.reg.a = mmu.reg.c, // LD A,C
+        0x7A => mmu.reg.a = mmu.reg.d, // LD A,D
+        0x7B => mmu.reg.a = mmu.reg.e, // LD A,E
+        0x7C => mmu.reg.a = mmu.reg.h, // LD A,H
+        0x7D => mmu.reg.a = mmu.reg.l, // LD A,L
 
-        0x47 => { mmu.reg.b = mmu.reg.a }  // LD B,A
-        0x40 => {}                 // LD B,B
-        0x41 => { mmu.reg.b = mmu.reg.c }  // LD B,C
-        0x42 => { mmu.reg.b = mmu.reg.d }  // LD B,D
-        0x43 => { mmu.reg.b = mmu.reg.e }  // LD B,E
-        0x44 => { mmu.reg.b = mmu.reg.h }  // LD B,H
-        0x45 => { mmu.reg.b = mmu.reg.l }  // LD B,L
+        0x47 => mmu.reg.b = mmu.reg.a, // LD B,A
+        0x40 => {}                     // LD B,B
+        0x41 => mmu.reg.b = mmu.reg.c, // LD B,C
+        0x42 => mmu.reg.b = mmu.reg.d, // LD B,D
+        0x43 => mmu.reg.b = mmu.reg.e, // LD B,E
+        0x44 => mmu.reg.b = mmu.reg.h, // LD B,H
+        0x45 => mmu.reg.b = mmu.reg.l, // LD B,L
 
-        0x4F => { mmu.reg.c = mmu.reg.a }  // LD C,A
-        0x48 => { mmu.reg.c = mmu.reg.b }  // LD C,B
-        0x49 => {}                 // LD C,C
-        0x4A => { mmu.reg.c = mmu.reg.d }  // LD C,D
-        0x4B => { mmu.reg.c = mmu.reg.e }  // LD C,E
-        0x4C => { mmu.reg.c = mmu.reg.h }  // LD C,H
-        0x4D => { mmu.reg.c = mmu.reg.l }  // LD C,L
+        0x4F => mmu.reg.c = mmu.reg.a, // LD C,A
+        0x48 => mmu.reg.c = mmu.reg.b, // LD C,B
+        0x49 => {}                     // LD C,C
+        0x4A => mmu.reg.c = mmu.reg.d, // LD C,D
+        0x4B => mmu.reg.c = mmu.reg.e, // LD C,E
+        0x4C => mmu.reg.c = mmu.reg.h, // LD C,H
+        0x4D => mmu.reg.c = mmu.reg.l, // LD C,L
 
-        0x57 => { mmu.reg.d = mmu.reg.a }  // LD D,A
-        0x50 => { mmu.reg.d = mmu.reg.b }  // LD D,B
-        0x51 => { mmu.reg.d = mmu.reg.c }  // LD D,C
-        0x52 => {}                 // LD D,D
-        0x53 => { mmu.reg.d = mmu.reg.e }  // LD D,E
-        0x54 => { mmu.reg.d = mmu.reg.h }  // LD D,H
-        0x55 => { mmu.reg.d = mmu.reg.l }  // LD D,L
+        0x57 => mmu.reg.d = mmu.reg.a, // LD D,A
+        0x50 => mmu.reg.d = mmu.reg.b, // LD D,B
+        0x51 => mmu.reg.d = mmu.reg.c, // LD D,C
+        0x52 => {}                     // LD D,D
+        0x53 => mmu.reg.d = mmu.reg.e, // LD D,E
+        0x54 => mmu.reg.d = mmu.reg.h, // LD D,H
+        0x55 => mmu.reg.d = mmu.reg.l, // LD D,L
 
-        0x5F => { mmu.reg.e = mmu.reg.a }  // LD E,A
-        0x58 => { mmu.reg.e = mmu.reg.b }  // LD E,B
-        0x59 => { mmu.reg.e = mmu.reg.c }  // LD E,C
-        0x5A => { mmu.reg.e = mmu.reg.d }  // LD E,D
-        0x5B => {}                 // LD E,E
-        0x5C => { mmu.reg.e = mmu.reg.h }  // LD E,H
-        0x5D => { mmu.reg.e = mmu.reg.l }  // LD E,L
+        0x5F => mmu.reg.e = mmu.reg.a, // LD E,A
+        0x58 => mmu.reg.e = mmu.reg.b, // LD E,B
+        0x59 => mmu.reg.e = mmu.reg.c, // LD E,C
+        0x5A => mmu.reg.e = mmu.reg.d, // LD E,D
+        0x5B => {}                     // LD E,E
+        0x5C => mmu.reg.e = mmu.reg.h, // LD E,H
+        0x5D => mmu.reg.e = mmu.reg.l, // LD E,L
 
-        0x67 => { mmu.reg.h = mmu.reg.a }  // LD H,A
-        0x60 => { mmu.reg.h = mmu.reg.b }  // LD H,B
-        0x61 => { mmu.reg.h = mmu.reg.c }  // LD H,C
-        0x62 => { mmu.reg.h = mmu.reg.d }  // LD H,D
-        0x63 => { mmu.reg.h = mmu.reg.e }  // LD H,E
-        0x64 => {}                 // LD H,H
-        0x65 => { mmu.reg.h = mmu.reg.l }  // LD H,L
+        0x67 => mmu.reg.h = mmu.reg.a, // LD H,A
+        0x60 => mmu.reg.h = mmu.reg.b, // LD H,B
+        0x61 => mmu.reg.h = mmu.reg.c, // LD H,C
+        0x62 => mmu.reg.h = mmu.reg.d, // LD H,D
+        0x63 => mmu.reg.h = mmu.reg.e, // LD H,E
+        0x64 => {}                     // LD H,H
+        0x65 => mmu.reg.h = mmu.reg.l, // LD H,L
 
-        0x6F => { mmu.reg.l = mmu.reg.a }  // LD L,A
-        0x68 => { mmu.reg.l = mmu.reg.b }  // LD L,B
-        0x69 => { mmu.reg.l = mmu.reg.c }  // LD L,C
-        0x6A => { mmu.reg.l = mmu.reg.d }  // LD L,D
-        0x6B => { mmu.reg.l = mmu.reg.e }  // LD L,E
-        0x6C => { mmu.reg.l = mmu.reg.h }  // LD L,H
-        0x6D => {}                 // LD L,L
+        0x6F => mmu.reg.l = mmu.reg.a, // LD L,A
+        0x68 => mmu.reg.l = mmu.reg.b, // LD L,B
+        0x69 => mmu.reg.l = mmu.reg.c, // LD L,C
+        0x6A => mmu.reg.l = mmu.reg.d, // LD L,D
+        0x6B => mmu.reg.l = mmu.reg.e, // LD L,E
+        0x6C => mmu.reg.l = mmu.reg.h, // LD L,H
+        0x6D => {}                     // LD L,L
 
         // LD n, (hl): store value at (hl) in register n
         // Length: 1
         // Cycles: 8
         // Flags: - - - -
-        0x46 => { let hl = mmu.reg.hl(); mmu.reg.b = mmu.read(hl) }
-        0x4E => { let hl = mmu.reg.hl(); mmu.reg.c = mmu.read(hl) }
-        0x56 => { let hl = mmu.reg.hl(); mmu.reg.d = mmu.read(hl) }
-        0x5E => { let hl = mmu.reg.hl(); mmu.reg.e = mmu.read(hl) }
-        0x66 => { let hl = mmu.reg.hl(); mmu.reg.h = mmu.read(hl) }
-        0x6E => { let hl = mmu.reg.hl(); mmu.reg.l = mmu.read(hl) }
-        0x7E => { let hl = mmu.reg.hl(); mmu.reg.a = mmu.read(hl) }
+        0x46 => {
+            let hl = mmu.reg.hl();
+            mmu.reg.b = mmu.read(hl)
+        }
+        0x4E => {
+            let hl = mmu.reg.hl();
+            mmu.reg.c = mmu.read(hl)
+        }
+        0x56 => {
+            let hl = mmu.reg.hl();
+            mmu.reg.d = mmu.read(hl)
+        }
+        0x5E => {
+            let hl = mmu.reg.hl();
+            mmu.reg.e = mmu.read(hl)
+        }
+        0x66 => {
+            let hl = mmu.reg.hl();
+            mmu.reg.h = mmu.read(hl)
+        }
+        0x6E => {
+            let hl = mmu.reg.hl();
+            mmu.reg.l = mmu.read(hl)
+        }
+        0x7E => {
+            let hl = mmu.reg.hl();
+            mmu.reg.a = mmu.read(hl)
+        }
 
         // LD n, (mm): load value from memory into register n
         // Length: 1
         // Cycles: 8
         // Flags: - - - -
-        0x0A => { let bc = mmu.reg.bc(); mmu.reg.a = mmu.read(bc) }
-        0x1A => { let de = mmu.reg.de(); mmu.reg.a = mmu.read(de) }
+        0x0A => {
+            let bc = mmu.reg.bc();
+            mmu.reg.a = mmu.read(bc)
+        }
+        0x1A => {
+            let de = mmu.reg.de();
+            mmu.reg.a = mmu.read(de)
+        }
 
         // LD ($FF00+n), A: Put A into memory address $FF00+n
         // Length: 2
@@ -782,13 +1030,41 @@ pub fn step(mmu: &mut MMU) {
         // Length: 1
         // Cycles: 8
         // Flags: - - - -
-        0x70 => { let hl = mmu.reg.hl(); let b = mmu.reg.b; mmu.write(hl, b) }
-        0x71 => { let hl = mmu.reg.hl(); let c = mmu.reg.c; mmu.write(hl, c) }
-        0x72 => { let hl = mmu.reg.hl(); let d = mmu.reg.d; mmu.write(hl, d) }
-        0x73 => { let hl = mmu.reg.hl(); let e = mmu.reg.e; mmu.write(hl, e) }
-        0x74 => { let hl = mmu.reg.hl(); let h = mmu.reg.h; mmu.write(hl, h) }
-        0x75 => { let hl = mmu.reg.hl(); let l = mmu.reg.l; mmu.write(hl, l) }
-        0x77 => { let hl = mmu.reg.hl(); let a = mmu.reg.a; mmu.write(hl, a) }
+        0x70 => {
+            let hl = mmu.reg.hl();
+            let b = mmu.reg.b;
+            mmu.write(hl, b)
+        }
+        0x71 => {
+            let hl = mmu.reg.hl();
+            let c = mmu.reg.c;
+            mmu.write(hl, c)
+        }
+        0x72 => {
+            let hl = mmu.reg.hl();
+            let d = mmu.reg.d;
+            mmu.write(hl, d)
+        }
+        0x73 => {
+            let hl = mmu.reg.hl();
+            let e = mmu.reg.e;
+            mmu.write(hl, e)
+        }
+        0x74 => {
+            let hl = mmu.reg.hl();
+            let h = mmu.reg.h;
+            mmu.write(hl, h)
+        }
+        0x75 => {
+            let hl = mmu.reg.hl();
+            let l = mmu.reg.l;
+            mmu.write(hl, l)
+        }
+        0x77 => {
+            let hl = mmu.reg.hl();
+            let a = mmu.reg.a;
+            mmu.write(hl, a)
+        }
 
         // RET: set PC to 16-bit value popped from stack
         // Length: 1
@@ -821,10 +1097,34 @@ pub fn step(mmu: &mut MMU) {
         // Cycles: 20/8
         // Flags: - - - -
         // TODO: placement of mmu.tick()?
-        0xC8 => { mmu.tick(4); if mmu.reg.zero { mmu.reg.pc = pop_op(mmu); mmu.tick(4); }}
-        0xD8 => { mmu.tick(4); if mmu.reg.carry { mmu.reg.pc = pop_op(mmu); mmu.tick(4); }}
-        0xC0 => { mmu.tick(4); if !mmu.reg.zero { mmu.reg.pc = pop_op(mmu); mmu.tick(4); }}
-        0xD0 => { mmu.tick(4); if !mmu.reg.carry { mmu.reg.pc = pop_op(mmu); mmu.tick(4); }}
+        0xC8 => {
+            mmu.tick(4);
+            if mmu.reg.zero {
+                mmu.reg.pc = pop_op(mmu);
+                mmu.tick(4);
+            }
+        }
+        0xD8 => {
+            mmu.tick(4);
+            if mmu.reg.carry {
+                mmu.reg.pc = pop_op(mmu);
+                mmu.tick(4);
+            }
+        }
+        0xC0 => {
+            mmu.tick(4);
+            if !mmu.reg.zero {
+                mmu.reg.pc = pop_op(mmu);
+                mmu.tick(4);
+            }
+        }
+        0xD0 => {
+            mmu.tick(4);
+            if !mmu.reg.carry {
+                mmu.reg.pc = pop_op(mmu);
+                mmu.tick(4);
+            }
+        }
 
         // CALL a16: push address of next instruction on stack
         //           and jump to address a16
@@ -906,32 +1206,76 @@ pub fn step(mmu: &mut MMU) {
         // Length: 1
         // Cycles: 16
         // Flags: - - - -
-        0xC7 => { rst_op(mmu, 0x0000); }
-        0xCF => { rst_op(mmu, 0x0008); }
-        0xD7 => { rst_op(mmu, 0x0010); }
-        0xDF => { rst_op(mmu, 0x0018); }
-        0xE7 => { rst_op(mmu, 0x0020); }
-        0xEF => { rst_op(mmu, 0x0028); }
-        0xF7 => { rst_op(mmu, 0x0030); }
-        0xFF => { rst_op(mmu, 0x0038); }
+        0xC7 => {
+            rst_op(mmu, 0x0000);
+        }
+        0xCF => {
+            rst_op(mmu, 0x0008);
+        }
+        0xD7 => {
+            rst_op(mmu, 0x0010);
+        }
+        0xDF => {
+            rst_op(mmu, 0x0018);
+        }
+        0xE7 => {
+            rst_op(mmu, 0x0020);
+        }
+        0xEF => {
+            rst_op(mmu, 0x0028);
+        }
+        0xF7 => {
+            rst_op(mmu, 0x0030);
+        }
+        0xFF => {
+            rst_op(mmu, 0x0038);
+        }
 
         // PUSH nn: push 16-bit register nn to stack
         // Length: 1
         // Cycles: 16
         // Flags: - - - -
-        0xC5 => { let bc = mmu.reg.bc(); mmu.tick(4); push_op(mmu, bc);  }
-        0xD5 => { let de = mmu.reg.de(); mmu.tick(4); push_op(mmu, de);  }
-        0xE5 => { let hl = mmu.reg.hl(); mmu.tick(4); push_op(mmu, hl);  }
-        0xF5 => { let af = mmu.reg.af(); mmu.tick(4); push_op(mmu, af);  }
+        0xC5 => {
+            let bc = mmu.reg.bc();
+            mmu.tick(4);
+            push_op(mmu, bc);
+        }
+        0xD5 => {
+            let de = mmu.reg.de();
+            mmu.tick(4);
+            push_op(mmu, de);
+        }
+        0xE5 => {
+            let hl = mmu.reg.hl();
+            mmu.tick(4);
+            push_op(mmu, hl);
+        }
+        0xF5 => {
+            let af = mmu.reg.af();
+            mmu.tick(4);
+            push_op(mmu, af);
+        }
 
         // POP nn: pop value from stack and store in 16-bit register nn
         // Length: 1
         // Cycles: 12
         // Flags: - - - -
-        0xC1 => { let v = pop_op(mmu); mmu.reg.set_bc(v); }
-        0xD1 => { let v = pop_op(mmu); mmu.reg.set_de(v); }
-        0xE1 => { let v = pop_op(mmu); mmu.reg.set_hl(v); }
-        0xF1 => { let v = pop_op(mmu); mmu.reg.set_af(v); }
+        0xC1 => {
+            let v = pop_op(mmu);
+            mmu.reg.set_bc(v);
+        }
+        0xD1 => {
+            let v = pop_op(mmu);
+            mmu.reg.set_de(v);
+        }
+        0xE1 => {
+            let v = pop_op(mmu);
+            mmu.reg.set_hl(v);
+        }
+        0xF1 => {
+            let v = pop_op(mmu);
+            mmu.reg.set_af(v);
+        }
 
         0xE2 => {
             // LD ($FF00+C), A: put value of A in address 0xFF00 + C
@@ -945,7 +1289,7 @@ pub fn step(mmu: &mut MMU) {
             mmu.write(addr, a);
         }
 
-        // LD A, ($FF00+C): store value at address 0xFF00 + C in A 
+        // LD A, ($FF00+C): store value at address 0xFF00 + C in A
         // Length: 1
         // Cycles: 8
         // Flags: - - - -
@@ -1074,7 +1418,7 @@ pub fn step(mmu: &mut MMU) {
             if mmu.reg.carry {
                 mmu.reg.pc = to;
                 mmu.tick(4);
-            }        
+            }
         }
 
         // JP a16: jump to immediate address
@@ -1120,14 +1464,39 @@ pub fn step(mmu: &mut MMU) {
         // Length: 1
         // Cycles: 4 (8 for op 0xAE)
         // Flags: Z 0 0 0
-        0xA8 => { let b = mmu.reg.b; xor_op(&mut mmu.reg, b); }
-        0xA9 => { let c = mmu.reg.c; xor_op(&mut mmu.reg, c); }
-        0xAA => { let d = mmu.reg.d; xor_op(&mut mmu.reg, d); }
-        0xAB => { let e = mmu.reg.e; xor_op(&mut mmu.reg, e); }
-        0xAC => { let h = mmu.reg.h; xor_op(&mut mmu.reg, h); }
-        0xAD => { let l = mmu.reg.l; xor_op(&mut mmu.reg, l); }
-        0xAE => { let hl = mmu.reg.hl(); let v = mmu.read(hl); xor_op(&mut mmu.reg, v); }
-        0xAF => { let a = mmu.reg.a; xor_op(&mut mmu.reg, a); }
+        0xA8 => {
+            let b = mmu.reg.b;
+            xor_op(&mut mmu.reg, b);
+        }
+        0xA9 => {
+            let c = mmu.reg.c;
+            xor_op(&mut mmu.reg, c);
+        }
+        0xAA => {
+            let d = mmu.reg.d;
+            xor_op(&mut mmu.reg, d);
+        }
+        0xAB => {
+            let e = mmu.reg.e;
+            xor_op(&mut mmu.reg, e);
+        }
+        0xAC => {
+            let h = mmu.reg.h;
+            xor_op(&mut mmu.reg, h);
+        }
+        0xAD => {
+            let l = mmu.reg.l;
+            xor_op(&mut mmu.reg, l);
+        }
+        0xAE => {
+            let hl = mmu.reg.hl();
+            let v = mmu.read(hl);
+            xor_op(&mut mmu.reg, v);
+        }
+        0xAF => {
+            let a = mmu.reg.a;
+            xor_op(&mut mmu.reg, a);
+        }
 
         // XOR d8: assign A xor d8 to A
         // Length: 2
@@ -1234,20 +1603,47 @@ pub fn step(mmu: &mut MMU) {
         // Length: 1
         // Cycles: 4 (8 for "CP (hl)")
         // Flags: Z 1 H C
-        0xB8 => { let b = mmu.reg.b; cp_op(&mut mmu.reg, b); }
-        0xB9 => { let c = mmu.reg.c; cp_op(&mut mmu.reg, c); }
-        0xBA => { let d = mmu.reg.d; cp_op(&mut mmu.reg, d); }
-        0xBB => { let e = mmu.reg.e; cp_op(&mut mmu.reg, e); }
-        0xBC => { let h = mmu.reg.h; cp_op(&mut mmu.reg, h); }
-        0xBD => { let l = mmu.reg.l; cp_op(&mut mmu.reg, l); }
-        0xBE => { let hl = mmu.reg.hl(); let v = mmu.read(hl); cp_op(&mut mmu.reg, v); }
-        0xBF => { mmu.reg.set_znhc(true, true, false, false); }
+        0xB8 => {
+            let b = mmu.reg.b;
+            cp_op(&mut mmu.reg, b);
+        }
+        0xB9 => {
+            let c = mmu.reg.c;
+            cp_op(&mut mmu.reg, c);
+        }
+        0xBA => {
+            let d = mmu.reg.d;
+            cp_op(&mut mmu.reg, d);
+        }
+        0xBB => {
+            let e = mmu.reg.e;
+            cp_op(&mut mmu.reg, e);
+        }
+        0xBC => {
+            let h = mmu.reg.h;
+            cp_op(&mut mmu.reg, h);
+        }
+        0xBD => {
+            let l = mmu.reg.l;
+            cp_op(&mut mmu.reg, l);
+        }
+        0xBE => {
+            let hl = mmu.reg.hl();
+            let v = mmu.read(hl);
+            cp_op(&mut mmu.reg, v);
+        }
+        0xBF => {
+            mmu.reg.set_znhc(true, true, false, false);
+        }
 
         // CP u8: Compare A with immediate
         // Length: 2
         // Cycles: 8
         // Flags: Z 1 H C
-        0xFE => { let v = mmu.fetch(); cp_op(&mut mmu.reg, v); }
+        0xFE => {
+            let v = mmu.fetch();
+            cp_op(&mut mmu.reg, v);
+        }
 
         0xF3 => {
             // DI: Disable Interrupt Master Enable Flag, prohibits maskable interrupts
@@ -1319,353 +1715,1012 @@ pub fn step(mmu: &mut MMU) {
             let op2 = mmu.fetch();
             match op2 {
                 // RLC n: rotate register n left
-                // Length: 
-                0x00 => { let b = mmu.reg.b; mmu.reg.b = rlc_op(&mut mmu.reg, b); }
-                0x01 => { let c = mmu.reg.c; mmu.reg.c = rlc_op(&mut mmu.reg, c); }
-                0x02 => { let d = mmu.reg.d; mmu.reg.d = rlc_op(&mut mmu.reg, d); }
-                0x03 => { let e = mmu.reg.e; mmu.reg.e = rlc_op(&mut mmu.reg, e); }
-                0x04 => { let h = mmu.reg.h; mmu.reg.h = rlc_op(&mut mmu.reg, h); }
-                0x05 => { let l = mmu.reg.l; mmu.reg.l = rlc_op(&mut mmu.reg, l); }
+                // Length:
+                0x00 => {
+                    let b = mmu.reg.b;
+                    mmu.reg.b = rlc_op(&mut mmu.reg, b);
+                }
+                0x01 => {
+                    let c = mmu.reg.c;
+                    mmu.reg.c = rlc_op(&mut mmu.reg, c);
+                }
+                0x02 => {
+                    let d = mmu.reg.d;
+                    mmu.reg.d = rlc_op(&mut mmu.reg, d);
+                }
+                0x03 => {
+                    let e = mmu.reg.e;
+                    mmu.reg.e = rlc_op(&mut mmu.reg, e);
+                }
+                0x04 => {
+                    let h = mmu.reg.h;
+                    mmu.reg.h = rlc_op(&mut mmu.reg, h);
+                }
+                0x05 => {
+                    let l = mmu.reg.l;
+                    mmu.reg.l = rlc_op(&mut mmu.reg, l);
+                }
                 0x06 => {
                     let hl = mmu.reg.hl();
                     let v = mmu.read(hl);
                     let rot = rlc_op(&mut mmu.reg, v);
                     mmu.write(hl, rot);
                 }
-                0x07 => { let a = mmu.reg.a; mmu.reg.a = rlc_op(&mut mmu.reg, a); }
+                0x07 => {
+                    let a = mmu.reg.a;
+                    mmu.reg.a = rlc_op(&mut mmu.reg, a);
+                }
 
                 // RLC n: rotate register n right
-                0x08 => { let b = mmu.reg.b; mmu.reg.b = rrc_op(&mut mmu.reg, b); }
-                0x09 => { let c = mmu.reg.c; mmu.reg.c = rrc_op(&mut mmu.reg, c); }
-                0x0A => { let d = mmu.reg.d; mmu.reg.d = rrc_op(&mut mmu.reg, d); }
-                0x0B => { let e = mmu.reg.e; mmu.reg.e = rrc_op(&mut mmu.reg, e); }
-                0x0C => { let h = mmu.reg.h; mmu.reg.h = rrc_op(&mut mmu.reg, h); }
-                0x0D => { let l = mmu.reg.l; mmu.reg.l = rrc_op(&mut mmu.reg, l); }
+                0x08 => {
+                    let b = mmu.reg.b;
+                    mmu.reg.b = rrc_op(&mut mmu.reg, b);
+                }
+                0x09 => {
+                    let c = mmu.reg.c;
+                    mmu.reg.c = rrc_op(&mut mmu.reg, c);
+                }
+                0x0A => {
+                    let d = mmu.reg.d;
+                    mmu.reg.d = rrc_op(&mut mmu.reg, d);
+                }
+                0x0B => {
+                    let e = mmu.reg.e;
+                    mmu.reg.e = rrc_op(&mut mmu.reg, e);
+                }
+                0x0C => {
+                    let h = mmu.reg.h;
+                    mmu.reg.h = rrc_op(&mut mmu.reg, h);
+                }
+                0x0D => {
+                    let l = mmu.reg.l;
+                    mmu.reg.l = rrc_op(&mut mmu.reg, l);
+                }
                 0x0E => {
                     let hl = mmu.reg.hl();
                     let v = mmu.read(hl);
                     let rot = rrc_op(&mut mmu.reg, v);
                     mmu.write(hl, rot);
                 }
-                0x0F => { let a = mmu.reg.a; mmu.reg.a = rrc_op(&mut mmu.reg, a); }
+                0x0F => {
+                    let a = mmu.reg.a;
+                    mmu.reg.a = rrc_op(&mut mmu.reg, a);
+                }
 
                 // RL n: rotate register n left with carry flag
-                0x10 => { let b = mmu.reg.b; mmu.reg.b = rl_op(&mut mmu.reg, b); }
-                0x11 => { let c = mmu.reg.c; mmu.reg.c = rl_op(&mut mmu.reg, c); }
-                0x12 => { let d = mmu.reg.d; mmu.reg.d = rl_op(&mut mmu.reg, d); }
-                0x13 => { let e = mmu.reg.e; mmu.reg.e = rl_op(&mut mmu.reg, e); }
-                0x14 => { let h = mmu.reg.h; mmu.reg.h = rl_op(&mut mmu.reg, h); }
-                0x15 => { let l = mmu.reg.l; mmu.reg.l = rl_op(&mut mmu.reg, l); }
+                0x10 => {
+                    let b = mmu.reg.b;
+                    mmu.reg.b = rl_op(&mut mmu.reg, b);
+                }
+                0x11 => {
+                    let c = mmu.reg.c;
+                    mmu.reg.c = rl_op(&mut mmu.reg, c);
+                }
+                0x12 => {
+                    let d = mmu.reg.d;
+                    mmu.reg.d = rl_op(&mut mmu.reg, d);
+                }
+                0x13 => {
+                    let e = mmu.reg.e;
+                    mmu.reg.e = rl_op(&mut mmu.reg, e);
+                }
+                0x14 => {
+                    let h = mmu.reg.h;
+                    mmu.reg.h = rl_op(&mut mmu.reg, h);
+                }
+                0x15 => {
+                    let l = mmu.reg.l;
+                    mmu.reg.l = rl_op(&mut mmu.reg, l);
+                }
                 0x16 => {
                     let hl = mmu.reg.hl();
                     let v = mmu.read(hl);
                     let rot = rl_op(&mut mmu.reg, v);
                     mmu.write(hl, rot);
                 }
-                0x17 => { let a = mmu.reg.a; mmu.reg.a = rl_op(&mut mmu.reg, a); }
+                0x17 => {
+                    let a = mmu.reg.a;
+                    mmu.reg.a = rl_op(&mut mmu.reg, a);
+                }
 
                 // RR n, rotate register n right with carry flag
-                0x18 => { let b = mmu.reg.b; mmu.reg.b = rr_op(&mut mmu.reg, b) }
-                0x19 => { let c = mmu.reg.c; mmu.reg.c = rr_op(&mut mmu.reg, c) }
-                0x1A => { let d = mmu.reg.d; mmu.reg.d = rr_op(&mut mmu.reg, d) }
-                0x1B => { let e = mmu.reg.e; mmu.reg.e = rr_op(&mut mmu.reg, e) }
-                0x1C => { let h = mmu.reg.h; mmu.reg.h = rr_op(&mut mmu.reg, h) }
-                0x1D => { let l = mmu.reg.l; mmu.reg.l = rr_op(&mut mmu.reg, l) }
+                0x18 => {
+                    let b = mmu.reg.b;
+                    mmu.reg.b = rr_op(&mut mmu.reg, b)
+                }
+                0x19 => {
+                    let c = mmu.reg.c;
+                    mmu.reg.c = rr_op(&mut mmu.reg, c)
+                }
+                0x1A => {
+                    let d = mmu.reg.d;
+                    mmu.reg.d = rr_op(&mut mmu.reg, d)
+                }
+                0x1B => {
+                    let e = mmu.reg.e;
+                    mmu.reg.e = rr_op(&mut mmu.reg, e)
+                }
+                0x1C => {
+                    let h = mmu.reg.h;
+                    mmu.reg.h = rr_op(&mut mmu.reg, h)
+                }
+                0x1D => {
+                    let l = mmu.reg.l;
+                    mmu.reg.l = rr_op(&mut mmu.reg, l)
+                }
                 0x1E => {
                     let hl = mmu.reg.hl();
                     let v = mmu.read(hl);
                     let rot = rr_op(&mut mmu.reg, v);
                     mmu.write(hl, rot);
                 }
-                0x1F => { let a = mmu.reg.a; mmu.reg.a = rr_op(&mut mmu.reg, a) }
+                0x1F => {
+                    let a = mmu.reg.a;
+                    mmu.reg.a = rr_op(&mut mmu.reg, a)
+                }
 
                 // SLA r
-                0x20 => { let b = mmu.reg.b; mmu.reg.b = sla_op(&mut mmu.reg, b) }
-                0x21 => { let c = mmu.reg.c; mmu.reg.c = sla_op(&mut mmu.reg, c) }
-                0x22 => { let d = mmu.reg.d; mmu.reg.d = sla_op(&mut mmu.reg, d) }
-                0x23 => { let e = mmu.reg.e; mmu.reg.e = sla_op(&mut mmu.reg, e) }
-                0x24 => { let h = mmu.reg.h; mmu.reg.h = sla_op(&mut mmu.reg, h) }
-                0x25 => { let l = mmu.reg.l; mmu.reg.l = sla_op(&mut mmu.reg, l) }
+                0x20 => {
+                    let b = mmu.reg.b;
+                    mmu.reg.b = sla_op(&mut mmu.reg, b)
+                }
+                0x21 => {
+                    let c = mmu.reg.c;
+                    mmu.reg.c = sla_op(&mut mmu.reg, c)
+                }
+                0x22 => {
+                    let d = mmu.reg.d;
+                    mmu.reg.d = sla_op(&mut mmu.reg, d)
+                }
+                0x23 => {
+                    let e = mmu.reg.e;
+                    mmu.reg.e = sla_op(&mut mmu.reg, e)
+                }
+                0x24 => {
+                    let h = mmu.reg.h;
+                    mmu.reg.h = sla_op(&mut mmu.reg, h)
+                }
+                0x25 => {
+                    let l = mmu.reg.l;
+                    mmu.reg.l = sla_op(&mut mmu.reg, l)
+                }
                 0x26 => {
                     let hl = mmu.reg.hl();
                     let v = mmu.read(hl);
                     let result = sla_op(&mut mmu.reg, v);
                     mmu.write(hl, result);
                 }
-                0x27 => { let a = mmu.reg.a; mmu.reg.a = sla_op(&mut mmu.reg, a) }
+                0x27 => {
+                    let a = mmu.reg.a;
+                    mmu.reg.a = sla_op(&mut mmu.reg, a)
+                }
 
                 // SRA r
-                0x28 => { let b = mmu.reg.b; mmu.reg.b = sra_op(&mut mmu.reg, b) }
-                0x29 => { let c = mmu.reg.c; mmu.reg.c = sra_op(&mut mmu.reg, c) }
-                0x2A => { let d = mmu.reg.d; mmu.reg.d = sra_op(&mut mmu.reg, d) }
-                0x2B => { let e = mmu.reg.e; mmu.reg.e = sra_op(&mut mmu.reg, e) }
-                0x2C => { let h = mmu.reg.h; mmu.reg.h = sra_op(&mut mmu.reg, h) }
-                0x2D => { let l = mmu.reg.l; mmu.reg.l = sra_op(&mut mmu.reg, l) }
+                0x28 => {
+                    let b = mmu.reg.b;
+                    mmu.reg.b = sra_op(&mut mmu.reg, b)
+                }
+                0x29 => {
+                    let c = mmu.reg.c;
+                    mmu.reg.c = sra_op(&mut mmu.reg, c)
+                }
+                0x2A => {
+                    let d = mmu.reg.d;
+                    mmu.reg.d = sra_op(&mut mmu.reg, d)
+                }
+                0x2B => {
+                    let e = mmu.reg.e;
+                    mmu.reg.e = sra_op(&mut mmu.reg, e)
+                }
+                0x2C => {
+                    let h = mmu.reg.h;
+                    mmu.reg.h = sra_op(&mut mmu.reg, h)
+                }
+                0x2D => {
+                    let l = mmu.reg.l;
+                    mmu.reg.l = sra_op(&mut mmu.reg, l)
+                }
                 0x2E => {
                     let hl = mmu.reg.hl();
                     let v = mmu.read(hl);
                     let result = sra_op(&mut mmu.reg, v);
                     mmu.write(hl, result);
                 }
-                0x2F => { let a = mmu.reg.a; mmu.reg.a = sra_op(&mut mmu.reg, a) }
+                0x2F => {
+                    let a = mmu.reg.a;
+                    mmu.reg.a = sra_op(&mut mmu.reg, a)
+                }
 
                 // SWAP r
-                0x30 => { let b = mmu.reg.b; mmu.reg.b = swap_op(&mut mmu.reg, b) }
-                0x31 => { let c = mmu.reg.c; mmu.reg.c = swap_op(&mut mmu.reg, c) }
-                0x32 => { let d = mmu.reg.d; mmu.reg.d = swap_op(&mut mmu.reg, d) }
-                0x33 => { let e = mmu.reg.e; mmu.reg.e = swap_op(&mut mmu.reg, e) }
-                0x34 => { let h = mmu.reg.h; mmu.reg.h = swap_op(&mut mmu.reg, h) }
-                0x35 => { let l = mmu.reg.l; mmu.reg.l = swap_op(&mut mmu.reg, l) }
+                0x30 => {
+                    let b = mmu.reg.b;
+                    mmu.reg.b = swap_op(&mut mmu.reg, b)
+                }
+                0x31 => {
+                    let c = mmu.reg.c;
+                    mmu.reg.c = swap_op(&mut mmu.reg, c)
+                }
+                0x32 => {
+                    let d = mmu.reg.d;
+                    mmu.reg.d = swap_op(&mut mmu.reg, d)
+                }
+                0x33 => {
+                    let e = mmu.reg.e;
+                    mmu.reg.e = swap_op(&mut mmu.reg, e)
+                }
+                0x34 => {
+                    let h = mmu.reg.h;
+                    mmu.reg.h = swap_op(&mut mmu.reg, h)
+                }
+                0x35 => {
+                    let l = mmu.reg.l;
+                    mmu.reg.l = swap_op(&mut mmu.reg, l)
+                }
                 0x36 => {
                     let hl = mmu.reg.hl();
                     let v = mmu.read(hl);
                     let result = swap_op(&mut mmu.reg, v);
                     mmu.write(hl, result);
                 }
-                0x37 => { let a = mmu.reg.a; mmu.reg.a = swap_op(&mut mmu.reg, a) }
+                0x37 => {
+                    let a = mmu.reg.a;
+                    mmu.reg.a = swap_op(&mut mmu.reg, a)
+                }
 
                 // SRL r
-                0x38 => { let b = mmu.reg.b; mmu.reg.b = srl_op(&mut mmu.reg, b) }
-                0x39 => { let c = mmu.reg.c; mmu.reg.c = srl_op(&mut mmu.reg, c) }
-                0x3A => { let d = mmu.reg.d; mmu.reg.d = srl_op(&mut mmu.reg, d) }
-                0x3B => { let e = mmu.reg.e; mmu.reg.e = srl_op(&mut mmu.reg, e) }
-                0x3C => { let h = mmu.reg.h; mmu.reg.h = srl_op(&mut mmu.reg, h) }
-                0x3D => { let l = mmu.reg.l; mmu.reg.l = srl_op(&mut mmu.reg, l) }
+                0x38 => {
+                    let b = mmu.reg.b;
+                    mmu.reg.b = srl_op(&mut mmu.reg, b)
+                }
+                0x39 => {
+                    let c = mmu.reg.c;
+                    mmu.reg.c = srl_op(&mut mmu.reg, c)
+                }
+                0x3A => {
+                    let d = mmu.reg.d;
+                    mmu.reg.d = srl_op(&mut mmu.reg, d)
+                }
+                0x3B => {
+                    let e = mmu.reg.e;
+                    mmu.reg.e = srl_op(&mut mmu.reg, e)
+                }
+                0x3C => {
+                    let h = mmu.reg.h;
+                    mmu.reg.h = srl_op(&mut mmu.reg, h)
+                }
+                0x3D => {
+                    let l = mmu.reg.l;
+                    mmu.reg.l = srl_op(&mut mmu.reg, l)
+                }
                 0x3E => {
                     let hl = mmu.reg.hl();
                     let v = mmu.read(hl);
                     let result = srl_op(&mut mmu.reg, v);
                     mmu.write(hl, result);
                 }
-                0x3F => { let a = mmu.reg.a; mmu.reg.a = srl_op(&mut mmu.reg, a) }
+                0x3F => {
+                    let a = mmu.reg.a;
+                    mmu.reg.a = srl_op(&mut mmu.reg, a)
+                }
 
                 // BIT b, r: test if bit 'b' in register 'r' is set
                 // Flags: Z 0 1 -
                 // TODO: does op 0x46, 0x4E, etc really consume 16 cycles?
-                0x40 => { let b = mmu.reg.b; bit_op(&mut mmu.reg, 0, b); }
-                0x41 => { let c = mmu.reg.c; bit_op(&mut mmu.reg, 0, c); }
-                0x42 => { let d = mmu.reg.d; bit_op(&mut mmu.reg, 0, d); }
-                0x43 => { let e = mmu.reg.e; bit_op(&mut mmu.reg, 0, e); }
-                0x44 => { let h = mmu.reg.h; bit_op(&mut mmu.reg, 0, h); }
-                0x45 => { let l = mmu.reg.l; bit_op(&mut mmu.reg, 0, l); }
-                0x46 => { let hl = mmu.reg.hl(); let v = mmu.read(hl); bit_op(&mut mmu.reg, 0, v) }
-                0x47 => { let a = mmu.reg.a; bit_op(&mut mmu.reg, 0, a); }
+                0x40 => {
+                    let b = mmu.reg.b;
+                    bit_op(&mut mmu.reg, 0, b);
+                }
+                0x41 => {
+                    let c = mmu.reg.c;
+                    bit_op(&mut mmu.reg, 0, c);
+                }
+                0x42 => {
+                    let d = mmu.reg.d;
+                    bit_op(&mut mmu.reg, 0, d);
+                }
+                0x43 => {
+                    let e = mmu.reg.e;
+                    bit_op(&mut mmu.reg, 0, e);
+                }
+                0x44 => {
+                    let h = mmu.reg.h;
+                    bit_op(&mut mmu.reg, 0, h);
+                }
+                0x45 => {
+                    let l = mmu.reg.l;
+                    bit_op(&mut mmu.reg, 0, l);
+                }
+                0x46 => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    bit_op(&mut mmu.reg, 0, v)
+                }
+                0x47 => {
+                    let a = mmu.reg.a;
+                    bit_op(&mut mmu.reg, 0, a);
+                }
 
-                0x48 => { let b = mmu.reg.b; bit_op(&mut mmu.reg, 1, b); }
-                0x49 => { let c = mmu.reg.c; bit_op(&mut mmu.reg, 1, c); }
-                0x4A => { let d = mmu.reg.d; bit_op(&mut mmu.reg, 1, d); }
-                0x4B => { let e = mmu.reg.e; bit_op(&mut mmu.reg, 1, e); }
-                0x4C => { let h = mmu.reg.h; bit_op(&mut mmu.reg, 1, h); }
-                0x4D => { let l = mmu.reg.l; bit_op(&mut mmu.reg, 1, l); }
-                0x4E => { let hl = mmu.reg.hl(); let v = mmu.read(hl); bit_op(&mut mmu.reg, 1, v) }
-                0x4F => { let a = mmu.reg.a; bit_op(&mut mmu.reg, 1, a); }
+                0x48 => {
+                    let b = mmu.reg.b;
+                    bit_op(&mut mmu.reg, 1, b);
+                }
+                0x49 => {
+                    let c = mmu.reg.c;
+                    bit_op(&mut mmu.reg, 1, c);
+                }
+                0x4A => {
+                    let d = mmu.reg.d;
+                    bit_op(&mut mmu.reg, 1, d);
+                }
+                0x4B => {
+                    let e = mmu.reg.e;
+                    bit_op(&mut mmu.reg, 1, e);
+                }
+                0x4C => {
+                    let h = mmu.reg.h;
+                    bit_op(&mut mmu.reg, 1, h);
+                }
+                0x4D => {
+                    let l = mmu.reg.l;
+                    bit_op(&mut mmu.reg, 1, l);
+                }
+                0x4E => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    bit_op(&mut mmu.reg, 1, v)
+                }
+                0x4F => {
+                    let a = mmu.reg.a;
+                    bit_op(&mut mmu.reg, 1, a);
+                }
 
-                0x50 => { let b = mmu.reg.b; bit_op(&mut mmu.reg, 2, b); }
-                0x51 => { let c = mmu.reg.c; bit_op(&mut mmu.reg, 2, c); }
-                0x52 => { let d = mmu.reg.d; bit_op(&mut mmu.reg, 2, d); }
-                0x53 => { let e = mmu.reg.e; bit_op(&mut mmu.reg, 2, e); }
-                0x54 => { let h = mmu.reg.h; bit_op(&mut mmu.reg, 2, h); }
-                0x55 => { let l = mmu.reg.l; bit_op(&mut mmu.reg, 2, l); }
-                0x56 => { let hl = mmu.reg.hl(); let v = mmu.read(hl); bit_op(&mut mmu.reg, 2, v) }
-                0x57 => { let a = mmu.reg.a; bit_op(&mut mmu.reg, 2, a); }
+                0x50 => {
+                    let b = mmu.reg.b;
+                    bit_op(&mut mmu.reg, 2, b);
+                }
+                0x51 => {
+                    let c = mmu.reg.c;
+                    bit_op(&mut mmu.reg, 2, c);
+                }
+                0x52 => {
+                    let d = mmu.reg.d;
+                    bit_op(&mut mmu.reg, 2, d);
+                }
+                0x53 => {
+                    let e = mmu.reg.e;
+                    bit_op(&mut mmu.reg, 2, e);
+                }
+                0x54 => {
+                    let h = mmu.reg.h;
+                    bit_op(&mut mmu.reg, 2, h);
+                }
+                0x55 => {
+                    let l = mmu.reg.l;
+                    bit_op(&mut mmu.reg, 2, l);
+                }
+                0x56 => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    bit_op(&mut mmu.reg, 2, v)
+                }
+                0x57 => {
+                    let a = mmu.reg.a;
+                    bit_op(&mut mmu.reg, 2, a);
+                }
 
-                0x58 => { let b = mmu.reg.b; bit_op(&mut mmu.reg, 3, b); }
-                0x59 => { let c = mmu.reg.c; bit_op(&mut mmu.reg, 3, c); }
-                0x5A => { let d = mmu.reg.d; bit_op(&mut mmu.reg, 3, d); }
-                0x5B => { let e = mmu.reg.e; bit_op(&mut mmu.reg, 3, e); }
-                0x5C => { let h = mmu.reg.h; bit_op(&mut mmu.reg, 3, h); }
-                0x5D => { let l = mmu.reg.l; bit_op(&mut mmu.reg, 3, l); }
-                0x5E => { let hl = mmu.reg.hl(); let v = mmu.read(hl); bit_op(&mut mmu.reg, 3, v) }
-                0x5F => { let a = mmu.reg.a; bit_op(&mut mmu.reg, 3, a); }
+                0x58 => {
+                    let b = mmu.reg.b;
+                    bit_op(&mut mmu.reg, 3, b);
+                }
+                0x59 => {
+                    let c = mmu.reg.c;
+                    bit_op(&mut mmu.reg, 3, c);
+                }
+                0x5A => {
+                    let d = mmu.reg.d;
+                    bit_op(&mut mmu.reg, 3, d);
+                }
+                0x5B => {
+                    let e = mmu.reg.e;
+                    bit_op(&mut mmu.reg, 3, e);
+                }
+                0x5C => {
+                    let h = mmu.reg.h;
+                    bit_op(&mut mmu.reg, 3, h);
+                }
+                0x5D => {
+                    let l = mmu.reg.l;
+                    bit_op(&mut mmu.reg, 3, l);
+                }
+                0x5E => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    bit_op(&mut mmu.reg, 3, v)
+                }
+                0x5F => {
+                    let a = mmu.reg.a;
+                    bit_op(&mut mmu.reg, 3, a);
+                }
 
-                0x60 => { let b = mmu.reg.b; bit_op(&mut mmu.reg, 4, b); }
-                0x61 => { let c = mmu.reg.c; bit_op(&mut mmu.reg, 4, c); }
-                0x62 => { let d = mmu.reg.d; bit_op(&mut mmu.reg, 4, d); }
-                0x63 => { let e = mmu.reg.e; bit_op(&mut mmu.reg, 4, e); }
-                0x64 => { let h = mmu.reg.h; bit_op(&mut mmu.reg, 4, h); }
-                0x65 => { let l = mmu.reg.l; bit_op(&mut mmu.reg, 4, l); }
-                0x66 => { let hl = mmu.reg.hl(); let v = mmu.read(hl); bit_op(&mut mmu.reg, 4, v) }
-                0x67 => { let a = mmu.reg.a; bit_op(&mut mmu.reg, 4, a); }
+                0x60 => {
+                    let b = mmu.reg.b;
+                    bit_op(&mut mmu.reg, 4, b);
+                }
+                0x61 => {
+                    let c = mmu.reg.c;
+                    bit_op(&mut mmu.reg, 4, c);
+                }
+                0x62 => {
+                    let d = mmu.reg.d;
+                    bit_op(&mut mmu.reg, 4, d);
+                }
+                0x63 => {
+                    let e = mmu.reg.e;
+                    bit_op(&mut mmu.reg, 4, e);
+                }
+                0x64 => {
+                    let h = mmu.reg.h;
+                    bit_op(&mut mmu.reg, 4, h);
+                }
+                0x65 => {
+                    let l = mmu.reg.l;
+                    bit_op(&mut mmu.reg, 4, l);
+                }
+                0x66 => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    bit_op(&mut mmu.reg, 4, v)
+                }
+                0x67 => {
+                    let a = mmu.reg.a;
+                    bit_op(&mut mmu.reg, 4, a);
+                }
 
-                0x68 => { let b = mmu.reg.b; bit_op(&mut mmu.reg, 5, b); }
-                0x69 => { let c = mmu.reg.c; bit_op(&mut mmu.reg, 5, c); }
-                0x6A => { let d = mmu.reg.d; bit_op(&mut mmu.reg, 5, d); }
-                0x6B => { let e = mmu.reg.e; bit_op(&mut mmu.reg, 5, e); }
-                0x6C => { let h = mmu.reg.h; bit_op(&mut mmu.reg, 5, h); }
-                0x6D => { let l = mmu.reg.l; bit_op(&mut mmu.reg, 5, l); }
-                0x6E => { let hl = mmu.reg.hl(); let v = mmu.read(hl); bit_op(&mut mmu.reg, 5, v) }
-                0x6F => { let a = mmu.reg.a; bit_op(&mut mmu.reg, 5, a); }
+                0x68 => {
+                    let b = mmu.reg.b;
+                    bit_op(&mut mmu.reg, 5, b);
+                }
+                0x69 => {
+                    let c = mmu.reg.c;
+                    bit_op(&mut mmu.reg, 5, c);
+                }
+                0x6A => {
+                    let d = mmu.reg.d;
+                    bit_op(&mut mmu.reg, 5, d);
+                }
+                0x6B => {
+                    let e = mmu.reg.e;
+                    bit_op(&mut mmu.reg, 5, e);
+                }
+                0x6C => {
+                    let h = mmu.reg.h;
+                    bit_op(&mut mmu.reg, 5, h);
+                }
+                0x6D => {
+                    let l = mmu.reg.l;
+                    bit_op(&mut mmu.reg, 5, l);
+                }
+                0x6E => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    bit_op(&mut mmu.reg, 5, v)
+                }
+                0x6F => {
+                    let a = mmu.reg.a;
+                    bit_op(&mut mmu.reg, 5, a);
+                }
 
-                0x70 => { let b = mmu.reg.b; bit_op(&mut mmu.reg, 6, b); }
-                0x71 => { let c = mmu.reg.c; bit_op(&mut mmu.reg, 6, c); }
-                0x72 => { let d = mmu.reg.d; bit_op(&mut mmu.reg, 6, d); }
-                0x73 => { let e = mmu.reg.e; bit_op(&mut mmu.reg, 6, e); }
-                0x74 => { let h = mmu.reg.h; bit_op(&mut mmu.reg, 6, h); }
-                0x75 => { let l = mmu.reg.l; bit_op(&mut mmu.reg, 6, l); }
-                0x76 => { let hl = mmu.reg.hl(); let v = mmu.read(hl); bit_op(&mut mmu.reg, 6, v) }
-                0x77 => { let a = mmu.reg.a; bit_op(&mut mmu.reg, 6, a); }
+                0x70 => {
+                    let b = mmu.reg.b;
+                    bit_op(&mut mmu.reg, 6, b);
+                }
+                0x71 => {
+                    let c = mmu.reg.c;
+                    bit_op(&mut mmu.reg, 6, c);
+                }
+                0x72 => {
+                    let d = mmu.reg.d;
+                    bit_op(&mut mmu.reg, 6, d);
+                }
+                0x73 => {
+                    let e = mmu.reg.e;
+                    bit_op(&mut mmu.reg, 6, e);
+                }
+                0x74 => {
+                    let h = mmu.reg.h;
+                    bit_op(&mut mmu.reg, 6, h);
+                }
+                0x75 => {
+                    let l = mmu.reg.l;
+                    bit_op(&mut mmu.reg, 6, l);
+                }
+                0x76 => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    bit_op(&mut mmu.reg, 6, v)
+                }
+                0x77 => {
+                    let a = mmu.reg.a;
+                    bit_op(&mut mmu.reg, 6, a);
+                }
 
-                0x78 => { let b = mmu.reg.b; bit_op(&mut mmu.reg, 7, b); }
-                0x79 => { let c = mmu.reg.c; bit_op(&mut mmu.reg, 7, c); }
-                0x7A => { let d = mmu.reg.d; bit_op(&mut mmu.reg, 7, d); }
-                0x7B => { let e = mmu.reg.e; bit_op(&mut mmu.reg, 7, e); }
-                0x7C => { let h = mmu.reg.h; bit_op(&mut mmu.reg, 7, h); }
-                0x7D => { let l = mmu.reg.l; bit_op(&mut mmu.reg, 7, l); }
-                0x7E => { let hl = mmu.reg.hl(); let v = mmu.read(hl); bit_op(&mut mmu.reg, 7, v) }
-                0x7F => { let a = mmu.reg.a; bit_op(&mut mmu.reg, 7, a); }
+                0x78 => {
+                    let b = mmu.reg.b;
+                    bit_op(&mut mmu.reg, 7, b);
+                }
+                0x79 => {
+                    let c = mmu.reg.c;
+                    bit_op(&mut mmu.reg, 7, c);
+                }
+                0x7A => {
+                    let d = mmu.reg.d;
+                    bit_op(&mut mmu.reg, 7, d);
+                }
+                0x7B => {
+                    let e = mmu.reg.e;
+                    bit_op(&mut mmu.reg, 7, e);
+                }
+                0x7C => {
+                    let h = mmu.reg.h;
+                    bit_op(&mut mmu.reg, 7, h);
+                }
+                0x7D => {
+                    let l = mmu.reg.l;
+                    bit_op(&mut mmu.reg, 7, l);
+                }
+                0x7E => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    bit_op(&mut mmu.reg, 7, v)
+                }
+                0x7F => {
+                    let a = mmu.reg.a;
+                    bit_op(&mut mmu.reg, 7, a);
+                }
 
                 // RES b, r: reset bit b in register r
                 // Length: 2
                 // Cycles: 8
                 // Flags: - - - -
-                0x80 => { mmu.reg.b &= !1; }
-                0x81 => { mmu.reg.c &= !1; }
-                0x82 => { mmu.reg.d &= !1; }
-                0x83 => { mmu.reg.e &= !1; }
-                0x84 => { mmu.reg.h &= !1; }
-                0x85 => { mmu.reg.l &= !1; }
-                0x86 => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v & !1); }
-                0x87 => { mmu.reg.a &= !1; }
+                0x80 => {
+                    mmu.reg.b &= !1;
+                }
+                0x81 => {
+                    mmu.reg.c &= !1;
+                }
+                0x82 => {
+                    mmu.reg.d &= !1;
+                }
+                0x83 => {
+                    mmu.reg.e &= !1;
+                }
+                0x84 => {
+                    mmu.reg.h &= !1;
+                }
+                0x85 => {
+                    mmu.reg.l &= !1;
+                }
+                0x86 => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v & !1);
+                }
+                0x87 => {
+                    mmu.reg.a &= !1;
+                }
 
-                0x88 => { mmu.reg.b &= !2; }
-                0x89 => { mmu.reg.c &= !2; }
-                0x8A => { mmu.reg.d &= !2; }
-                0x8B => { mmu.reg.e &= !2; }
-                0x8C => { mmu.reg.h &= !2; }
-                0x8D => { mmu.reg.l &= !2; }
-                0x8E => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v & !2); }
-                0x8F => { mmu.reg.a &= !2; }
+                0x88 => {
+                    mmu.reg.b &= !2;
+                }
+                0x89 => {
+                    mmu.reg.c &= !2;
+                }
+                0x8A => {
+                    mmu.reg.d &= !2;
+                }
+                0x8B => {
+                    mmu.reg.e &= !2;
+                }
+                0x8C => {
+                    mmu.reg.h &= !2;
+                }
+                0x8D => {
+                    mmu.reg.l &= !2;
+                }
+                0x8E => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v & !2);
+                }
+                0x8F => {
+                    mmu.reg.a &= !2;
+                }
 
-                0x90 => { mmu.reg.b &= !4; }
-                0x91 => { mmu.reg.c &= !4; }
-                0x92 => { mmu.reg.d &= !4; }
-                0x93 => { mmu.reg.e &= !4; }
-                0x94 => { mmu.reg.h &= !4; }
-                0x95 => { mmu.reg.l &= !4; }
-                0x96 => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v & !4); }
-                0x97 => { mmu.reg.a &= !4; }
+                0x90 => {
+                    mmu.reg.b &= !4;
+                }
+                0x91 => {
+                    mmu.reg.c &= !4;
+                }
+                0x92 => {
+                    mmu.reg.d &= !4;
+                }
+                0x93 => {
+                    mmu.reg.e &= !4;
+                }
+                0x94 => {
+                    mmu.reg.h &= !4;
+                }
+                0x95 => {
+                    mmu.reg.l &= !4;
+                }
+                0x96 => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v & !4);
+                }
+                0x97 => {
+                    mmu.reg.a &= !4;
+                }
 
-                0x98 => { mmu.reg.b &= !8; }
-                0x99 => { mmu.reg.c &= !8; }
-                0x9A => { mmu.reg.d &= !8; }
-                0x9B => { mmu.reg.e &= !8; }
-                0x9C => { mmu.reg.h &= !8; }
-                0x9D => { mmu.reg.l &= !8; }
-                0x9E => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v & !8); }
-                0x9F => { mmu.reg.a &= !8; }
+                0x98 => {
+                    mmu.reg.b &= !8;
+                }
+                0x99 => {
+                    mmu.reg.c &= !8;
+                }
+                0x9A => {
+                    mmu.reg.d &= !8;
+                }
+                0x9B => {
+                    mmu.reg.e &= !8;
+                }
+                0x9C => {
+                    mmu.reg.h &= !8;
+                }
+                0x9D => {
+                    mmu.reg.l &= !8;
+                }
+                0x9E => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v & !8);
+                }
+                0x9F => {
+                    mmu.reg.a &= !8;
+                }
 
-                0xA0 => { mmu.reg.b &= !16; }
-                0xA1 => { mmu.reg.c &= !16; }
-                0xA2 => { mmu.reg.d &= !16; }
-                0xA3 => { mmu.reg.e &= !16; }
-                0xA4 => { mmu.reg.h &= !16; }
-                0xA5 => { mmu.reg.l &= !16; }
-                0xA6 => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v & !16); }
-                0xA7 => { mmu.reg.a &= !16; }
+                0xA0 => {
+                    mmu.reg.b &= !16;
+                }
+                0xA1 => {
+                    mmu.reg.c &= !16;
+                }
+                0xA2 => {
+                    mmu.reg.d &= !16;
+                }
+                0xA3 => {
+                    mmu.reg.e &= !16;
+                }
+                0xA4 => {
+                    mmu.reg.h &= !16;
+                }
+                0xA5 => {
+                    mmu.reg.l &= !16;
+                }
+                0xA6 => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v & !16);
+                }
+                0xA7 => {
+                    mmu.reg.a &= !16;
+                }
 
-                0xA8 => { mmu.reg.b &= !32; }
-                0xA9 => { mmu.reg.c &= !32; }
-                0xAA => { mmu.reg.d &= !32; }
-                0xAB => { mmu.reg.e &= !32; }
-                0xAC => { mmu.reg.h &= !32; }
-                0xAD => { mmu.reg.l &= !32; }
-                0xAE => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v & !32); }
-                0xAF => { mmu.reg.a &= !32; }
+                0xA8 => {
+                    mmu.reg.b &= !32;
+                }
+                0xA9 => {
+                    mmu.reg.c &= !32;
+                }
+                0xAA => {
+                    mmu.reg.d &= !32;
+                }
+                0xAB => {
+                    mmu.reg.e &= !32;
+                }
+                0xAC => {
+                    mmu.reg.h &= !32;
+                }
+                0xAD => {
+                    mmu.reg.l &= !32;
+                }
+                0xAE => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v & !32);
+                }
+                0xAF => {
+                    mmu.reg.a &= !32;
+                }
 
-                0xB0 => { mmu.reg.b &= !64; }
-                0xB1 => { mmu.reg.c &= !64; }
-                0xB2 => { mmu.reg.d &= !64; }
-                0xB3 => { mmu.reg.e &= !64; }
-                0xB4 => { mmu.reg.h &= !64; }
-                0xB5 => { mmu.reg.l &= !64; }
-                0xB6 => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v & !64); }
-                0xB7 => { mmu.reg.a &= !64; }
+                0xB0 => {
+                    mmu.reg.b &= !64;
+                }
+                0xB1 => {
+                    mmu.reg.c &= !64;
+                }
+                0xB2 => {
+                    mmu.reg.d &= !64;
+                }
+                0xB3 => {
+                    mmu.reg.e &= !64;
+                }
+                0xB4 => {
+                    mmu.reg.h &= !64;
+                }
+                0xB5 => {
+                    mmu.reg.l &= !64;
+                }
+                0xB6 => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v & !64);
+                }
+                0xB7 => {
+                    mmu.reg.a &= !64;
+                }
 
-                0xB8 => { mmu.reg.b &= !128; }
-                0xB9 => { mmu.reg.c &= !128; }
-                0xBA => { mmu.reg.d &= !128; }
-                0xBB => { mmu.reg.e &= !128; }
-                0xBC => { mmu.reg.h &= !128; }
-                0xBD => { mmu.reg.l &= !128; }
-                0xBE => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v & !128); }
-                0xBF => { mmu.reg.a &= !128; }
+                0xB8 => {
+                    mmu.reg.b &= !128;
+                }
+                0xB9 => {
+                    mmu.reg.c &= !128;
+                }
+                0xBA => {
+                    mmu.reg.d &= !128;
+                }
+                0xBB => {
+                    mmu.reg.e &= !128;
+                }
+                0xBC => {
+                    mmu.reg.h &= !128;
+                }
+                0xBD => {
+                    mmu.reg.l &= !128;
+                }
+                0xBE => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v & !128);
+                }
+                0xBF => {
+                    mmu.reg.a &= !128;
+                }
 
                 // SET b, r: set bit b in register r
                 // Flags: - - - -
-                0xC0 => { mmu.reg.b |= 1; }
-                0xC1 => { mmu.reg.c |= 1; }
-                0xC2 => { mmu.reg.d |= 1; }
-                0xC3 => { mmu.reg.e |= 1; }
-                0xC4 => { mmu.reg.h |= 1; }
-                0xC5 => { mmu.reg.l |= 1; }
-                0xC6 => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v | 1); }
-                0xC7 => { mmu.reg.a |= 1; }
+                0xC0 => {
+                    mmu.reg.b |= 1;
+                }
+                0xC1 => {
+                    mmu.reg.c |= 1;
+                }
+                0xC2 => {
+                    mmu.reg.d |= 1;
+                }
+                0xC3 => {
+                    mmu.reg.e |= 1;
+                }
+                0xC4 => {
+                    mmu.reg.h |= 1;
+                }
+                0xC5 => {
+                    mmu.reg.l |= 1;
+                }
+                0xC6 => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v | 1);
+                }
+                0xC7 => {
+                    mmu.reg.a |= 1;
+                }
 
-                0xC8 => { mmu.reg.b |= 2; }
-                0xC9 => { mmu.reg.c |= 2; }
-                0xCA => { mmu.reg.d |= 2; }
-                0xCB => { mmu.reg.e |= 2; }
-                0xCC => { mmu.reg.h |= 2; }
-                0xCD => { mmu.reg.l |= 2; }
-                0xCE => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v | 2); }
-                0xCF => { mmu.reg.a |= 2; }
+                0xC8 => {
+                    mmu.reg.b |= 2;
+                }
+                0xC9 => {
+                    mmu.reg.c |= 2;
+                }
+                0xCA => {
+                    mmu.reg.d |= 2;
+                }
+                0xCB => {
+                    mmu.reg.e |= 2;
+                }
+                0xCC => {
+                    mmu.reg.h |= 2;
+                }
+                0xCD => {
+                    mmu.reg.l |= 2;
+                }
+                0xCE => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v | 2);
+                }
+                0xCF => {
+                    mmu.reg.a |= 2;
+                }
 
-                0xD0 => { mmu.reg.b |= 4; }
-                0xD1 => { mmu.reg.c |= 4; }
-                0xD2 => { mmu.reg.d |= 4; }
-                0xD3 => { mmu.reg.e |= 4; }
-                0xD4 => { mmu.reg.h |= 4; }
-                0xD5 => { mmu.reg.l |= 4; }
-                0xD6 => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v | 4); }
-                0xD7 => { mmu.reg.a |= 4; }
+                0xD0 => {
+                    mmu.reg.b |= 4;
+                }
+                0xD1 => {
+                    mmu.reg.c |= 4;
+                }
+                0xD2 => {
+                    mmu.reg.d |= 4;
+                }
+                0xD3 => {
+                    mmu.reg.e |= 4;
+                }
+                0xD4 => {
+                    mmu.reg.h |= 4;
+                }
+                0xD5 => {
+                    mmu.reg.l |= 4;
+                }
+                0xD6 => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v | 4);
+                }
+                0xD7 => {
+                    mmu.reg.a |= 4;
+                }
 
-                0xD8 => { mmu.reg.b |= 8; }
-                0xD9 => { mmu.reg.c |= 8; }
-                0xDA => { mmu.reg.d |= 8; }
-                0xDB => { mmu.reg.e |= 8; }
-                0xDC => { mmu.reg.h |= 8; }
-                0xDD => { mmu.reg.l |= 8; }
-                0xDE => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v | 8); }
-                0xDF => { mmu.reg.a |= 8; }
+                0xD8 => {
+                    mmu.reg.b |= 8;
+                }
+                0xD9 => {
+                    mmu.reg.c |= 8;
+                }
+                0xDA => {
+                    mmu.reg.d |= 8;
+                }
+                0xDB => {
+                    mmu.reg.e |= 8;
+                }
+                0xDC => {
+                    mmu.reg.h |= 8;
+                }
+                0xDD => {
+                    mmu.reg.l |= 8;
+                }
+                0xDE => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v | 8);
+                }
+                0xDF => {
+                    mmu.reg.a |= 8;
+                }
 
-                0xE0 => { mmu.reg.b |= 16; }
-                0xE1 => { mmu.reg.c |= 16; }
-                0xE2 => { mmu.reg.d |= 16; }
-                0xE3 => { mmu.reg.e |= 16; }
-                0xE4 => { mmu.reg.h |= 16; }
-                0xE5 => { mmu.reg.l |= 16; }
-                0xE6 => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v | 16); }
-                0xE7 => { mmu.reg.a |= 16; }
+                0xE0 => {
+                    mmu.reg.b |= 16;
+                }
+                0xE1 => {
+                    mmu.reg.c |= 16;
+                }
+                0xE2 => {
+                    mmu.reg.d |= 16;
+                }
+                0xE3 => {
+                    mmu.reg.e |= 16;
+                }
+                0xE4 => {
+                    mmu.reg.h |= 16;
+                }
+                0xE5 => {
+                    mmu.reg.l |= 16;
+                }
+                0xE6 => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v | 16);
+                }
+                0xE7 => {
+                    mmu.reg.a |= 16;
+                }
 
-                0xE8 => { mmu.reg.b |= 32; }
-                0xE9 => { mmu.reg.c |= 32; }
-                0xEA => { mmu.reg.d |= 32; }
-                0xEB => { mmu.reg.e |= 32; }
-                0xEC => { mmu.reg.h |= 32; }
-                0xED => { mmu.reg.l |= 32; }
-                0xEE => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v | 32); }
-                0xEF => { mmu.reg.a |= 32; }
+                0xE8 => {
+                    mmu.reg.b |= 32;
+                }
+                0xE9 => {
+                    mmu.reg.c |= 32;
+                }
+                0xEA => {
+                    mmu.reg.d |= 32;
+                }
+                0xEB => {
+                    mmu.reg.e |= 32;
+                }
+                0xEC => {
+                    mmu.reg.h |= 32;
+                }
+                0xED => {
+                    mmu.reg.l |= 32;
+                }
+                0xEE => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v | 32);
+                }
+                0xEF => {
+                    mmu.reg.a |= 32;
+                }
 
-                0xF0 => { mmu.reg.b |= 64; }
-                0xF1 => { mmu.reg.c |= 64; }
-                0xF2 => { mmu.reg.d |= 64; }
-                0xF3 => { mmu.reg.e |= 64; }
-                0xF4 => { mmu.reg.h |= 64; }
-                0xF5 => { mmu.reg.l |= 64; }
-                0xF6 => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v | 64); }
-                0xF7 => { mmu.reg.a |= 64; }
+                0xF0 => {
+                    mmu.reg.b |= 64;
+                }
+                0xF1 => {
+                    mmu.reg.c |= 64;
+                }
+                0xF2 => {
+                    mmu.reg.d |= 64;
+                }
+                0xF3 => {
+                    mmu.reg.e |= 64;
+                }
+                0xF4 => {
+                    mmu.reg.h |= 64;
+                }
+                0xF5 => {
+                    mmu.reg.l |= 64;
+                }
+                0xF6 => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v | 64);
+                }
+                0xF7 => {
+                    mmu.reg.a |= 64;
+                }
 
-                0xF8 => { mmu.reg.b |= 128; }
-                0xF9 => { mmu.reg.c |= 128; }
-                0xFA => { mmu.reg.d |= 128; }
-                0xFB => { mmu.reg.e |= 128; }
-                0xFC => { mmu.reg.h |= 128; }
-                0xFD => { mmu.reg.l |= 128; }
-                0xFE => { let hl = mmu.reg.hl(); let v = mmu.read(hl); mmu.write(hl, v | 128); }
-                0xFF => { mmu.reg.a |= 128; }
+                0xF8 => {
+                    mmu.reg.b |= 128;
+                }
+                0xF9 => {
+                    mmu.reg.c |= 128;
+                }
+                0xFA => {
+                    mmu.reg.d |= 128;
+                }
+                0xFB => {
+                    mmu.reg.e |= 128;
+                }
+                0xFC => {
+                    mmu.reg.h |= 128;
+                }
+                0xFD => {
+                    mmu.reg.l |= 128;
+                }
+                0xFE => {
+                    let hl = mmu.reg.hl();
+                    let v = mmu.read(hl);
+                    mmu.write(hl, v | 128);
+                }
+                0xFF => {
+                    mmu.reg.a |= 128;
+                }
 
                 _ => {
-                    panic!("Unsupported opcode at 0x{:04X}: 0x{:02X}{:02X}", mmu.reg.pc, op, op2);
+                    panic!(
+                        "Unsupported opcode at 0x{:04X}: 0x{:02X}{:02X}",
+                        mmu.reg.pc, op, op2
+                    );
                 }
             }
         }
@@ -1678,8 +2733,8 @@ pub fn step(mmu: &mut MMU) {
 
 #[cfg(test)]
 mod tests {
-    use instructions::*;
     use debug::*;
+    use instructions::*;
 
     fn build_machine() -> MMU {
         let mut mmu = MMU::new();
@@ -1694,7 +2749,9 @@ mod tests {
         // on instruction length
         for i in 0..255 {
             // 0x76 = HALT (not implemented yet)
-            if i == 0x76 { continue };
+            if i == 0x76 {
+                continue;
+            };
             let mut mmu = build_machine();
             mmu.reg.pc = 0x1000;
             mmu.reg.zero = false;
@@ -1711,24 +2768,12 @@ mod tests {
                     // JR r8
                     assert_eq!(mmu.reg.pc, 0x1014)
                 }
-                0x20 => {
-                    assert_eq!(mmu.reg.pc, 0x1014)
-                }
-                0x30 => {
-                    assert_eq!(mmu.reg.pc, 0x1014)
-                }
-                0xC0 => {
-                    assert_eq!(mmu.reg.pc, 0x7856)
-                }
-                0xC2 => {
-                    assert_eq!(mmu.reg.pc, 0x3412)
-                }
-                0xC3 => {
-                    assert_eq!(mmu.reg.pc, 0x3412)
-                }
-                0xC4 => {
-                    assert_eq!(mmu.reg.pc, 0x3412)
-                }
+                0x20 => assert_eq!(mmu.reg.pc, 0x1014),
+                0x30 => assert_eq!(mmu.reg.pc, 0x1014),
+                0xC0 => assert_eq!(mmu.reg.pc, 0x7856),
+                0xC2 => assert_eq!(mmu.reg.pc, 0x3412),
+                0xC3 => assert_eq!(mmu.reg.pc, 0x3412),
+                0xC4 => assert_eq!(mmu.reg.pc, 0x3412),
                 0xC7 => {
                     assert_eq!(mmu.reg.pc, 0);
                     assert_eq!(mmu.pop(), 0x1001);
@@ -1736,9 +2781,7 @@ mod tests {
                 0xC9 => {
                     assert_eq!(mmu.reg.pc, 0x7856);
                 }
-                0xCD => {
-                    assert_eq!(mmu.reg.pc, 0x3412)
-                }
+                0xCD => assert_eq!(mmu.reg.pc, 0x3412),
                 0xCF => {
                     assert_eq!(mmu.reg.pc, 0x08);
                     assert_eq!(mmu.pop(), 0x1001);
@@ -1766,7 +2809,7 @@ mod tests {
 //         mmu.reg.sp = 0x2000;
 //         cpu
 //     }
-    
+
 //     #[test]
 //     fn test_op_0x38_add_sp_immediate() {
 //         let cpu = build_cpu();
