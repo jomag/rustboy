@@ -1,5 +1,5 @@
 
-extern crate sdl2;
+// extern crate sdl2;
 
 // use std::time::Duration;
 // use sdl2::pixels::Color;

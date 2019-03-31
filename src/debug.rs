@@ -54,7 +54,7 @@ pub fn print_registers(mmu: &MMU) {
 }
 
 pub fn print_timer_state(timer: &Timer) {
-    println!("  TAC: 0x{:02X} TIMA: 0x{:02X} TMA: 0x{:02X}", timer.tac, timer.tima, timer.tma);
+    println!("  TAC: 0x{:02X} TIMA: 0x{:02X} TMA: 0x{:02X} Abs cycle: {}", timer.tac, timer.tima, timer.tma, timer.abs_cycle);
 }
 
 const SIMPLE_MNEMONICS: [&str; 256] = [

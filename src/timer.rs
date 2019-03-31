@@ -3,11 +3,18 @@
 // http://gbdev.gg8.se/wiki/articles/Timer_and_Divider_Registers
 // http://gbdev.gg8.se/wiki/articles/Timer_Obscure_Behaviour
 
-const CLOCK_SELECTION: [u16; 4] = [ 4096, 64, 256, 1024 ];
+use interrupt::{ IF_TMR_BIT };
+
+const CLOCK_SELECTION: [u16; 4] = [512, 8, 32, 128];
 
 const TAC_ENABLE_BIT: u8 = 4;
 
 pub struct Timer {
+    // Absolut cycle count since start of emulator.
+    // This is only used for statistics and debugging.
+    // It is not used by the emulator.
+    pub abs_cycle: u64,
+
     // The internal 16-bit counter. DIV is the top 8 bits.
     pub cycle: u16,
 
@@ -17,6 +24,7 @@ pub struct Timer {
     // the bit might have gone low because DIV has
     // been written to, and TIMA should be incremented
     // in that case as well.
+    pub prev_bit_state: bool,
     pub prev_cycle: u16,
 
     // TAC register: controller register
@@ -38,18 +46,27 @@ pub struct Timer {
     // TMA register: reset value of TIMA
     pub tma: u8,
 
-    interrupt: bool
+    pub irq: u8,
+
+    pub trigger_debug: bool,
+
+    // Break at absolute cycle. Cycle 0 is ignored.
+    pub abs_cycle_breakpoint: u64
 }
 
 impl Timer {
-            pub fn new() -> Self {
+    pub fn new() -> Self {
         Timer {
+            abs_cycle: 0,
             cycle: 0,
             prev_cycle: 0,
+            prev_bit_state: false,
             tac: 0,
             tima: 0,
             tma: 0,
-            interrupt: false
+            irq: 0,
+            trigger_debug: false,
+            abs_cycle_breakpoint: 0
         }
     }
 
@@ -69,21 +86,48 @@ impl Timer {
         }
     }
 
-    fn one_cycle(&mut self) {
-        self.prev_cycle = self.cycle;
+    fn x_one_cycle(&mut self) {
         self.cycle = self.cycle.wrapping_add(1);
 
         if self.tac & TAC_ENABLE_BIT != 0 {
             let bit = CLOCK_SELECTION[(self.tac & 3) as usize];
             if (self.prev_cycle & bit) != 0 && (self.cycle & bit) == 0 {
                 if self.tima == 0xFF {
-                    //println!("TIMER INTERRUPT!");
-                    self.interrupt = true;
+                    self.irq |= IF_TMR_BIT;
                     self.tima = self.tma;
                 } else {
                     self.tima = self.tima + 1;
                 }
             }
         }
+
+        self.prev_cycle = self.cycle;
+    }
+
+    fn one_cycle(&mut self) {
+        self.abs_cycle = self.abs_cycle.wrapping_add(1);
+        
+        if self.abs_cycle == self.abs_cycle_breakpoint {
+            self.trigger_debug = true;
+        }
+
+        self.cycle = self.cycle.wrapping_add(1);
+
+        let bit = if self.tac & TAC_ENABLE_BIT != 0 {
+            CLOCK_SELECTION[(self.tac & 3) as usize]
+        } else { 0 };
+        
+        let bit_state = self.cycle & bit != 0;
+
+        if self.prev_bit_state && !bit_state {
+            if self.tima == 0xFF {
+                self.irq |= IF_TMR_BIT;
+                self.tima = self.tma;
+            } else {
+                self.tima = self.tima + 1;
+            }
+        }
+
+        self.prev_bit_state = bit_state;
     }
 }

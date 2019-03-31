@@ -5,12 +5,16 @@ use std::io::Read;
 use std::fs::File;
 use mmu::ansi_term::Colour::Blue;
 
+use interrupt::{ IF_VBLANK_BIT, IF_LCDC_BIT, IF_TMR_BIT };
+
 use timer::Timer;
 use dma::DMA;
 use registers::Registers;
 use lcd::LCD;
 use instructions;
 use interrupt::handle_interrupts;
+
+use debug::print_registers;
 
 // Port/Mode registers
 pub const P1_REG:   u16 = 0xFF00;
@@ -56,6 +60,17 @@ pub struct MMU {
     pub display_updated: bool
 }
 
+// impl Serialize for MMU {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: Serializer,
+//     {
+//         let mut state = serializer.serialize_struct("MMU", 2)?;
+//         state.serialize_field("reg", &self.reg);
+
+//     }
+// }
+
 impl MMU {
     pub fn new() -> Self {
         MMU {
@@ -81,15 +96,17 @@ impl MMU {
     }
 
     pub fn get_if_reg(&self) -> u8 {
-        return self.lcd.irq
+        return self.lcd.irq | self.timer.irq;
     }
 
     pub fn set_if_reg(&mut self, value: u8) {
-        self.lcd.irq = value;
+        self.lcd.irq = value & (IF_VBLANK_BIT | IF_LCDC_BIT);
+        self.timer.irq = value & IF_TMR_BIT;
     }
 
     pub fn clear_if_reg_bits(&mut self, mask: u8) {
-        self.lcd.irq &= !mask
+        self.lcd.irq &= !mask;
+        self.timer.irq &= !mask;
     }
 
     pub fn exec_op(&mut self) {
@@ -104,7 +121,7 @@ impl MMU {
             self.display_updated = true;
         }
 
-        for c in 0..(cycles/4) {
+        for _ in 0..(cycles/4) {
             if self.dma.is_active() {
                 let offset = self.dma.start_address.unwrap();
                 let idx = self.dma.step;
@@ -171,7 +188,7 @@ impl MMU {
             LY_REG => { self.lcd.scanline }
             LYC_REG => { self.lcd.lyc }
 
-            DMA_REG => { 0xFF }
+            DMA_REG => { self.dma.last_write_dma_reg }
 
             _ => { self.mem[addr as usize] }
             }

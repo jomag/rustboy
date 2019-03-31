@@ -12,9 +12,10 @@ use interrupt::{ IF_VBLANK_BIT, IF_LCDC_BIT };
 // 1 - OBJ Enable (0 = off, 1 = on)
 // 0 - BG Mode (0 = BG Display Off, 1 = BG Display On)
 
-const SCREEN_WIDTH: usize = 160;
-const SCREEN_HEIGHT: usize = 144;
-const BUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 3;
+pub const SCREEN_WIDTH: usize = 160;
+pub const SCREEN_HEIGHT: usize = 144;
+const BUFFER_BYTES_PER_PIXEL: usize = 3;
+const BUFFER_SIZE_RGB8: usize = SCREEN_WIDTH * SCREEN_HEIGHT * BUFFER_BYTES_PER_PIXEL;
 
 pub struct LCD {
     scanline_cycles: u32,
@@ -50,7 +51,7 @@ pub struct LCD {
     // to the texture.
     //
     // The pixel format is RGB24, 3 bytes per pixel.
-    buf: [u8; BUFFER_SIZE],
+    pub buf_rgb8: [u8; BUFFER_SIZE_RGB8],
 
     // Interrupt Request
     pub irq: u8
@@ -72,7 +73,7 @@ impl LCD {
             isel_mode10: false,
             isel_ly: false,
             ram: [0; 8192],
-            buf: [0; BUFFER_SIZE],
+            buf_rgb8: [0; BUFFER_SIZE_RGB8],
             irq: 0
         }
     }
@@ -96,7 +97,7 @@ impl LCD {
 
     fn render_line(&mut self, scanline: u8) {
         // Length of one row of pixels in bytes
-        let pitch = SCREEN_WIDTH * 3;
+        let pitch = SCREEN_WIDTH * BUFFER_BYTES_PER_PIXEL;
 
         // Start point in texture
         let mut buf_offs = scanline as usize * pitch;
@@ -129,12 +130,14 @@ impl LCD {
             for x in 0..8 {
                 let hi = b1 & (1 << (7 - x)) != 0;
                 let lo = b2 & (1 << (7 - x)) != 0;
-                let mut v = 0;
-                if hi { v += 128; }
-                if lo { v += 64; }
-                self.buf[buf_offs] = v;
-                self.buf[buf_offs + 1] = v;
-                self.buf[buf_offs + 2] = v;
+                let mut v = 255;
+                if hi { v -= 128; }
+                if lo { v -= 64; }
+                self.buf_rgb8[buf_offs] = v;
+                self.buf_rgb8[buf_offs + 1] = v;
+                self.buf_rgb8[buf_offs + 2] = v;
+                // FIXME: we could set the alpha just once instead.
+                // self.buf_rgba8[buf_offs + 3] = 255; 
                 buf_offs += 3;
             }
         }
@@ -299,11 +302,5 @@ impl LCD {
 
     pub fn write_display_ram(&mut self, address: u16, value: u8) {
         self.ram[address as usize - 0x8000] = value;
-    }
-
-    pub fn copy_to_texture(&self, txt: &mut Texture) {
-        txt.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            buffer.copy_from_slice(&self.buf);
-        }).unwrap();
     }
 }
