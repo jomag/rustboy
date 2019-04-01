@@ -47,7 +47,28 @@ pub const OAM_OFFSET: u16 = 0xFE00;
 
 pub struct MMU {
     pub reg: Registers,
-    pub mem: [u8; 0x10000],
+
+    // ROM bank (0x0000 to 0x3FFF)
+    pub rom: [u8; 0x4000],
+
+    // Switchable ROM bank (0x4000 to 0x7FFF)
+    pub romx: [u8; 0x4000],
+
+    // External RAM in cartridge
+    pub external_ram: [u8; 0x2000],
+
+    // RAM bank (0xC000 to 0xCFFF)
+    pub ram: [u8; 0x2000],
+
+    // I/O registers (0xFF00 to 0xFFFF)
+    // FIXME: these are used to allow emulator to progress.
+    // When we support all registers this memory area can be removed.
+    pub io_reg: [u8; 0x80],
+    ie_reg: u8,
+
+    // Internal RAM (0xFF80 to 0xFFFF)
+    pub internal_ram: [u8; 0x7F],
+
     bootstrap: [u8; 0x100],
     pub bootstrap_mode: bool,
     pub watch_triggered: bool,
@@ -57,25 +78,19 @@ pub struct MMU {
     pub lcd: LCD,
 
     pub display_updated: bool,
-    pub halted: bool,
 }
-
-// impl Serialize for MMU {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         let mut state = serializer.serialize_struct("MMU", 2)?;
-//         state.serialize_field("reg", &self.reg);
-
-//     }
-// }
 
 impl MMU {
     pub fn new() -> Self {
         MMU {
             reg: Registers::new(),
-            mem: [0; 0x10000],
+            rom: [0; 0x4000],
+            romx: [0; 0x4000],
+            external_ram: [0; 0x2000],
+            ram: [0; 0x2000],
+            io_reg: [0; 0x80],
+            ie_reg: 0,
+            internal_ram: [0; 0x7F],
             bootstrap: [0; 0x100],
             bootstrap_mode: true,
             watch_triggered: false,
@@ -83,22 +98,20 @@ impl MMU {
             dma: DMA::new(),
             lcd: LCD::new(),
             display_updated: false,
-            halted: false,
         }
     }
 
     pub fn init(&mut self) {
-        self.mem[0xFF00] = 0xCF;
-        self.mem[0xFF01] = 0x00;
-        self.mem[0xFF02] = 0x7E;
+        self.io_reg[0xFF00 & 0x7F] = 0xCF;
+        self.io_reg[0xFF01 & 0x7F] = 0x00;
+        self.io_reg[0xFF02 & 0x7F] = 0x7E;
 
         // Undocumented, but should be initialized to 0xFF
-        self.mem[0xFF03] = 0xFF;
+        self.io_reg[0xFF03 & 0x4F] = 0xFF;
     }
 
     pub fn wakeup_if_halted(&mut self) {
         if self.reg.halted {
-            println!("unhalted!");
             self.reg.halted = false;
         }
     }
@@ -121,7 +134,7 @@ impl MMU {
         if !self.reg.halted {
             instructions::step(self);
         } else {
-            self.tick(1);
+            self.tick(4);
         }
 
         handle_interrupts(self);
@@ -130,29 +143,25 @@ impl MMU {
     pub fn tick(&mut self, cycles: u32) {
         self.timer.update(cycles);
 
-        if self.lcd.update(cycles, &mut self.mem) {
+        if self.lcd.update(cycles) {
             self.display_updated = true;
         }
 
-        // FIXME: Handle cycles not divisible by 4,
-        // for example while halted as the machine
-        // steps cycle by cycle in that mode.
-        // We could do it by adding a cycle counter
-        // to self.dma, and proceed with dma update
-        // every 4:th cycle
-        for _ in 0..(cycles / 4) {
-            if self.dma.is_active() {
-                let offset = self.dma.start_address.unwrap();
-                let idx = self.dma.step;
-                let b = self.direct_read(offset + idx);
-                self.dma.oam[idx as usize] = b;
-                println!(
-                    "DMA stuff.. from {:x} to {:x}",
-                    offset + idx,
-                    OAM_OFFSET + idx
-                );
+        if !self.reg.halted {
+            for _ in 0..(cycles / 4) {
+                if self.dma.is_active() {
+                    let offset = self.dma.start_address.unwrap();
+                    let idx = self.dma.step;
+                    let b = self.direct_read(offset + idx);
+                    self.dma.oam[idx as usize] = b;
+                    println!(
+                        "DMA stuff.. from {:x} to {:x}",
+                        offset + idx,
+                        OAM_OFFSET + idx
+                    );
+                }
+                self.dma.update();
             }
-            self.dma.update();
         }
     }
 
@@ -165,7 +174,7 @@ impl MMU {
 
     pub fn load_cartridge(&mut self, filename: &str) {
         let mut f = File::open(filename).expect("failed to open cartridge rom");
-        f.read(&mut self.mem)
+        f.read(&mut self.rom)
             .expect("failed to read content of cartridge rom");
     }
 
@@ -188,31 +197,50 @@ impl MMU {
     }
 
     pub fn direct_read(&self, addr: u16) -> u8 {
-        if addr < 0x100 && self.bootstrap_mode {
-            return self.bootstrap[addr as usize];
-        } else if addr >= 0x8000 && addr < 0xA000 {
-            return self.lcd.read_display_ram(addr);
-        } else if addr >= 0xFE00 && addr < 0xFEA0 {
-            return self.dma.read(addr - 0xFE00);
-        } else {
-            match addr {
-                IF_REG => self.get_if_reg(),
-                DIV_REG => self.timer.read_div(),
-                TIMA_REG => self.timer.tima,
-                TMA_REG => self.timer.tma,
-                TAC_REG => self.timer.tac,
-
-                LCDC_REG => self.lcd.lcdc,
-                STAT_REG => self.lcd.get_stat_reg(),
-                SCY_REG => self.lcd.scy,
-                SCX_REG => self.lcd.scx,
-                LY_REG => self.lcd.scanline,
-                LYC_REG => self.lcd.lyc,
-
-                DMA_REG => self.dma.last_write_dma_reg,
-
-                _ => self.mem[addr as usize],
+        match addr {
+            0x0000...0x00FF => {
+                if self.bootstrap_mode {
+                    self.bootstrap[addr as usize]
+                } else {
+                    self.rom[addr as usize]
+                }
             }
+            0x0100...0x3FFF => self.rom[addr as usize],
+            0x4000...0x7FFF => self.romx[(addr & 0x3FFF) as usize],
+            0x8000...0x9FFF => self.lcd.read_display_ram(addr),
+            0xA000...0xBFFF => self.external_ram[(addr & 0x1FFF) as usize],
+            0xC000...0xCFFF => self.ram[(addr - 0xC000) as usize], // RAM
+            0xD000...0xDFFF => self.ram[(addr - 0xC000) as usize], // RAM (switchable on GBC)
+            0xE000...0xFDFF => self.ram[(addr - 0xE000) as usize], // RAM echo
+            0xFE00...0xFE9F => {
+                if self.dma.is_active() {
+                    0xFF
+                } else {
+                    self.dma.read(addr - 0xFE00)
+                }
+            }
+            0xFEA0...0xFEFF => 0, // Unused. Not emulated yet.
+
+            // Special registers in area 0xFF00 to 0xFFFF
+            IF_REG => self.get_if_reg(),
+            DIV_REG => self.timer.read_div(),
+            TIMA_REG => self.timer.tima,
+            TMA_REG => self.timer.tma,
+            TAC_REG => self.timer.tac,
+            LCDC_REG => self.lcd.lcdc,
+            STAT_REG => self.lcd.get_stat_reg(),
+            SCY_REG => self.lcd.scy,
+            SCX_REG => self.lcd.scx,
+            LY_REG => self.lcd.scanline,
+            LYC_REG => self.lcd.lyc,
+            DMA_REG => self.dma.last_write_dma_reg,
+
+            // Use self.io_reg for I/O registers that have not been implemented yet
+            0xFF00...0xFF7F => self.io_reg[(addr & 0x7F) as usize],
+
+            0xFF80...0xFFFE => self.internal_ram[(addr & 0x7F) as usize],
+
+            IE_REG => self.ie_reg,
         }
     }
 
@@ -249,75 +277,66 @@ impl MMU {
     }
 
     pub fn direct_write(&mut self, addr: u16, value: u8) {
-        //if addr >= 0xD000 && addr < 0xD100 {
-        //    println!("Write to watched memory location 0x{:04X}. Current: 0x{:02X}. New value: 0x{:02X}", addr, self.mem[addr as usize], value);
-        //    self.watch_triggered = true;
-        //}
+        match addr {
+            0x0000...0x3FFF => {}
+            0x4000...0x7FFF => {}
+            0x8000...0x9FFF => self.lcd.write_display_ram(addr, value),
+            0xA000...0xBFFF => self.external_ram[(addr & 0x1FFF) as usize] = value,
+            0xC000...0xCFFF => self.ram[(addr - 0xC000) as usize] = value,
+            0xD000...0xDFFF => self.ram[(addr - 0xC000) as usize] = value,
+            0xE000...0xFDFF => self.ram[(addr - 0xE000) as usize] = value,
+            0xFE00...0xFE9F => self.dma.write(addr - 0xFE00, value),
+            0xFEA0...0xFEFF => {} // unused and not yet emulated
 
-        // println!("WRITE MEM: 0x{:04X} = 0x{:02X} ({})", addr, value, address_type(addr));
-        if addr >= 0x8000 && addr < 0xA000 {
-            self.lcd.write_display_ram(addr, value)
-        } else if addr >= 0xFE00 && addr < 0xFEA0 {
-            self.dma.write(addr - 0xFE00, value);
-        } else if addr == 0xFF0F {
-            self.set_if_reg(value)
-        } else if addr == 0xFFFF {
-            // println!("Write to IE register 0xFFFF: {}", value);
-        } else if addr >= 0xFF80 && addr <= 0xFFFE {
+            0xFF10...0xFF26 => println!(
+                "Unhanlded write to audio register: 0x{:04X}={:02X}",
+                addr, value
+            ),
+            0xFF30...0xFF3F => println!(
+                "Unhandled write to wave register 0x{:04X}={:02X}",
+                addr, value
+            ),
 
-        } else if addr >= 0xFF00 {
-            if addr >= 0xFF10 && addr <= 0xFF26 {
-                println!(
-                    "unhandled write to audio register 0x{:04X}: {}",
-                    addr, value
-                );
-            } else if addr >= 0xFF30 && addr <= 0xFF3F {
-                println!("unhandled write to wave register 0x{:04X}: {}", addr, value);
-            } else {
-                match addr {
-                    0xFF00 => {} // P1
-                    0xFF01 => {}
-                    0xFF02 => {
-                        if value == 0x81 {
-                            let s = format!("{}", self.mem[0xFF01] as char);
-                            print!("{}", Blue.bold().paint(s)) // SB
-                        }
-                    }
-                    0xFF04 => self.timer.write_div(value),
-                    0xFF05 => self.timer.tima = value, // TIMA
-                    0xFF06 => self.timer.tma = value,  // TMA
-                    0xFF07 => self.timer.tac = value,  // TAC
-                    0xFF08 => println!("write to 0xFF08 - undocumented!: {}", value),
+            P1_REG => {}
+            SB_REG => {}
+            SC_REG => {}
+            DIV_REG => self.timer.write_div(value),
+            TIMA_REG => self.timer.tima = value,
+            TMA_REG => self.timer.tma = value,
+            TAC_REG => self.timer.tac = value,
+            0xFF08 => println!("write to 0xFF08 - undocumented!: {}", value),
+            IF_REG => self.set_if_reg(value),
 
-                    0xFF40 => self.lcd.lcdc = value,
-                    0xFF41 => self.lcd.set_stat_reg(value), // STAT
-                    0xFF42 => self.lcd.scy = value,
-                    0xFF43 => self.lcd.scx = value, // SCX
-                    0xFF44 => self.lcd.scanline = value,
-                    0xFF45 => self.lcd.lyc = value,
-                    0xFF46 => self.dma.start(value), // DMA
-                    0xFF47 => {}                     // BGP
-                    0xFF48 => {}                     // OBP0
-                    0xFF49 => {}                     // OBP1
-                    0xFF4A => {}                     // WY
-                    0xFF4B => {}                     // WX
-                    0xFF4D => println!("write to 0xFF4D - KEY1 (CGB only): {}", value),
+            LCDC_REG => self.lcd.lcdc = value,
+            STAT_REG => self.lcd.set_stat_reg(value),
+            SCY_REG => self.lcd.scy = value,
+            SCX_REG => self.lcd.scx = value,
+            LY_REG => self.lcd.scanline = value,
+            LYC_REG => self.lcd.lyc = value,
+            DMA_REG => self.dma.start(value),
+            BGP_REG => {}
+            OBP0_REG => {}
+            OBP1_REG => {}
+            WY_REG => {}
+            WX_REG => {}
 
-                    // Invalid registers, that are still used by for example Tetris
-                    // https://www.reddit.com/r/EmuDev/comments/5nixai/gb_tetris_writing_to_unused_memory/
-                    0xFF7F => {}
+            0xFF4D => println!("write to 0xFF4D - KEY1 (CGB only): {}", value),
 
-                    // 0xFF50: write 1 to disable bootstrap ROM
-                    0xFF50 => self.bootstrap_mode = false,
-                    _ => panic!(
-                        "unhandled write to special register 0x{:04X}: {}",
-                        addr, value
-                    ),
-                }
+            // 0xFF50: write 1 to disable bootstrap ROM
+            0xFF50 => self.bootstrap_mode = false,
+
+            // Invalid registers, that are still used by for example Tetris
+            // https://www.reddit.com/r/EmuDev/comments/5nixai/gb_tetris_writing_to_unused_memory/
+            0xFF7F => {}
+
+            0xFF00...0xFF7F => self.io_reg[(addr & 0xFF) as usize] = value,
+            0xFF80...0xFFFE => self.internal_ram[(addr & 0x7F) as usize] = value,
+
+            IE_REG => {
+                println!("SET IE TO {}", value);
+                self.ie_reg = value
             }
-        }
-
-        self.mem[addr as usize] = value;
+        };
     }
 
     pub fn pop(&mut self) -> u16 {

@@ -10,77 +10,90 @@ Currently the following tests has been tried:
 
 ### CPU instructions
 
-* `01-special.gb`: **passes!**
-* `02-interrupts.gb`: fails
-* `03-op sp,hl.gb`: **passes!**
-* `04-op r,imm.gb`: **passes!**
-* `05-op rp.gb`: **passes!**
-* `06-ld r,r.gb`: **passes!**
-* `07-jr,jp,call,ret,rst.gb`: **passes!**
-* `08-misc instrs.gb`: **passes!**
-* `09-op r,r.gb`: **passes!**
-* `10-bit ops.gb`: **passes!**
-* `11-op a,(hl).gb`: **passes!**
+- `instr_timing.gb`: **pass**
+- `interrupt_time.gb`: fail
+- `mem_timing/mem_timing.gb`: **pass**
+- `mem_timing-2/mem_timing.gb`: **pass**
+
+Individual memory timing tests:
+
+- `mem_timing/01-read_timing.gb`: **pass**
+- `mem_timing/02-write_timing.gb`: **pass**
+- `mem_timing/03-modify_timing.gb`: **pass**
+
+Individual CPU instruction tests:
+
+- `01-special.gb`: **pass**
+- `02-interrupts.gb`: **pass**
+- `03-op sp,hl.gb`: **pass**
+- `04-op r,imm.gb`: **pass**
+- `05-op rp.gb`: **pass**
+- `06-ld r,r.gb`: **pass**
+- `07-jr,jp,call,ret,rst.gb`: **pass**
+- `08-misc instrs.gb`: **pass**
+- `09-op r,r.gb`: **pass**
+- `10-bit ops.gb`: **pass**
+- `11-op a,(hl).gb`: **pass**
 
 ## Mooneye GB
 
 The Mooneye GB emulator (which also happens to be written in Rust)
 includes a number of tests as well. Here's current state of some:
 
-* `acceptance/bits/mem_oam`: **passes!**
-* `acceptance/bits/reg_f`: **passes!**
-* `acceptance/bits/unused_hwio-GS`: fails
+- `acceptance/bits/mem_oam`: **pass**
+- `acceptance/bits/reg_f`: **pass**
+- `acceptance/bits/unused_hwio-GS`: fail
 
-* `acceptance/instr/daa`: **passes!**
+- `acceptance/instr/daa`: **pass**
 
-* `acceptance/interrupts/ie_push`: fails with "R1: not cancelled"
+- `acceptance/interrupts/ie_push`: fail with "R1: not cancelled"
 
-* `acceptance/oam_dma/basic`: **passes!**
-* `acceptance/oam_dma/reg_read`: **passes!**
-* `acceptance/oam_dma/sources-dmgABCmgbS`: fails
+- `acceptance/oam_dma/basic`: **pass**
+- `acceptance/oam_dma/reg_read`: **pass**
+- `acceptance/oam_dma/sources-dmgABCmgbS`: fail
 
-* `acceptance/timer/div_write`: **passes!**
-* `acceptance/timer/rapid_toggle`: fails
-* `acceptance/timer/tim00`: **passes!**
-* `acceptance/timer/tim00_div_trigger`: **passes!**
-* `acceptance/timer/tim01`: **passes!**
-* `acceptance/timer/tim01_div_trigger`: **passes!**
-* `acceptance/timer/tim10`: **passes!**
-* `acceptance/timer/tim10_div_trigger`: **passes!**
-* `acceptance/timer/tim11`: **passes!**
-* `acceptance/timer/tim11_div_trigger`: **passes!**
-* `acceptance/timer/tima_reload`: fails
-* `acceptance/timer/tima_write_reloading`: fails
-* `acceptance/timer/tma_write_reloading`: fails
+- `acceptance/timer/div_write`: **pass**
+- `acceptance/timer/rapid_toggle`: fail
+- `acceptance/timer/tim00`: **pass**
+- `acceptance/timer/tim00_div_trigger`: **pass**
+- `acceptance/timer/tim01`: **pass**
+- `acceptance/timer/tim01_div_trigger`: **pass**
+- `acceptance/timer/tim10`: **pass**
+- `acceptance/timer/tim10_div_trigger`: **pass**
+- `acceptance/timer/tim11`: **pass**
+- `acceptance/timer/tim11_div_trigger`: **pass**
+- `acceptance/timer/tima_reload`: fail
+- `acceptance/timer/tima_write_reloading`: fail
+- `acceptance/timer/tma_write_reloading`: fail
 
-* `acceptance/add_sp_e_timing`: **passes!**
-* `acceptance/boot_regs-dmgABC.gb`: **passes!**
-* `acceptance/call_cc_timing`: **passes!**
-* `acceptance/call_cc_timing2`: **passes!**
-* `acceptance/call_timing`: **passes!**
-* `acceptance/call_timing2`: **passes!**
-* `acceptance/div_timing`: **passes!**
-* `acceptance/ei_sequence`: fails (used to pass?)
-* `acceptance/ei_timing`: fails (used to pass?)
-* `acceptance/halt_ime0_ei`: fails
-* `acceptance/halt_ime0_nointr_timing`: fails
-* `acceptance/halt_ime1_timing`: fails
-* `acceptance/if_ei_registers`: fails (because serial interrupt not impl.)
-* `acceptance/intr_timing`: fails: round 1
-* `acceptance/jp_cc_timing`: **passes!**
-* `acceptance/jp_timing`: **passes!**
-* `acceptance/ld_hl_sp_e_timing`: **passes!**
-* `acceptance/oam_dma_restart`: **passes!**
-* `acceptance/oam_dma_start`: **passes!**
-* `acceptance/oam_dma_timing`: **passes!**
-* `acceptance/pop_timing`: **passes!**
-* `acceptance/push_timing`: **passes!**
-* `acceptance/rapid_di_ei`: fails! (used to pass?)
-* `acceptance/ret_cc_timing`: **passes!**
-* `acceptance/reti_intr_timing`: fails! (used to pass?)
-* `acceptance/reti_timing`: **passes!**
-* `acceptance/ret_timing`: **passes!**
-* `acceptance/rst_timing`: **passes!**
+- `acceptance/add_sp_e_timing`: **pass**
+- `acceptance/boot_regs-dmgABC.gb`: **pass**
+- `acceptance/call_cc_timing`: **pass**
+- `acceptance/call_cc_timing2`: **pass**
+- `acceptance/call_timing`: **pass**
+- `acceptance/call_timing2`: **pass**
+- `acceptance/div_timing`: **pass**
+- `acceptance/ei_sequence`: fail (used to pass?)
+- `acceptance/ei_timing`: fail (used to pass?)
+- `acceptance/halt_ime0_ei`: fail
+- `acceptance/halt_ime0_nointr_timing`: fail
+- `acceptance/halt_ime1_timing`: fail
+- `acceptance/if_ei_registers`: fail (because serial interrupt not impl.)
+- `acceptance/intr_timing`: fail: round 1
+- `acceptance/jp_cc_timing`: **pass**
+- `acceptance/jp_timing`: **pass**
+- `acceptance/ld_hl_sp_e_timing`: **pass**
+- `acceptance/oam_dma_restart`: **pass**
+- `acceptance/oam_dma_start`: **pass**
+- `acceptance/oam_dma_timing`: **pass**
+- `acceptance/pop_timing`: **pass**
+- `acceptance/push_timing`: **pass**
+- `acceptance/rapid_di_ei`: fail! (used to pass?)
+- `acceptance/ret_cc_timing`: **pass**
+- `acceptance/reti_intr_timing`: fail! (used to pass?)
+- `acceptance/reti_timing`: **pass**
+- `acceptance/ret_timing`: **pass**
+- `acceptance/rst_timing`: **pass**
 
 ## Graphics
 
@@ -88,7 +101,7 @@ Resolution: 160 x 144
 Real resolution: 256 x 256
 Tiles: 32 x 32
 Real resolution: 256 x 256 (32 x (8 x 32) x 8)
-Clock speed: 4.194304 MHz (2 ** 22)
+Clock speed: 4.194304 MHz (2 \*\* 22)
 Vertical sync: 59.73 Hz
 
 ## References

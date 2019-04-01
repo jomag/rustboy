@@ -337,17 +337,16 @@ pub fn step(mmu: &mut MMU) {
         // Flags: - - - -
         0x76 => {
             if mmu.reg.ime != 0 {
-                println!("HALTED!");
                 mmu.reg.halted = true;
             } else {
                 let if_reg = mmu.direct_read(IF_REG);
                 let ie_reg = mmu.direct_read(IE_REG);
                 if if_reg & ie_reg & 0x1F == 0 {
-                    println!("HALTED 2!");
                     mmu.reg.halted = true;
                 } else {
                     // FIXME: Emulate HALT bug: next op is executed twice
                     // if a single byte op. If a multi byte op, it's even worse.
+                    println!("Ooops! HALT bug is NOT emulated!")
                 }
             }
         }
@@ -360,7 +359,6 @@ pub fn step(mmu: &mut MMU) {
             mmu.reg.neg = false;
             mmu.reg.half_carry = false;
             mmu.reg.carry = true;
-            mmu.tick(4);
         }
 
         // DAA: ...
@@ -2730,112 +2728,3 @@ pub fn step(mmu: &mut MMU) {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use debug::*;
-    use instructions::*;
-
-    fn build_machine() -> MMU {
-        let mut mmu = MMU::new();
-        mmu.reg.pc = 0x1000;
-        mmu.reg.sp = 0xFFFC;
-        mmu
-    }
-
-    #[test]
-    fn test_instruction_length() {
-        // Test that PC increments correctly depending
-        // on instruction length
-        for i in 0..255 {
-            // 0x76 = HALT (not implemented yet)
-            if i == 0x76 {
-                continue;
-            };
-            let mut mmu = build_machine();
-            mmu.reg.pc = 0x1000;
-            mmu.reg.zero = false;
-            mmu.reg.carry = false;
-            mmu.mem[0x1000] = i as u8;
-            mmu.mem[0x1001] = 0x12;
-            mmu.mem[0x1002] = 0x34;
-            mmu.mem[0xFFFC] = 0x56;
-            mmu.mem[0xFFFD] = 0x78;
-            mmu.exec_op();
-            println!("Op: 0x{:02X}", i);
-            match i {
-                0x18 => {
-                    // JR r8
-                    assert_eq!(mmu.reg.pc, 0x1014)
-                }
-                0x20 => assert_eq!(mmu.reg.pc, 0x1014),
-                0x30 => assert_eq!(mmu.reg.pc, 0x1014),
-                0xC0 => assert_eq!(mmu.reg.pc, 0x7856),
-                0xC2 => assert_eq!(mmu.reg.pc, 0x3412),
-                0xC3 => assert_eq!(mmu.reg.pc, 0x3412),
-                0xC4 => assert_eq!(mmu.reg.pc, 0x3412),
-                0xC7 => {
-                    assert_eq!(mmu.reg.pc, 0);
-                    assert_eq!(mmu.pop(), 0x1001);
-                }
-                0xC9 => {
-                    assert_eq!(mmu.reg.pc, 0x7856);
-                }
-                0xCD => assert_eq!(mmu.reg.pc, 0x3412),
-                0xCF => {
-                    assert_eq!(mmu.reg.pc, 0x08);
-                    assert_eq!(mmu.pop(), 0x1001);
-                }
-                _ => {
-                    assert_eq!(mmu.reg.pc - 0x1000, op_length(i) as u16);
-
-                    if op_cycles(i) != 0 {
-                        assert_eq!(mmu.timer.cycle, op_cycles(i) as u16);
-                    }
-                }
-            }
-        }
-    }
-}
-
-// #[cfg(test)]
-// mod tests {
-//     use instructions::*;
-//     use debug::*;
-
-//     fn build_cpu() -> Cpu {
-//         let cpu = Cpu::new();
-//         mmu.reg.pc = 0x1000;
-//         mmu.reg.sp = 0x2000;
-//         cpu
-//     }
-
-//     #[test]
-//     fn test_op_0x38_add_sp_immediate() {
-//         let cpu = build_cpu();
-//         cpu.mem.mem[mmu.reg.pc as usize] = 0xE8;
-//         cpu.mem.mem[(mmu.reg.pc + 1) as usize] = 1 as u8;
-//         step(&mut cpu);
-//         print_registers(&mut mmu.reg);
-//         assert!(mmu.reg.sp == 0x2001);
-//     }
-
-//     #[test]
-//     fn test_op_0xCE_add_sp_immediate() {
-//         let cpu = build_cpu();
-//         mmu.reg.a = 100;
-//         mmu.reg.carry = true;
-//         cpu.mem.mem[mmu.reg.pc as usize] = 0xCE;
-//         cpu.mem.mem[(mmu.reg.pc + 1) as usize] = 10 as u8;
-//         step(&mut cpu);
-//         print_registers(&mut mmu.reg);
-//         assert!(mmu.reg.a == 111);
-
-//         mmu.reg.carry = false;
-//         cpu.mem.mem[mmu.reg.pc as usize] = 0xCE;
-//         cpu.mem.mem[(mmu.reg.pc + 1) as usize] = (0 as u8).wrapping_sub(35);
-//         step(&mut cpu);
-//         print_registers(&mut mmu.reg);
-//         assert!(mmu.reg.a == 111 - 35);
-//     }
-// }

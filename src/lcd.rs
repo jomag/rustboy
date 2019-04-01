@@ -1,6 +1,5 @@
-
+use interrupt::{IF_LCDC_BIT, IF_VBLANK_BIT};
 use sdl2::render::Texture;
-use interrupt::{ IF_VBLANK_BIT, IF_LCDC_BIT };
 
 // Bits of LCDC register:
 // 7 - LCD Enable (0 = off, 1 = on)
@@ -38,7 +37,7 @@ pub struct LCD {
     isel_mode00: bool,
     isel_mode01: bool,
     isel_mode10: bool,
-    isel_ly: bool,  // When LY == LYC
+    isel_ly: bool, // When LY == LYC
 
     // 8k of display RAM (address 0x8000-0x9FFF)
     ram: [u8; 8192],
@@ -54,9 +53,8 @@ pub struct LCD {
     pub buf_rgb8: [u8; BUFFER_SIZE_RGB8],
 
     // Interrupt Request
-    pub irq: u8
+    pub irq: u8,
 }
-
 
 impl LCD {
     pub fn new() -> Self {
@@ -74,17 +72,27 @@ impl LCD {
             isel_ly: false,
             ram: [0; 8192],
             buf_rgb8: [0; BUFFER_SIZE_RGB8],
-            irq: 0
+            irq: 0,
         }
     }
 
     pub fn get_stat_reg(&self) -> u8 {
         let mut stat = self.mode;
-        if self.scanline == self.lyc { stat |= 4 }
-        if self.isel_mode00 { stat |= 8 }
-        if self.isel_mode01 { stat |= 16 }
-        if self.isel_mode10 { stat |= 32 }
-        if self.isel_ly { stat |= 64 }
+        if self.scanline == self.lyc {
+            stat |= 4
+        }
+        if self.isel_mode00 {
+            stat |= 8
+        }
+        if self.isel_mode01 {
+            stat |= 16
+        }
+        if self.isel_mode10 {
+            stat |= 32
+        }
+        if self.isel_ly {
+            stat |= 64
+        }
         stat
     }
 
@@ -131,13 +139,17 @@ impl LCD {
                 let hi = b1 & (1 << (7 - x)) != 0;
                 let lo = b2 & (1 << (7 - x)) != 0;
                 let mut v = 255;
-                if hi { v -= 128; }
-                if lo { v -= 64; }
+                if hi {
+                    v -= 128;
+                }
+                if lo {
+                    v -= 64;
+                }
                 self.buf_rgb8[buf_offs] = v;
                 self.buf_rgb8[buf_offs + 1] = v;
                 self.buf_rgb8[buf_offs + 2] = v;
                 // FIXME: we could set the alpha just once instead.
-                // self.buf_rgba8[buf_offs + 3] = 255; 
+                // self.buf_rgba8[buf_offs + 3] = 255;
                 buf_offs += 3;
             }
         }
@@ -163,7 +175,7 @@ impl LCD {
     // have been rendered the v-blank period starts and
     // it lasts for the same time it would take to draw
     // another 10 lines
-    pub fn step(&mut self, mmu: &mut [u8; 0x10000]) -> bool {
+    pub fn step(&mut self) -> bool {
         let mut display_update = false;
 
         if self.scanline < 144 {
@@ -225,10 +237,10 @@ impl LCD {
         display_update
     }
 
-    pub fn update(&mut self, cycles: u32, mmu: &mut [u8; 0x10000]) -> bool {
+    pub fn update(&mut self, cycles: u32) -> bool {
         let mut display_update = false;
         for _ in 0..cycles {
-            display_update = display_update || self.step(mmu);
+            display_update = display_update || self.step();
         }
         display_update
     }
@@ -270,7 +282,7 @@ impl LCD {
             self.scanline_cycles -= 456;
         }
 
-        return display_update
+        return display_update;
 
         // Old code:
         /*
@@ -280,7 +292,7 @@ impl LCD {
 
             if self.scanline < 144 {
 
-                if mode != 
+                if mode !=
 
             } else if self.scanline < 153 {
                 self.scanline += 1;

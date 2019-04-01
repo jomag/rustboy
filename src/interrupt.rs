@@ -23,7 +23,6 @@ fn interrupt(mmu: &mut MMU, bit: u8, addr: u16) {
         mmu.reg.halted
     );
 
-    mmu.wakeup_if_halted();
     mmu.clear_if_reg_bits(bit);
     let pc = mmu.reg.pc;
     push_op(mmu, pc);
@@ -32,16 +31,23 @@ fn interrupt(mmu: &mut MMU, bit: u8, addr: u16) {
 }
 
 pub fn handle_interrupts(mmu: &mut MMU) {
+    let if_reg = mmu.direct_read(IF_REG);
+    let ie_reg = mmu.direct_read(IE_REG);
+    let masked = if_reg & ie_reg;
+
+    if masked != 0 {
+        // If the CPU is halted it should always wake up when
+        // an IF flag and the corresponding IE flag are both set.
+        // This is true no matter the state of IME.
+        mmu.wakeup_if_halted();
+    }
+
     if mmu.reg.ime == 1 {
         mmu.reg.ime = 2;
         return;
     }
 
     if mmu.reg.ime == 2 {
-        let if_reg = mmu.direct_read(IF_REG);
-        let ie_reg = mmu.direct_read(IE_REG);
-        let masked = if_reg & ie_reg;
-
         if masked & IF_VBLANK_BIT != 0 {
             interrupt(mmu, IF_VBLANK_BIT, VBLANK_ADDR);
         } else if masked & IF_LCDC_BIT != 0 {

@@ -18,7 +18,7 @@ pub struct DMA {
     // This is to handle a quirk: the DMA address (0xFF46) should
     // always return the last written value on read operations,
     // or 0xFF it has not been written to. See Mooneye test "reg_read.gb"
-    pub last_write_dma_reg: u8
+    pub last_write_dma_reg: u8,
 }
 
 impl DMA {
@@ -29,7 +29,7 @@ impl DMA {
             start_address: None,
             step: 0,
             oam: [0; 0xA0],
-            last_write_dma_reg: 0xFF
+            last_write_dma_reg: 0xFF,
         }
     }
 
@@ -39,7 +39,7 @@ impl DMA {
 
     pub fn read(&self, address: u16) -> u8 {
         if self.is_active() {
-            return 0xFF
+            return 0xFF;
         } else {
             return self.oam[address as usize];
         }
@@ -52,6 +52,7 @@ impl DMA {
     }
 
     pub fn start(&mut self, start: u8) {
+        println!("OAM DMA START! 0x{:02X}", start);
         self.start_request = Some((start as u16) << 8);
         self.last_write_dma_reg = start;
     }
@@ -67,11 +68,12 @@ impl DMA {
             self.start_address = self.start_request_delay;
             self.start_request_delay = None;
             self.step = 0;
-            return
+            return;
         }
 
         if self.start_address.is_some() {
             if self.step == 159 {
+                println!("DMA finished!");
                 self.start_address = None;
             } else {
                 self.step += 1;

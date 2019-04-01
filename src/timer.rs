@@ -1,9 +1,8 @@
-
 // References:
 // http://gbdev.gg8.se/wiki/articles/Timer_and_Divider_Registers
 // http://gbdev.gg8.se/wiki/articles/Timer_Obscure_Behaviour
 
-use interrupt::{ IF_TMR_BIT };
+use interrupt::IF_TMR_BIT;
 
 const CLOCK_SELECTION: [u16; 4] = [512, 8, 32, 128];
 
@@ -51,7 +50,7 @@ pub struct Timer {
     pub trigger_debug: bool,
 
     // Break at absolute cycle. Cycle 0 is ignored.
-    pub abs_cycle_breakpoint: u64
+    pub abs_cycle_breakpoint: u64,
 }
 
 impl Timer {
@@ -66,7 +65,7 @@ impl Timer {
             tma: 0,
             irq: 0,
             trigger_debug: false,
-            abs_cycle_breakpoint: 0
+            abs_cycle_breakpoint: 0,
         }
     }
 
@@ -106,7 +105,7 @@ impl Timer {
 
     fn one_cycle(&mut self) {
         self.abs_cycle = self.abs_cycle.wrapping_add(1);
-        
+
         if self.abs_cycle == self.abs_cycle_breakpoint {
             self.trigger_debug = true;
         }
@@ -115,8 +114,10 @@ impl Timer {
 
         let bit = if self.tac & TAC_ENABLE_BIT != 0 {
             CLOCK_SELECTION[(self.tac & 3) as usize]
-        } else { 0 };
-        
+        } else {
+            0
+        };
+
         let bit_state = self.cycle & bit != 0;
 
         if self.prev_bit_state && !bit_state {
