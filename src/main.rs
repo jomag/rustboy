@@ -1,5 +1,6 @@
 extern crate clap;
 extern crate ctrlc;
+extern crate num_traits;
 extern crate png;
 extern crate sdl2;
 extern crate serde;
@@ -59,12 +60,20 @@ fn should_enter_stepping(emu: &mut Emu, breakpoints: &Vec<u16>) -> bool {
     return false;
 }
 
-fn parse_optional<T: FromStr>(value: Option<&str>) -> Option<T> {
+fn parse_number<T: num_traits::Num>(text: &str) -> Result<T, T::FromStrRadixErr> {
+    if text.starts_with("0x") {
+        T::from_str_radix(&text[2..], 16)
+    } else {
+        T::from_str_radix(text, 10)
+    }
+}
+
+fn parse_optional<T: num_traits::Num>(value: Option<&str>) -> Option<T> {
     match value {
-        Some(num) => match num.parse::<T>() {
+        Some(text) => match parse_number(text) {
             Ok(num) => Some(num),
             Err(_) => {
-                println!("Not a valid number: {:?}", num);
+                println!("Not a valid number: {:?}", text);
                 std::process::exit(1);
             }
         },
@@ -72,7 +81,7 @@ fn parse_optional<T: FromStr>(value: Option<&str>) -> Option<T> {
     }
 }
 
-fn parse<T: FromStr>(value: Option<&str>, default: T) -> T {
+fn parse<T: num_traits::Num>(value: Option<&str>, default: T) -> T {
     match parse_optional(value) {
         Some(num) => num,
         None => default,
@@ -143,10 +152,12 @@ fn main() -> Result<(), String> {
     emu.init();
 
     println!("Loading bootstrap ROM: {}", bootstrap_rom);
-    emu.load_bootstrap(bootstrap_rom);
+    let sz = emu.load_bootstrap(bootstrap_rom);
+    println!(" - {} bytes read", sz);
 
     println!("Loading cartridge ROM: {}", cartridge_rom);
-    emu.load_cartridge(cartridge_rom);
+    let sz = emu.load_cartridge(cartridge_rom);
+    println!(" - {} bytes read", sz);
 
     let mut breakpoints: Vec<u16> = Vec::new();
     let mut stepping = false;
@@ -261,6 +272,19 @@ fn main() -> Result<(), String> {
                     }
                     "q" => {
                         break 'running;
+                    }
+                    "r" => {
+                        if args.len() > 1 {
+                            match parse_number::<u16>(args[1]) {
+                                Ok(addr) => println!(
+                                    "[{:04X}] = 0x{:02X} / :02X",
+                                    addr,
+                                    &emu.mmu.direct_read(addr),
+                                    //&emu.mmu.rom[addr as usize]
+                                ),
+                                Err(_) => println!("Not a valid address"),
+                            };
+                        }
                     }
                     "" => {}
                     _ => {

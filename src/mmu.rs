@@ -49,10 +49,10 @@ pub struct MMU {
     pub reg: Registers,
 
     // ROM bank (0x0000 to 0x3FFF)
-    pub rom: [u8; 0x4000],
+    pub rom: [u8; 0x8000],
 
     // Switchable ROM bank (0x4000 to 0x7FFF)
-    pub romx: [u8; 0x4000],
+    // pub romx: [u8; 0x4000],
 
     // External RAM in cartridge
     pub external_ram: [u8; 0x2000],
@@ -84,8 +84,8 @@ impl MMU {
     pub fn new() -> Self {
         MMU {
             reg: Registers::new(),
-            rom: [0; 0x4000],
-            romx: [0; 0x4000],
+            rom: [0; 0x8000],
+            //romx: [0; 0x4000],
             external_ram: [0; 0x2000],
             ram: [0; 0x2000],
             io_reg: [0; 0x80],
@@ -154,28 +154,30 @@ impl MMU {
                     let idx = self.dma.step;
                     let b = self.direct_read(offset + idx);
                     self.dma.oam[idx as usize] = b;
+                    /*
                     println!(
                         "DMA stuff.. from {:x} to {:x}",
                         offset + idx,
                         OAM_OFFSET + idx
                     );
+                    */
                 }
                 self.dma.update();
             }
         }
     }
 
-    pub fn load_bootstrap(&mut self, filename: &str) {
+    pub fn load_bootstrap(&mut self, filename: &str) -> usize {
         // Open and read content of boot rom
         let mut f = File::open(filename).expect("failed to open boot rom");
         f.read(&mut self.bootstrap)
-            .expect("failed to read content of boot rom");
+            .expect("failed to read content of boot rom")
     }
 
-    pub fn load_cartridge(&mut self, filename: &str) {
+    pub fn load_cartridge(&mut self, filename: &str) -> usize {
         let mut f = File::open(filename).expect("failed to open cartridge rom");
         f.read(&mut self.rom)
-            .expect("failed to read content of cartridge rom");
+            .expect("failed to read content of cartridge rom")
     }
 
     pub fn fetch(&mut self) -> u8 {
@@ -206,9 +208,9 @@ impl MMU {
                 }
             }
             0x0100...0x3FFF => self.rom[addr as usize],
-            0x4000...0x7FFF => self.romx[(addr & 0x3FFF) as usize],
+            0x4000...0x7FFF => self.rom[addr as usize], // self.romx[(addr - 0x4000) as usize],
             0x8000...0x9FFF => self.lcd.read_display_ram(addr),
-            0xA000...0xBFFF => self.external_ram[(addr & 0x1FFF) as usize],
+            0xA000...0xBFFF => self.external_ram[(addr - 0xA000) as usize],
             0xC000...0xCFFF => self.ram[(addr - 0xC000) as usize], // RAM
             0xD000...0xDFFF => self.ram[(addr - 0xC000) as usize], // RAM (switchable on GBC)
             0xE000...0xFDFF => self.ram[(addr - 0xE000) as usize], // RAM echo
@@ -219,7 +221,11 @@ impl MMU {
                     self.dma.read(addr - 0xFE00)
                 }
             }
-            0xFEA0...0xFEFF => 0, // Unused. Not emulated yet.
+
+            0xFEA0...0xFEFF => {
+                println!("read of unused memory area: 0x{:04X}", addr);
+                0xFF
+            }
 
             // Special registers in area 0xFF00 to 0xFFFF
             IF_REG => self.get_if_reg(),
@@ -236,9 +242,9 @@ impl MMU {
             DMA_REG => self.dma.last_write_dma_reg,
 
             // Use self.io_reg for I/O registers that have not been implemented yet
-            0xFF00...0xFF7F => self.io_reg[(addr & 0x7F) as usize],
+            0xFF00...0xFF7F => self.io_reg[(addr - 0xFF00) as usize],
 
-            0xFF80...0xFFFE => self.internal_ram[(addr & 0x7F) as usize],
+            0xFF80...0xFFFE => self.internal_ram[(addr - 0xFF80) as usize],
 
             IE_REG => self.ie_reg,
         }
@@ -278,16 +284,22 @@ impl MMU {
 
     pub fn direct_write(&mut self, addr: u16, value: u8) {
         match addr {
-            0x0000...0x3FFF => {}
-            0x4000...0x7FFF => {}
+            0x0000...0x3FFF => {
+                println!("Write to ROM! Breaking.");
+                self.watch_triggered = true;
+            }
+            0x4000...0x7FFF => panic!("viodvdafvadfv {}", addr),
             0x8000...0x9FFF => self.lcd.write_display_ram(addr, value),
-            0xA000...0xBFFF => self.external_ram[(addr & 0x1FFF) as usize] = value,
+            0xA000...0xBFFF => self.external_ram[(addr - 0xA000) as usize] = value,
             0xC000...0xCFFF => self.ram[(addr - 0xC000) as usize] = value,
             0xD000...0xDFFF => self.ram[(addr - 0xC000) as usize] = value,
             0xE000...0xFDFF => self.ram[(addr - 0xE000) as usize] = value,
             0xFE00...0xFE9F => self.dma.write(addr - 0xFE00, value),
-            0xFEA0...0xFEFF => {} // unused and not yet emulated
 
+            0xFEA0...0xFEFF => {} /*println!(
+            "write to unused memory area: 0x{:04X} = 0x{:02X}",
+            addr, value
+            )*/
             0xFF10...0xFF26 => println!(
                 "Unhanlded write to audio register: 0x{:04X}={:02X}",
                 addr, value
@@ -323,14 +335,17 @@ impl MMU {
             0xFF4D => println!("write to 0xFF4D - KEY1 (CGB only): {}", value),
 
             // 0xFF50: write 1 to disable bootstrap ROM
-            0xFF50 => self.bootstrap_mode = false,
+            0xFF50 => {
+                println!("bootstrap disabled!");
+                self.bootstrap_mode = false
+            }
 
             // Invalid registers, that are still used by for example Tetris
             // https://www.reddit.com/r/EmuDev/comments/5nixai/gb_tetris_writing_to_unused_memory/
             0xFF7F => {}
 
-            0xFF00...0xFF7F => self.io_reg[(addr & 0xFF) as usize] = value,
-            0xFF80...0xFFFE => self.internal_ram[(addr & 0x7F) as usize] = value,
+            0xFF00...0xFF7F => self.io_reg[(addr - 0xFF00) as usize] = value,
+            0xFF80...0xFFFE => self.internal_ram[(addr - 0xFF80) as usize] = value,
 
             IE_REG => {
                 println!("SET IE TO {}", value);

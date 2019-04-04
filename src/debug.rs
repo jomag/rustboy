@@ -24,14 +24,19 @@ pub fn log_state(file: &mut File, mmu: &MMU) {
 }
 
 pub fn print_stack(mmu: &MMU, sp: u16) {
-    let mut a: u16 = 0xDFFF;
+    let mut a: u16 = 0xFFFC;
 
-    if sp == a {
+    if sp < 0xFF80 {
+        println!("  stack: SP at 0x{:04X}. Stack corrupted?", sp);
+        return;
+    }
+
+    if sp > a {
         println!("  stack: empty");
     } else {
-        print!("  stack: ");
+        print!("  stack:");
         while a >= sp {
-            print!(" 0x{:04X}", mmu.direct_read_u16(a));
+            print!(" {:04X}", mmu.direct_read_u16(a));
             a -= 2;
         }
         println!();
@@ -67,6 +72,7 @@ pub fn print_registers(mmu: &MMU) {
 
     print_interrupt_state(&mmu);
     print_timer_state(&mmu.timer);
+    print_stack(&mmu, mmu.reg.sp);
 
     if mmu.reg.halted {
         println!("  CPU is halted");
@@ -490,6 +496,8 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
         0xF8 => format!("LD   HL, SP + ${:02X}", mmu.direct_read(addr + 1)),
         0xFE => format!("CP   ${:02X}", mmu.direct_read(addr + 1)),
 
+        0xFC => format!("! Illegal op code: 0x{:02X}", op),
+
         _ => {
             let easy = SIMPLE_MNEMONICS[op as usize];
 
@@ -509,6 +517,12 @@ pub fn print_listing(mmu: &MMU, addr: u16, line_count: i32) -> u16 {
     let mut a = addr;
     for _n in 0..line_count {
         println!("0x{:04X}: {}", a, format_mnemonic(&mmu, a));
+        println!(
+            "{:02x} {:02x} {:02x}",
+            mmu.direct_read(a),
+            mmu.direct_read(a + 1),
+            mmu.direct_read(a + 2)
+        );
         a = a + (op_length(mmu.direct_read(addr)) as u16);
     }
     a
