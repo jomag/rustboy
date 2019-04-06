@@ -15,6 +15,7 @@ pub const SERIAL_ADDR: u16 = 0x58;
 pub const INP_ADDR: u16 = 0x60;
 
 fn interrupt(mmu: &mut MMU, bit: u8, addr: u16) {
+    /*
     println!(
         "INTERRUPT! bit {}, addr 0x{:04X}, IE: {:02X}, halted: {}",
         bit,
@@ -22,6 +23,7 @@ fn interrupt(mmu: &mut MMU, bit: u8, addr: u16) {
         mmu.direct_read(IE_REG),
         mmu.reg.halted
     );
+    */
 
     mmu.clear_if_reg_bits(bit);
     let pc = mmu.reg.pc;
