@@ -517,12 +517,6 @@ pub fn print_listing(mmu: &MMU, addr: u16, line_count: i32) -> u16 {
     let mut a = addr;
     for _n in 0..line_count {
         println!("0x{:04X}: {}", a, format_mnemonic(&mmu, a));
-        println!(
-            "{:02x} {:02x} {:02x}",
-            mmu.direct_read(a),
-            mmu.direct_read(a + 1),
-            mmu.direct_read(a + 2)
-        );
         a = a + (op_length(mmu.direct_read(addr)) as u16);
     }
     a

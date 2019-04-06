@@ -1,7 +1,7 @@
 use mmu::MMU;
 
 pub struct Emu {
-    pub mmu: MMU,
+    pub mmu: MMU
 }
 
 impl Emu {

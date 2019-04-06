@@ -280,7 +280,6 @@ fn main() -> Result<(), String> {
                                     "[{:04X}] = 0x{:02X} / :02X",
                                     addr,
                                     &emu.mmu.direct_read(addr),
-                                    //&emu.mmu.rom[addr as usize]
                                 ),
                                 Err(_) => println!("Not a valid address"),
                             };
