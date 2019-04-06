@@ -50,7 +50,7 @@ includes a number of tests as well. Here's current state of some:
 
 - `acceptance/oam_dma/basic`: **pass**
 - `acceptance/oam_dma/reg_read`: **pass**
-- `acceptance/oam_dma/sources-dmgABCmgbS`: fail
+- `acceptance/oam_dma/sources-dmgABCmgbS`: **pass**
 
 - `acceptance/timer/div_write`: **pass**
 - `acceptance/timer/rapid_toggle`: fail

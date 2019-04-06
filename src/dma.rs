@@ -52,7 +52,6 @@ impl DMA {
     }
 
     pub fn start(&mut self, start: u8) {
-        println!("OAM DMA START! 0x{:02X}", start);
         self.start_request = Some((start as u16) << 8);
         self.last_write_dma_reg = start;
     }
@@ -73,7 +72,6 @@ impl DMA {
 
         if self.start_address.is_some() {
             if self.step == 159 {
-                println!("DMA finished!");
                 self.start_address = None;
             } else {
                 self.step += 1;

@@ -332,8 +332,9 @@ fn main() -> Result<(), String> {
 
             canvas.clear();
 
-            // This currently works on MacOS
-            /*
+            // FIXME: there's currently a problem with the next statement:
+            // On MacOS the second parameter for React::new should be
+            // "WINDOW_HEIGHT as i32", while on Linux it should be 0.
             canvas
                 .copy(
                     &texture,
@@ -341,14 +342,6 @@ fn main() -> Result<(), String> {
                     Rect::new(0, WINDOW_HEIGHT as i32, WINDOW_WIDTH, WINDOW_HEIGHT),
                 )
                 .unwrap();
-                */
-
-            // ... but this on Linux
-            canvas.copy(
-                &texture,
-                None,
-                Some(Rect::new(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)),
-            )?;
 
             canvas.present();
 

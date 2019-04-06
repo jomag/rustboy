@@ -152,15 +152,12 @@ impl MMU {
                 if self.dma.is_active() {
                     let offset = self.dma.start_address.unwrap();
                     let idx = self.dma.step;
-                    let b = self.direct_read(offset + idx);
+                    let b = if offset < 0xE000 {
+                        self.direct_read(offset + idx)
+                    } else {
+                        self.ram[(offset + idx - 0xE000) as usize]
+                    };
                     self.dma.oam[idx as usize] = b;
-                    /*
-                    println!(
-                        "DMA stuff.. from {:x} to {:x}",
-                        offset + idx,
-                        OAM_OFFSET + idx
-                    );
-                    */
                 }
                 self.dma.update();
             }
@@ -284,11 +281,8 @@ impl MMU {
 
     pub fn direct_write(&mut self, addr: u16, value: u8) {
         match addr {
-            0x0000...0x3FFF => {
-                println!("Write to ROM! Breaking.");
-                self.watch_triggered = true;
-            }
-            0x4000...0x7FFF => panic!("viodvdafvadfv {}", addr),
+            0x0000...0x3FFF => {}
+            0x4000...0x7FFF => {},
             0x8000...0x9FFF => self.lcd.write_display_ram(addr, value),
             0xA000...0xBFFF => self.external_ram[(addr - 0xA000) as usize] = value,
             0xC000...0xCFFF => self.ram[(addr - 0xC000) as usize] = value,
@@ -296,18 +290,18 @@ impl MMU {
             0xE000...0xFDFF => self.ram[(addr - 0xE000) as usize] = value,
             0xFE00...0xFE9F => self.dma.write(addr - 0xFE00, value),
 
-            0xFEA0...0xFEFF => {} /*println!(
-            "write to unused memory area: 0x{:04X} = 0x{:02X}",
-            addr, value
-            )*/
-            0xFF10...0xFF26 => println!(
-                "Unhanlded write to audio register: 0x{:04X}={:02X}",
-                addr, value
-            ),
-            0xFF30...0xFF3F => println!(
-                "Unhandled write to wave register 0x{:04X}={:02X}",
-                addr, value
-            ),
+            0xFEA0...0xFEFF => {},
+            0xFF10...0xFF26 => {},
+            // println!(
+            //     "Unhanlded write to audio register: 0x{:04X}={:02X}",
+            //     addr, value
+            // ),
+
+            0xFF30...0xFF3F => {},
+            // println!(
+            //     "Unhandled write to wave register 0x{:04X}={:02X}",
+            //     addr, value
+            // ),
 
             P1_REG => {}
             SB_REG => {}
