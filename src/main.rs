@@ -15,6 +15,8 @@ use std::sync::Arc;
 
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
+use sdl2::keyboard::Keycode;
+use sdl2::event::Event;
 
 mod cpu;
 mod debug;
@@ -27,10 +29,12 @@ mod mmu;
 mod registers;
 mod timer;
 mod ui;
+mod buttons;
 
 use debug::{format_mnemonic, print_listing, print_registers};
 use emu::Emu;
 use lcd::{LCD, SCREEN_HEIGHT, SCREEN_WIDTH};
+use buttons::ButtonType;
 
 const APPNAME: &str = "Rustboy?";
 const VERSION: &str = "0.0.0";
@@ -208,18 +212,50 @@ fn main() -> Result<(), String> {
     let mut event_pump = sdl_context.event_pump().map_err(|msg| msg.to_string())?;
 
     'running: loop {
-        /* THIS SLOWS DOWN THE CODE! NOT SURE WHY!*/
         for event in event_pump.poll_iter() {
             match event {
+                Event::Quit {..} => {
+                    break 'running
+                },
+
+                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                    break 'running
+                },
+
+                Event::KeyDown { keycode: Some(keycode), .. } => {
+                    match keycode {
+                        Keycode::Left => emu.mmu.buttons.handle_press(ButtonType::Left),
+                        Keycode::Right => emu.mmu.buttons.handle_press(ButtonType::Right),
+                        Keycode::Up => emu.mmu.buttons.handle_press(ButtonType::Up),
+                        Keycode::Down => emu.mmu.buttons.handle_press(ButtonType::Down),
+                        Keycode::Space => emu.mmu.buttons.handle_press(ButtonType::Select),
+                        Keycode::Return => emu.mmu.buttons.handle_press(ButtonType::Start),
+                        Keycode::Z => emu.mmu.buttons.handle_press(ButtonType::A),
+                        Keycode::X => emu.mmu.buttons.handle_press(ButtonType::B),
+                        _ => {}
+                    }
+                },
+
+                Event::KeyUp { keycode: Some(keycode), .. } => {
+                    match keycode {
+                        Keycode::Left => emu.mmu.buttons.handle_release(ButtonType::Left),
+                        Keycode::Right => emu.mmu.buttons.handle_release(ButtonType::Right),
+                        Keycode::Up => emu.mmu.buttons.handle_release(ButtonType::Up),
+                        Keycode::Down => emu.mmu.buttons.handle_release(ButtonType::Down),
+                        Keycode::Space => emu.mmu.buttons.handle_release(ButtonType::Select),
+                        Keycode::Return => emu.mmu.buttons.handle_release(ButtonType::Start),
+                        Keycode::Z => emu.mmu.buttons.handle_release(ButtonType::A),
+                        Keycode::X => emu.mmu.buttons.handle_release(ButtonType::B),
+                        _ => {}
+                    }
+                },
+
                 _ => {
-                    println!("unhandled event: {:?}", event);
+                    // println!("unhandled event: {:?}", event);
                 }
             }
             /*
             match event {
-                Event::Quit {..} | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-                    break 'running
-                },
                 _ => { println!("unhandled event"); }
             }*/
         }

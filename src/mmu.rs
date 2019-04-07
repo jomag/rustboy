@@ -4,7 +4,7 @@ use mmu::ansi_term::Colour::Blue;
 use std::fs::File;
 use std::io::Read;
 
-use interrupt::{IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
+use interrupt::{IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT, IF_INP_BIT};
 
 use dma::DMA;
 use instructions;
@@ -12,6 +12,7 @@ use interrupt::handle_interrupts;
 use lcd::LCD;
 use registers::Registers;
 use timer::Timer;
+use buttons::Buttons;
 
 use debug::print_registers;
 
@@ -76,6 +77,7 @@ pub struct MMU {
     pub timer: Timer,
     pub dma: DMA,
     pub lcd: LCD,
+    pub buttons: Buttons,
 
     pub display_updated: bool,
 }
@@ -97,6 +99,7 @@ impl MMU {
             timer: Timer::new(),
             dma: DMA::new(),
             lcd: LCD::new(),
+            buttons: Buttons::new(),
             display_updated: false,
         }
     }
@@ -117,17 +120,19 @@ impl MMU {
     }
 
     pub fn get_if_reg(&self) -> u8 {
-        return self.lcd.irq | self.timer.irq;
+        return self.lcd.irq | self.timer.irq | self.buttons.irq;
     }
 
     pub fn set_if_reg(&mut self, value: u8) {
         self.lcd.irq = value & (IF_VBLANK_BIT | IF_LCDC_BIT);
         self.timer.irq = value & IF_TMR_BIT;
+        self.buttons.irq = value & IF_INP_BIT;
     }
 
     pub fn clear_if_reg_bits(&mut self, mask: u8) {
         self.lcd.irq &= !mask;
         self.timer.irq &= !mask;
+        self.buttons.irq &= !mask;
     }
 
     pub fn exec_op(&mut self) {
@@ -142,6 +147,7 @@ impl MMU {
 
     pub fn tick(&mut self, cycles: u32) {
         self.timer.update(cycles);
+        self.buttons.update();
 
         if self.lcd.update(cycles) {
             self.display_updated = true;
@@ -225,6 +231,7 @@ impl MMU {
             }
 
             // Special registers in area 0xFF00 to 0xFFFF
+            P1_REG => self.buttons.read_p1(),
             IF_REG => self.get_if_reg(),
             DIV_REG => self.timer.read_div(),
             TIMA_REG => self.timer.tima,
@@ -303,7 +310,7 @@ impl MMU {
             //     addr, value
             // ),
 
-            P1_REG => {}
+            P1_REG => self.buttons.write_p1(value),
             SB_REG => {}
             SC_REG => {}
             DIV_REG => self.timer.write_div(value),
