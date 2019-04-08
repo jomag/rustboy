@@ -163,7 +163,7 @@ impl MMU {
                     } else {
                         self.ram[(offset + idx - 0xE000) as usize]
                     };
-                    self.dma.oam[idx as usize] = b;
+                    self.lcd.oam[idx as usize] = b;
                 }
                 self.dma.update();
             }
@@ -221,7 +221,7 @@ impl MMU {
                 if self.dma.is_active() {
                     0xFF
                 } else {
-                    self.dma.read(addr - 0xFE00)
+                    self.lcd.oam[addr as usize - 0xFE00]
                 }
             }
 
@@ -295,7 +295,11 @@ impl MMU {
             0xC000...0xCFFF => self.ram[(addr - 0xC000) as usize] = value,
             0xD000...0xDFFF => self.ram[(addr - 0xC000) as usize] = value,
             0xE000...0xFDFF => self.ram[(addr - 0xE000) as usize] = value,
-            0xFE00...0xFE9F => self.dma.write(addr - 0xFE00, value),
+            0xFE00...0xFE9F => {
+                if !self.dma.is_active() {
+                    self.lcd.oam[addr as usize - 0xFE00] = value
+                }
+            },
 
             0xFEA0...0xFEFF => {},
             0xFF10...0xFF26 => {},

@@ -1,5 +1,5 @@
 use instructions::op_length;
-use mmu::{IE_REG, IF_REG, MMU};
+use mmu::{IE_REG, IF_REG, LCDC_REG, MMU};
 use std::fs::File;
 use std::io::Write;
 use timer::Timer;
@@ -40,6 +40,33 @@ pub fn print_stack(mmu: &MMU, sp: u16) {
             a -= 2;
         }
         println!();
+    }
+}
+
+pub fn print_sprite(mmu: &MMU, i: usize) {
+    let offset = 0xFE00 + (i * 4) as u16;
+    let x = mmu.direct_read(offset + 1);
+    let y = mmu.direct_read(offset);
+    if x != 0 && y != 0 {
+        println!(" - Sprite {} @ 0x{:04X}: X={}, Y={}, Pattern={}, Flags=0x{:02X}",
+            i,
+            offset,
+            x,
+            y,
+            mmu.direct_read(offset + 2),
+            mmu.direct_read(offset + 3)
+        );
+    }
+}
+
+pub fn print_sprites(mmu: &MMU) {
+    let lcdc = mmu.direct_read(LCDC_REG);
+
+    println!("Sprites are: {}", if lcdc & 2 == 0 { "disabled" } else { "enabled" });
+    println!("Sprite size: {}", if lcdc & 4 == 0 { "8x8"} else { "8x16" });
+
+    for i in 0..40 {
+        print_sprite(mmu, i);
     }
 }
 

@@ -31,7 +31,7 @@ mod timer;
 mod ui;
 mod buttons;
 
-use debug::{format_mnemonic, print_listing, print_registers};
+use debug::{format_mnemonic, print_listing, print_registers, print_sprites};
 use emu::Emu;
 use lcd::{LCD, SCREEN_HEIGHT, SCREEN_WIDTH};
 use buttons::ButtonType;
@@ -320,6 +320,9 @@ fn main() -> Result<(), String> {
                                 Err(_) => println!("Not a valid address"),
                             };
                         }
+                    }
+                    "sprites" => {
+                        print_sprites(&emu.mmu);
                     }
                     "" => {}
                     _ => {
