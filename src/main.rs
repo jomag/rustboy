@@ -13,11 +13,13 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use sdl2::audio::{AudioCallback, AudioQueue, AudioSpecDesired};
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
-use sdl2::keyboard::Keycode;
-use sdl2::event::Event;
 
+mod buttons;
 mod cpu;
 mod debug;
 mod dma;
@@ -27,14 +29,14 @@ mod interrupt;
 mod lcd;
 mod mmu;
 mod registers;
+mod sound;
 mod timer;
 mod ui;
-mod buttons;
 
+use buttons::ButtonType;
 use debug::{format_mnemonic, print_listing, print_registers, print_sprites};
 use emu::Emu;
 use lcd::{LCD, SCREEN_HEIGHT, SCREEN_WIDTH};
-use buttons::ButtonType;
 
 const APPNAME: &str = "Rustboy?";
 const VERSION: &str = "0.0.0";
@@ -209,45 +211,56 @@ fn main() -> Result<(), String> {
     canvas.copy(&texture, None, Some(Rect::new(150, 150, 320, 288)))?;
     canvas.present();
 
+    // Setup audio system
+    let audio_subsystem = sdl_context.audio()?;
+    let desired_audio_spec = AudioSpecDesired {
+        freq: Some(44_100),
+        channels: Some(1),
+        samples: None,
+    };
+    let audio_queue = audio_subsystem.open_queue::<i16, _>(None, &desired_audio_spec)?;
+    audio_queue.resume();
+
     let mut event_pump = sdl_context.event_pump().map_err(|msg| msg.to_string())?;
 
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit {..} => {
-                    break 'running
+                Event::Quit { .. } => break 'running,
+
+                Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => break 'running,
+
+                Event::KeyDown {
+                    keycode: Some(keycode),
+                    ..
+                } => match keycode {
+                    Keycode::Left => emu.mmu.buttons.handle_press(ButtonType::Left),
+                    Keycode::Right => emu.mmu.buttons.handle_press(ButtonType::Right),
+                    Keycode::Up => emu.mmu.buttons.handle_press(ButtonType::Up),
+                    Keycode::Down => emu.mmu.buttons.handle_press(ButtonType::Down),
+                    Keycode::Space => emu.mmu.buttons.handle_press(ButtonType::Select),
+                    Keycode::Return => emu.mmu.buttons.handle_press(ButtonType::Start),
+                    Keycode::Z => emu.mmu.buttons.handle_press(ButtonType::A),
+                    Keycode::X => emu.mmu.buttons.handle_press(ButtonType::B),
+                    _ => {}
                 },
 
-                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-                    break 'running
-                },
-
-                Event::KeyDown { keycode: Some(keycode), .. } => {
-                    match keycode {
-                        Keycode::Left => emu.mmu.buttons.handle_press(ButtonType::Left),
-                        Keycode::Right => emu.mmu.buttons.handle_press(ButtonType::Right),
-                        Keycode::Up => emu.mmu.buttons.handle_press(ButtonType::Up),
-                        Keycode::Down => emu.mmu.buttons.handle_press(ButtonType::Down),
-                        Keycode::Space => emu.mmu.buttons.handle_press(ButtonType::Select),
-                        Keycode::Return => emu.mmu.buttons.handle_press(ButtonType::Start),
-                        Keycode::Z => emu.mmu.buttons.handle_press(ButtonType::A),
-                        Keycode::X => emu.mmu.buttons.handle_press(ButtonType::B),
-                        _ => {}
-                    }
-                },
-
-                Event::KeyUp { keycode: Some(keycode), .. } => {
-                    match keycode {
-                        Keycode::Left => emu.mmu.buttons.handle_release(ButtonType::Left),
-                        Keycode::Right => emu.mmu.buttons.handle_release(ButtonType::Right),
-                        Keycode::Up => emu.mmu.buttons.handle_release(ButtonType::Up),
-                        Keycode::Down => emu.mmu.buttons.handle_release(ButtonType::Down),
-                        Keycode::Space => emu.mmu.buttons.handle_release(ButtonType::Select),
-                        Keycode::Return => emu.mmu.buttons.handle_release(ButtonType::Start),
-                        Keycode::Z => emu.mmu.buttons.handle_release(ButtonType::A),
-                        Keycode::X => emu.mmu.buttons.handle_release(ButtonType::B),
-                        _ => {}
-                    }
+                Event::KeyUp {
+                    keycode: Some(keycode),
+                    ..
+                } => match keycode {
+                    Keycode::Left => emu.mmu.buttons.handle_release(ButtonType::Left),
+                    Keycode::Right => emu.mmu.buttons.handle_release(ButtonType::Right),
+                    Keycode::Up => emu.mmu.buttons.handle_release(ButtonType::Up),
+                    Keycode::Down => emu.mmu.buttons.handle_release(ButtonType::Down),
+                    Keycode::Space => emu.mmu.buttons.handle_release(ButtonType::Select),
+                    Keycode::Return => emu.mmu.buttons.handle_release(ButtonType::Start),
+                    Keycode::Z => emu.mmu.buttons.handle_release(ButtonType::A),
+                    Keycode::X => emu.mmu.buttons.handle_release(ButtonType::B),
+                    _ => {}
                 },
 
                 _ => {
@@ -350,6 +363,12 @@ fn main() -> Result<(), String> {
         }
 
         if emu.mmu.display_updated {
+            // Generate one new frame worth of audio samples.
+            // FIXME: there's no syncing, so it's very probable that we will get
+            // empty buffers or an ever growing audio buffer.
+            let samples = &emu.mmu.apu.generate(44100 / 60);
+            audio_queue.queue(&samples);
+
             if let Some(frm) = capture_at_frame {
                 if frm == frame_counter {
                     capture_frame(capture_filename, frame_counter, &emu.mmu.lcd).unwrap();
@@ -377,7 +396,12 @@ fn main() -> Result<(), String> {
                 .copy(
                     &texture,
                     None,
-                    Rect::new(0, WINDOW_HEIGHT as i32, WINDOW_WIDTH, WINDOW_HEIGHT),
+                    Rect::new(
+                        0,
+                        0, /*WINDOW_HEIGHT as i32*/
+                        WINDOW_WIDTH,
+                        WINDOW_HEIGHT,
+                    ),
                 )
                 .unwrap();
 

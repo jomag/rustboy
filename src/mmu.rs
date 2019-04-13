@@ -4,15 +4,16 @@ use mmu::ansi_term::Colour::Blue;
 use std::fs::File;
 use std::io::Read;
 
-use interrupt::{IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT, IF_INP_BIT};
+use interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
 
+use buttons::Buttons;
 use dma::DMA;
 use instructions;
 use interrupt::handle_interrupts;
 use lcd::LCD;
 use registers::Registers;
+use sound::AudioProcessingUnit;
 use timer::Timer;
-use buttons::Buttons;
 
 use debug::print_registers;
 
@@ -42,6 +43,34 @@ pub const OBP0_REG: u16 = 0xFF48;
 pub const OBP1_REG: u16 = 0xFF49;
 pub const WY_REG: u16 = 0xFF4A;
 pub const WX_REG: u16 = 0xFF4B;
+
+// Sound registers
+// - Sound Generator 1
+pub const NR10_REG: u16 = 0xFF10;
+pub const NR11_REG: u16 = 0xFF11;
+pub const NR12_REG: u16 = 0xFF12;
+pub const NR13_REG: u16 = 0xFF13;
+pub const NR14_REG: u16 = 0xFF14;
+// - Sound Generator 2
+pub const NR21_REG: u16 = 0xFF16;
+pub const NR22_REG: u16 = 0xFF17;
+pub const NR23_REG: u16 = 0xFF18;
+pub const NR24_REG: u16 = 0xFF19;
+// - Sound Generator 3
+pub const NR30_REG: u16 = 0xFF1A;
+pub const NR31_REG: u16 = 0xFF1B;
+pub const NR32_REG: u16 = 0xFF1C;
+pub const NR33_REG: u16 = 0xFF1D;
+pub const NR34_REG: u16 = 0xFF1E;
+// - Sound Generator 4
+pub const NR41_REG: u16 = 0xFF20;
+pub const NR42_REG: u16 = 0xFF21;
+pub const NR43_REG: u16 = 0xFF22;
+pub const NR44_REG: u16 = 0xFF23;
+// - Sound Control
+pub const NR50_REG: u16 = 0xFF24;
+pub const NR51_REG: u16 = 0xFF25;
+pub const NR52_REG: u16 = 0xFF26;
 
 // Memory areas
 pub const OAM_OFFSET: u16 = 0xFE00;
@@ -78,6 +107,7 @@ pub struct MMU {
     pub dma: DMA,
     pub lcd: LCD,
     pub buttons: Buttons,
+    pub apu: AudioProcessingUnit,
 
     pub display_updated: bool,
 }
@@ -101,6 +131,7 @@ impl MMU {
             lcd: LCD::new(),
             buttons: Buttons::new(),
             display_updated: false,
+            apu: AudioProcessingUnit::new(),
         }
     }
 
@@ -245,6 +276,9 @@ impl MMU {
             LYC_REG => self.lcd.lyc,
             DMA_REG => self.dma.last_write_dma_reg,
 
+            // Sound registers
+            0xFF10...0xFF26 => self.apu.read_reg(addr),
+
             // Use self.io_reg for I/O registers that have not been implemented yet
             0xFF00...0xFF7F => self.io_reg[(addr - 0xFF00) as usize],
 
@@ -289,7 +323,7 @@ impl MMU {
     pub fn direct_write(&mut self, addr: u16, value: u8) {
         match addr {
             0x0000...0x3FFF => {}
-            0x4000...0x7FFF => {},
+            0x4000...0x7FFF => {}
             0x8000...0x9FFF => self.lcd.write_display_ram(addr, value),
             0xA000...0xBFFF => self.external_ram[(addr - 0xA000) as usize] = value,
             0xC000...0xCFFF => self.ram[(addr - 0xC000) as usize] = value,
@@ -299,21 +333,22 @@ impl MMU {
                 if !self.dma.is_active() {
                     self.lcd.oam[addr as usize - 0xFE00] = value
                 }
-            },
+            }
 
-            0xFEA0...0xFEFF => {},
-            0xFF10...0xFF26 => {},
+            0xFEA0...0xFEFF => {}
+
+            // Sound registers
+            0xFF10...0xFF26 => self.apu.write_reg(addr, value),
+
             // println!(
             //     "Unhanlded write to audio register: 0x{:04X}={:02X}",
             //     addr, value
             // ),
-
-            0xFF30...0xFF3F => {},
+            0xFF30...0xFF3F => {}
             // println!(
             //     "Unhandled write to wave register 0x{:04X}={:02X}",
             //     addr, value
             // ),
-
             P1_REG => self.buttons.write_p1(value),
             SB_REG => {}
             SC_REG => {}
