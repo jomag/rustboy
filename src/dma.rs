@@ -13,7 +13,6 @@ pub struct DMA {
     pub start_request_delay: Option<u16>,
     pub start_address: Option<u16>,
     pub step: u16,
-    pub oam: [u8; 0xA0],
 
     // This is to handle a quirk: the DMA address (0xFF46) should
     // always return the last written value on read operations,
@@ -28,27 +27,12 @@ impl DMA {
             start_request_delay: None,
             start_address: None,
             step: 0,
-            oam: [0; 0xA0],
             last_write_dma_reg: 0xFF,
         }
     }
 
     pub fn is_active(&self) -> bool {
         self.start_address.is_some()
-    }
-
-    pub fn read(&self, address: u16) -> u8 {
-        if self.is_active() {
-            return 0xFF;
-        } else {
-            return self.oam[address as usize];
-        }
-    }
-
-    pub fn write(&mut self, address: u16, value: u8) {
-        if !self.is_active() {
-            self.oam[address as usize] = value;
-        }
     }
 
     pub fn start(&mut self, start: u8) {

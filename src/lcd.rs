@@ -42,6 +42,9 @@ pub struct LCD {
     // 8k of display RAM (address 0x8000-0x9FFF)
     ram: [u8; 8192],
 
+    // OAM - Object Attribute Memory
+    pub oam: [u8; 0xA0],
+
     // Buffer to hold all pixel data
     //
     // Each scanline is rendered to this buffer and then
@@ -71,6 +74,7 @@ impl LCD {
             isel_mode10: false,
             isel_ly: false,
             ram: [0; 8192],
+            oam: [0; 0xA0],
             buf_rgb8: [0; BUFFER_SIZE_RGB8],
             irq: 0,
         }
@@ -101,6 +105,45 @@ impl LCD {
         self.isel_mode01 = (v & 16) != 0;
         self.isel_mode10 = (v & 32) != 0;
         self.isel_ly = (v & 64) != 0;
+    }
+
+    fn render_line_sprites(&mut self, scanline: u8) {
+        // Length of one row of pixels in bytes
+        let pitch = SCREEN_WIDTH * BUFFER_BYTES_PER_PIXEL;
+
+        // Start point in texture
+        let mut buf_offs = scanline as usize * pitch;
+
+        for i in 0..40 {
+            let offset = (i * 4) as usize;
+            let x: i16 = self.oam[offset + 1] as i16 - 8;
+            let y: i16 = self.oam[offset] as i16 - 16;
+            let pattern = self.oam[offset + 2];
+            if x != -8 && y != -16 {
+                if (scanline as i16) >= y && (scanline as i16) < y + 8 {
+                    let mut src_offs = pattern as u16 * 16;
+                    src_offs = src_offs + (scanline as i16 - y) as u16 * 2;
+                    let b1 = self.ram[src_offs as usize];
+                    let b2 = self.ram[src_offs as usize + 1];
+
+                    for xo in 0..8 {
+                        let hi = b1 & (1 << (7 - xo)) != 0;
+                        let lo = b2 & (1 << (7 - xo)) != 0;
+                        let mut v = 255;
+                        if hi {
+                            v -= 128;
+                        }
+                        if lo {
+                            v -= 64;
+                        }
+                        self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 0] = v;
+                        self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 1] = v;
+                        self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 2] = v;
+
+                    }
+                }
+            }
+        }
     }
 
     fn render_line(&mut self, scanline: u8) {
@@ -153,6 +196,8 @@ impl LCD {
                 buf_offs += 3;
             }
         }
+
+        self.render_line_sprites(scanline);
     }
 
     // Each line takes 456 cycles (114 clocks) to draw.
