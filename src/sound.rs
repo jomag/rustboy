@@ -16,6 +16,7 @@ pub struct SquareWaveSoundGenerator {
     nr12: u8,
     nr13: u8,
     nr14: u8,
+    envelope: i16,
 }
 
 impl SquareWaveSoundGenerator {
@@ -31,6 +32,7 @@ impl SquareWaveSoundGenerator {
             nr12: 0,
             nr13: 0,
             nr14: 0,
+            envelope: 0,
         }
     }
 
@@ -46,14 +48,24 @@ impl SquareWaveSoundGenerator {
     }
 
     pub fn write_reg(&mut self, address: u16, value: u8) {
+        println!("S1 write NR10 + {:02X} = {:02X}", address, value);
         match address {
             0 => self.nr10 = value,
             1 => self.nr11 = value,
             2 => self.nr12 = value,
             3 => self.nr13 = value,
-            4 => self.nr14 = value,
+            4 => {
+                self.nr14 = value;
+                if value & 0x80 != 0 {
+                    self.trigger();
+                }
+            }
             _ => {}
         }
+    }
+
+    fn trigger(&mut self) {
+        self.envelope = ((self.nr12 >> 4) & 0xF) as i16;
     }
 
     pub fn generate(&mut self, samples: usize) -> Vec<i16> {
@@ -74,6 +86,10 @@ impl SquareWaveSoundGenerator {
             _ => 12,
         };
 
+        if self.envelope > 0 {
+            self.envelope = self.envelope - 1;
+        }
+
         let freq_raw: u32 = ((self.nr13 as u16) | (((self.nr14 & 0x07) as u16) << 8)) as u32;
         // let freq = 4194304 / (4 * 2 * (2048 - freq_raw));
         let freq = 131072 / (2048 - freq_raw);
@@ -81,9 +97,9 @@ impl SquareWaveSoundGenerator {
 
         for _ in 0..samples {
             if self.sample_count % freq_samples < (freq_samples / 2) {
-                buf.push(3000);
+                buf.push(self.envelope * 200);
             } else {
-                buf.push(-3000);
+                buf.push(-self.envelope * 200);
             }
             self.sample_count = self.sample_count + 1
         }
@@ -122,16 +138,20 @@ impl AudioProcessingUnit {
         }
 
         if self.nr52 & 0x01 == 0 {
-            let wave = self.s1.generate(samples);
-            for i in 0..wave.len() {
-                mix[i] = wave[i] / 2;
+            if self.nr51 & (1 | 16) != 0 {
+                let wave = self.s1.generate(samples);
+                for i in 0..wave.len() {
+                    mix[i] = wave[i] / 2;
+                }
             }
         }
 
         if self.nr52 & 0x02 == 0 {
-            let wave = self.s2.generate(samples);
-            for i in 0..wave.len() {
-                mix[i] = mix[i] + wave[i] / 2;
+            if self.nr51 & (2 | 32) != 0 {
+                let wave = self.s2.generate(samples);
+                for i in 0..wave.len() {
+                    mix[i] = mix[i] + wave[i] / 2;
+                }
             }
         }
 
