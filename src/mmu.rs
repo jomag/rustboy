@@ -244,6 +244,9 @@ impl MMU {
             LY_REG => self.lcd.scanline,
             LYC_REG => self.lcd.lyc,
             DMA_REG => self.dma.last_write_dma_reg,
+            BGP_REG => self.lcd.bgp,
+            OBP0_REG => self.lcd.obp0,
+            OBP1_REG => self.lcd.obp1,
 
             // Use self.io_reg for I/O registers that have not been implemented yet
             0xFF00...0xFF7F => self.io_reg[(addr - 0xFF00) as usize],
@@ -331,9 +334,9 @@ impl MMU {
             LY_REG => self.lcd.scanline = value,
             LYC_REG => self.lcd.lyc = value,
             DMA_REG => self.dma.start(value),
-            BGP_REG => {}
-            OBP0_REG => {}
-            OBP1_REG => {}
+            BGP_REG => self.lcd.bgp = value,
+            OBP0_REG => self.lcd.obp0 = value,
+            OBP1_REG => self.lcd.obp1 = value,
             WY_REG => {}
             WX_REG => {}
 

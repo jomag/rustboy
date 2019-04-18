@@ -70,6 +70,23 @@ pub fn print_sprites(mmu: &MMU) {
     }
 }
 
+fn get_bit(bitmap: u8, bit: u8) -> u8 {
+    if bitmap & (1 << bit) == 0 { 0 } else { 1 }
+}
+
+pub fn print_lcdc(mmu: &MMU) {
+    let v = mmu.direct_read(LCDC_REG);
+    println!("LCDC ({:04X}): {:02X}", LCDC_REG, v);
+    println!("  Bit 0={} - BG Display (0=Off, 1=On)", get_bit(v, 0));
+    println!("  Bit 1={} - OBJ (Sprite) Display (0=Off, 1=On)", get_bit(v, 1));
+    println!("  Bit 2={} - OBJ (Sprite) Size (0=8x8, 1=8x16)", get_bit(v, 2));
+    println!("  Bit 3={} - BG Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)", get_bit(v, 3));
+    println!("  Bit 4={} - BG & Window Tile Data Select (0=8800-97FF, 1=8000-8FFF)", get_bit(v, 4));
+    println!("  Bit 5={} - Window Display Enable (0=Off, 1=On)", get_bit(v, 5));
+    println!("  Bit 6={} - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF", get_bit(v, 6));
+    println!("  Bit 7={} - LCD Display Enable (0=Off, 1=On)", get_bit(v, 7));
+}
+
 pub fn print_registers(mmu: &MMU) {
     print!(
         "  A: 0x{:02X} B: 0x{:02X} C: 0x{:02X} D: 0x{:02X} ",

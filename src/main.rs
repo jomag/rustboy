@@ -31,7 +31,7 @@ mod timer;
 mod ui;
 mod buttons;
 
-use debug::{format_mnemonic, print_listing, print_registers, print_sprites};
+use debug::{format_mnemonic, print_listing, print_registers, print_sprites, print_lcdc};
 use emu::Emu;
 use lcd::{LCD, SCREEN_HEIGHT, SCREEN_WIDTH};
 use buttons::ButtonType;
@@ -313,7 +313,7 @@ fn main() -> Result<(), String> {
                         if args.len() > 1 {
                             match parse_number::<u16>(args[1]) {
                                 Ok(addr) => println!(
-                                    "[{:04X}] = 0x{:02X} / :02X",
+                                    "[{:04X}] = 0x{:02X}",
                                     addr,
                                     &emu.mmu.direct_read(addr),
                                 ),
@@ -324,6 +324,7 @@ fn main() -> Result<(), String> {
                     "sprites" => {
                         print_sprites(&emu.mmu);
                     }
+                    "lcdc" => print_lcdc(&emu.mmu),
                     "" => {}
                     _ => {
                         println!("invalid command!");
@@ -377,7 +378,7 @@ fn main() -> Result<(), String> {
                 .copy(
                     &texture,
                     None,
-                    Rect::new(0, WINDOW_HEIGHT as i32, WINDOW_WIDTH, WINDOW_HEIGHT),
+                    Rect::new(0, 0 /*WINDOW_HEIGHT as i32*/, WINDOW_WIDTH, WINDOW_HEIGHT),
                 )
                 .unwrap();
 
