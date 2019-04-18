@@ -57,6 +57,13 @@ pub struct LCD {
 
     // Interrupt Request
     pub irq: u8,
+
+    // Background Palette Data
+    pub bgp: u8,
+
+    // Object Palette 0/1 Data (palette for sprites)
+    pub obp0: u8,
+    pub obp1: u8
 }
 
 impl LCD {
@@ -77,6 +84,9 @@ impl LCD {
             oam: [0; 0xA0],
             buf_rgb8: [0; BUFFER_SIZE_RGB8],
             irq: 0,
+            bgp: 0,
+            obp0: 0,
+            obp1: 0
         }
     }
 
@@ -108,6 +118,24 @@ impl LCD {
     }
 
     fn render_line_sprites(&mut self, scanline: u8) {
+        let rgb_palette: [u8; 4] = [
+            0xFF, 0xAA, 0x55, 0x00
+        ];
+
+        let palette0: [u8; 4] = [
+            rgb_palette[(self.obp0 >> 0 & 3) as usize],
+            rgb_palette[(self.obp0 >> 2 & 3) as usize],
+            rgb_palette[(self.obp0 >> 4 & 3) as usize],
+            rgb_palette[(self.obp0 >> 6 & 3) as usize]
+        ];
+
+        let palette1: [u8; 4] = [
+            rgb_palette[(self.obp1 >> 0 & 3) as usize],
+            rgb_palette[(self.obp1 >> 2 & 3) as usize],
+            rgb_palette[(self.obp1 >> 4 & 3) as usize],
+            rgb_palette[(self.obp1 >> 6 & 3) as usize]
+        ];
+
         // Length of one row of pixels in bytes
         let pitch = SCREEN_WIDTH * BUFFER_BYTES_PER_PIXEL;
 
@@ -119,6 +147,7 @@ impl LCD {
             let x: i16 = self.oam[offset + 1] as i16 - 8;
             let y: i16 = self.oam[offset] as i16 - 16;
             let pattern = self.oam[offset + 2];
+            let flags = self.oam[offset + 3];
             if x != -8 && y != -16 {
                 if (scanline as i16) >= y && (scanline as i16) < y + 8 {
                     let mut src_offs = pattern as u16 * 16;
@@ -127,19 +156,16 @@ impl LCD {
                     let b2 = self.ram[src_offs as usize + 1];
 
                     for xo in 0..8 {
-                        let hi = b1 & (1 << (7 - xo)) != 0;
-                        let lo = b2 & (1 << (7 - xo)) != 0;
-                        let mut v = 255;
-                        if hi {
-                            v -= 128;
-                        }
-                        if lo {
-                            v -= 64;
-                        }
-                        self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 0] = v;
-                        self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 1] = v;
-                        self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 2] = v;
+                        let lo = b1 & (1 << (7 - xo)) != 0;
+                        let hi = b2 & (1 << (7 - xo)) != 0;
+                        let idx = if lo { if hi { 3 } else { 1 } } else { if hi { 2 } else { 0 } };
+                        let v = if flags & 16 != 0 { palette1[idx as usize] } else { palette1[idx as usize] };
 
+                        if hi || lo {
+                            self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 0] = v;
+                            self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 1] = v;
+                            self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 2] = v;
+                        }
                     }
                 }
             }
@@ -165,34 +191,53 @@ impl LCD {
             tile_map_offset += 0x9C00 - 0x8000;
         }
 
+        let mut tile_data_offset: u16 = 0;
+
+        let rgb_palette: [u8; 4] = [
+            0xFF, 0xAA, 0x55, 0x00
+        ];
+
+        let palette: [u8; 4] = [
+            rgb_palette[(self.bgp >> 0 & 3) as usize],
+            rgb_palette[(self.bgp >> 2 & 3) as usize],
+            rgb_palette[(self.bgp >> 4 & 3) as usize],
+            rgb_palette[(self.bgp >> 6 & 3) as usize]
+        ];
+
         for tx in 0..20 {
             let tile_index = self.ram[(tile_map_offset + tx) as usize] as u16;
-            let mut tile_data_offset = tile_index * 16 + (y & 7) as u16 * 2;
 
             if self.lcdc & 16 == 0 {
-                tile_data_offset += 0x8800 - 0x8000;
+                // Tile data at 0x8800 to 0x97FF. Tile map data (tile_index)
+                // is signed for this area (tile index 0 = 0x9000)
+                if tile_index > 127 {
+                    tile_data_offset = 0x8800 + (tile_index - 128) * 16;
+                } else {
+                    tile_data_offset = 0x9000 + tile_index * 16;
+                }
             } else {
-                tile_data_offset += 0x8000 - 0x8000;
+                // Tile data at 0x8000 to 0x8FFF. Tile map data (tile_index) is unsigned for this area.
+                tile_data_offset = 0x8000 + tile_index * 16;
             }
+
+            // Jump to the correct Y position in tile
+            tile_data_offset += (y & 7) as u16 * 2;
+
+            // self.ram starts at 0x8000
+            tile_data_offset -= 0x8000;
 
             let b1 = self.ram[tile_data_offset as usize];
             let b2 = self.ram[(tile_data_offset + 1) as usize];
 
             for x in 0..8 {
-                let hi = b1 & (1 << (7 - x)) != 0;
-                let lo = b2 & (1 << (7 - x)) != 0;
-                let mut v = 255;
-                if hi {
-                    v -= 128;
-                }
-                if lo {
-                    v -= 64;
-                }
+                let lo = b1 & (1 << (7 - x)) != 0;
+                let hi = b2 & (1 << (7 - x)) != 0;
+                let idx = if lo { if hi { 3 } else { 1 } } else { if hi { 2 } else { 0 } };
+                let v = palette[idx as usize];
+
                 self.buf_rgb8[buf_offs] = v;
                 self.buf_rgb8[buf_offs + 1] = v;
                 self.buf_rgb8[buf_offs + 2] = v;
-                // FIXME: we could set the alpha just once instead.
-                // self.buf_rgba8[buf_offs + 3] = 255;
                 buf_offs += 3;
             }
         }
