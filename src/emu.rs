@@ -17,7 +17,7 @@ impl Emu {
         self.mmu.load_bootstrap(&path)
     }
 
-    pub fn load_cartridge(&mut self, path: &str) -> usize {
+    pub fn load_cartridge(&mut self, path: &str) {
         self.mmu.load_cartridge(&path)
     }
 

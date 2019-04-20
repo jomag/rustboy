@@ -13,6 +13,7 @@ use lcd::LCD;
 use registers::Registers;
 use timer::Timer;
 use buttons::Buttons;
+use cartridge::{ Cartridge, NullCartridge, load_cartridge };
 
 use debug::print_registers;
 
@@ -48,12 +49,7 @@ pub const OAM_OFFSET: u16 = 0xFE00;
 
 pub struct MMU {
     pub reg: Registers,
-
-    // ROM bank (0x0000 to 0x3FFF)
-    pub rom: [u8; 0x8000],
-
-    // Switchable ROM bank (0x4000 to 0x7FFF)
-    // pub romx: [u8; 0x4000],
+    pub cartridge: Box<Cartridge>,
 
     // External RAM in cartridge
     pub external_ram: [u8; 0x2000],
@@ -86,8 +82,7 @@ impl MMU {
     pub fn new() -> Self {
         MMU {
             reg: Registers::new(),
-            rom: [0; 0x8000],
-            //romx: [0; 0x4000],
+            cartridge: Box::new(NullCartridge {}),
             external_ram: [0; 0x2000],
             ram: [0; 0x2000],
             io_reg: [0; 0x80],
@@ -177,10 +172,8 @@ impl MMU {
             .expect("failed to read content of boot rom")
     }
 
-    pub fn load_cartridge(&mut self, filename: &str) -> usize {
-        let mut f = File::open(filename).expect("failed to open cartridge rom");
-        f.read(&mut self.rom)
-            .expect("failed to read content of cartridge rom")
+    pub fn load_cartridge(&mut self, filename: &str) {
+        self.cartridge = load_cartridge(filename);
     }
 
     pub fn fetch(&mut self) -> u8 {
@@ -207,11 +200,11 @@ impl MMU {
                 if self.bootstrap_mode {
                     self.bootstrap[addr as usize]
                 } else {
-                    self.rom[addr as usize]
+                    self.cartridge.read(addr)
                 }
             }
-            0x0100...0x3FFF => self.rom[addr as usize],
-            0x4000...0x7FFF => self.rom[addr as usize], // self.romx[(addr - 0x4000) as usize],
+            0x0100...0x3FFF => self.cartridge.read(addr),
+            0x4000...0x7FFF => self.cartridge.read(addr), // self.romx[(addr - 0x4000) as usize],
             0x8000...0x9FFF => self.lcd.read_display_ram(addr),
             0xA000...0xBFFF => self.external_ram[(addr - 0xA000) as usize],
             0xC000...0xCFFF => self.ram[(addr - 0xC000) as usize], // RAM
@@ -291,8 +284,8 @@ impl MMU {
 
     pub fn direct_write(&mut self, addr: u16, value: u8) {
         match addr {
-            0x0000...0x3FFF => {}
-            0x4000...0x7FFF => {},
+            0x0000...0x3FFF => self.cartridge.write(addr, value),
+            0x4000...0x7FFF => self.cartridge.write(addr, value),
             0x8000...0x9FFF => self.lcd.write_display_ram(addr, value),
             0xA000...0xBFFF => self.external_ram[(addr - 0xA000) as usize] = value,
             0xC000...0xCFFF => self.ram[(addr - 0xC000) as usize] = value,

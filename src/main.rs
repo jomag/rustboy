@@ -30,6 +30,7 @@ mod registers;
 mod timer;
 mod ui;
 mod buttons;
+mod cartridge;
 
 use debug::{format_mnemonic, print_listing, print_registers, print_sprites, print_lcdc};
 use emu::Emu;
@@ -160,8 +161,7 @@ fn main() -> Result<(), String> {
     println!(" - {} bytes read", sz);
 
     println!("Loading cartridge ROM: {}", cartridge_rom);
-    let sz = emu.load_cartridge(cartridge_rom);
-    println!(" - {} bytes read", sz);
+    emu.load_cartridge(cartridge_rom);
 
     let mut breakpoints: Vec<u16> = Vec::new();
     let mut stepping = false;
