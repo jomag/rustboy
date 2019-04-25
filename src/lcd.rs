@@ -301,8 +301,11 @@ impl LCD {
 
                 456 => {
                     // End of line. Start next.
-                    self.scanline += 1;
                     self.scanline_cycles = 0;
+                    self.scanline += 1;
+                    if self.isel_ly && self.lyc == self.scanline {
+                        self.irq |= IF_LCDC_BIT;
+                    }
                 }
 
                 _ => {
@@ -313,13 +316,19 @@ impl LCD {
             self.scanline_cycles += 1;
 
             if self.scanline_cycles == 456 {
-                self.scanline += 1;
                 self.scanline_cycles = 0;
+                self.scanline += 1;
+                if self.isel_ly && self.lyc == self.scanline {
+                    self.irq |= IF_LCDC_BIT;
+                }
 
                 if self.scanline == 154 {
                     self.irq |= IF_VBLANK_BIT;
                     display_update = true;
                     self.scanline = 0;
+                    if self.isel_ly && self.lyc == self.scanline {
+                        self.irq |= IF_LCDC_BIT;
+                    }
                 }
             }
         }
@@ -370,6 +379,9 @@ impl LCD {
         } else {
             self.scanline += 1;
             self.scanline_cycles -= 456;
+            if self.isel_ly && self.lyc == self.scanline {
+                self.irq |= IF_LCDC_BIT;
+            }
         }
 
         return display_update;
