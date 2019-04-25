@@ -156,15 +156,17 @@ impl LCD {
                     let b2 = self.ram[src_offs as usize + 1];
 
                     for xo in 0..8 {
-                        let lo = b1 & (1 << (7 - xo)) != 0;
-                        let hi = b2 & (1 << (7 - xo)) != 0;
-                        let idx = if lo { if hi { 3 } else { 1 } } else { if hi { 2 } else { 0 } };
-                        let v = if flags & 16 != 0 { palette1[idx as usize] } else { palette1[idx as usize] };
+                        if xo + x > 0 {
+                            let lo = b1 & (1 << (7 - xo)) != 0;
+                            let hi = b2 & (1 << (7 - xo)) != 0;
+                            let idx = if lo { if hi { 3 } else { 1 } } else { if hi { 2 } else { 0 } };
+                            let v = if flags & 16 != 0 { palette1[idx as usize] } else { palette0[idx as usize] };
 
-                        if hi || lo {
-                            self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 0] = v;
-                            self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 1] = v;
-                            self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 2] = v;
+                            if hi || lo {
+                                self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 0] = v;
+                                self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 1] = v;
+                                self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 2] = v;
+                            }
                         }
                     }
                 }
