@@ -48,7 +48,7 @@ impl SquareWaveSoundGenerator {
     }
 
     pub fn write_reg(&mut self, address: u16, value: u8) {
-        println!("S1 write NR10 + {:02X} = {:02X}", address, value);
+        // println!("S1 write NR10 + {:02X} = {:02X}", address, value);
         match address {
             0 => self.nr10 = value,
             1 => self.nr11 = value,
@@ -175,15 +175,15 @@ impl AudioProcessingUnit {
             0xFF10...0xFF14 => self.s1.write_reg(address - 0xFF10, value),
             0xFF15...0xFF19 => self.s2.write_reg(address - 0xFF15, value),
             NR50_REG => {
-                println!("NRF50 = {:02X}", value);
+                // println!("NRF50 = {:02X}", value);
                 self.nr50 = value
             }
             NR51_REG => {
-                println!("NRF51 = {:02X}", value);
+                // println!("NRF51 = {:02X}", value);
                 self.nr51 = value
             }
             NR52_REG => {
-                println!("NRF52 = {:02X}", value);
+                // println!("NRF52 = {:02X}", value);
                 self.nr52 = value
             }
             _ => {}

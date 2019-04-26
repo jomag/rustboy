@@ -11,14 +11,16 @@ use std::io::stdin;
 use std::io::stdout;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 
 use sdl2::audio::{AudioCallback, AudioQueue, AudioSpecDesired};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
+use sdl2::video::SwapInterval;
 
+mod apu;
 mod buttons;
 mod cpu;
 mod debug;
@@ -29,12 +31,11 @@ mod interrupt;
 mod lcd;
 mod mmu;
 mod registers;
-mod sound;
 mod timer;
 mod ui;
 
 use buttons::ButtonType;
-use debug::{format_mnemonic, print_listing, print_registers, print_sprites, print_lcdc};
+use debug::{format_mnemonic, print_lcdc, print_listing, print_registers, print_sprites};
 use emu::Emu;
 use lcd::{LCD, SCREEN_HEIGHT, SCREEN_WIDTH};
 
@@ -115,6 +116,27 @@ fn capture_frame(filename: &str, frame: u32, lcd: &LCD) -> Result<(), std::io::E
 
     println!("Captured frame {}", frame);
     return Ok(());
+}
+
+struct AudioBuffer {
+    buf: Arc<Mutex<[i16; 48_000]>>,
+    pair: Arc<(Mutex<bool>, Condvar)>,
+}
+
+impl AudioCallback for AudioBuffer {
+    type Channel = i16;
+
+    fn callback(&mut self, out: &mut [i16]) {
+        let mut i: usize = 0;
+        let data = self.buf.lock().unwrap();
+        for x in out.iter_mut() {
+            *x = data[i];
+            i = i + 1;
+        }
+
+        let &(ref lock, ref cvar) = &*self.pair;
+        cvar.notify_one();
+    }
 }
 
 fn main() -> Result<(), String> {
@@ -207,19 +229,36 @@ fn main() -> Result<(), String> {
         .create_texture_streaming(fmt, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)
         .map_err(|e| e.to_string())?;
 
+    video_subsystem.gl_set_swap_interval(SwapInterval::Immediate)?;
     canvas.clear();
     canvas.copy(&texture, None, Some(Rect::new(150, 150, 320, 288)))?;
     canvas.present();
 
     // Setup audio system
     let audio_subsystem = sdl_context.audio()?;
+    let audio_buffer: Arc<Mutex<[i16; 48_000]>> = Arc::new(Mutex::new([0; 48_000]));
+    let audio_sync_pair = Arc::new((Mutex::new(false), Condvar::new()));
+
+    let sample_rate: u32 = 48_000;
+    let fps = 59.7;
+    let samples_per_frame: u32 = (sample_rate * 100) / (fps * 100.0) as u32;
+    println!("SAMPLES PER FRAME: {}", samples_per_frame);
+
     let desired_audio_spec = AudioSpecDesired {
-        freq: Some(44_100),
+        freq: Some(48_000),
         channels: Some(1),
-        samples: None,
+        samples: Some(samples_per_frame as u16),
     };
-    let audio_queue = audio_subsystem.open_queue::<i16, _>(None, &desired_audio_spec)?;
-    audio_queue.resume();
+
+    let audio_device = audio_subsystem
+        .open_playback(None, &desired_audio_spec, |spec| AudioBuffer {
+            buf: audio_buffer.clone(),
+            pair: audio_sync_pair.clone(),
+        })
+        .unwrap();
+
+    // Start playback
+    audio_device.resume();
 
     let mut event_pump = sdl_context.event_pump().map_err(|msg| msg.to_string())?;
 
@@ -364,12 +403,6 @@ fn main() -> Result<(), String> {
         }
 
         if emu.mmu.display_updated {
-            // Generate one new frame worth of audio samples.
-            // FIXME: there's no syncing, so it's very probable that we will get
-            // empty buffers or an ever growing audio buffer.
-            let samples = &emu.mmu.apu.generate(44100 / 60);
-            audio_queue.queue(&samples);
-
             if let Some(frm) = capture_at_frame {
                 if frm == frame_counter {
                     capture_frame(capture_filename, frame_counter, &emu.mmu.lcd).unwrap();
@@ -417,9 +450,24 @@ fn main() -> Result<(), String> {
 
             emu.mmu.display_updated = false;
             frame_counter = frame_counter + 1;
+
+            // Generate one new frame worth of audio samples.
+            {
+                let &(ref lock, ref cvar) = &*audio_sync_pair;
+                let consumed = lock.lock().unwrap();
+                cvar.wait(consumed).unwrap();
+            }
+
+            let samples = &emu.mmu.apu.generate(samples_per_frame as usize);
+            let mut audio_data = audio_buffer.lock().unwrap();
+
+            for i in 0..samples.len() {
+                audio_data[i as usize] = samples[i as usize];
+            }
         }
     }
 
+    audio_device.pause();
     println!("Clean shutdown. Bye!");
     return Ok(());
 }

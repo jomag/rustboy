@@ -6,13 +6,13 @@ use std::io::Read;
 
 use interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
 
+use apu::AudioProcessingUnit;
 use buttons::Buttons;
 use dma::DMA;
 use instructions;
 use interrupt::handle_interrupts;
 use lcd::LCD;
 use registers::Registers;
-use sound::AudioProcessingUnit;
 use timer::Timer;
 
 use debug::print_registers;
