@@ -113,7 +113,7 @@ pub struct MMU {
 }
 
 impl MMU {
-    pub fn new() -> Self {
+    pub fn new(sample_rate: u32) -> Self {
         MMU {
             reg: Registers::new(),
             rom: [0; 0x8000],
@@ -131,7 +131,7 @@ impl MMU {
             lcd: LCD::new(),
             buttons: Buttons::new(),
             display_updated: false,
-            apu: AudioProcessingUnit::new(),
+            apu: AudioProcessingUnit::new(sample_rate),
         }
     }
 

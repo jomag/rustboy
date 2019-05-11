@@ -35,7 +35,9 @@ mod timer;
 mod ui;
 
 use buttons::ButtonType;
-use debug::{format_mnemonic, print_lcdc, print_listing, print_registers, print_sprites};
+use debug::{
+    format_mnemonic, print_apu, print_lcdc, print_listing, print_registers, print_sprites,
+};
 use emu::Emu;
 use lcd::{LCD, SCREEN_HEIGHT, SCREEN_WIDTH};
 
@@ -176,7 +178,41 @@ fn main() -> Result<(), String> {
         .value_of("capture-to")
         .unwrap_or("capture-frame-#.png");
 
-    let mut emu = Emu::new();
+    // Setup SDL2
+    let sdl_context = sdl2::init()?;
+    let video_subsystem = sdl_context.video()?;
+    let window = video_subsystem
+        .window("MoeGeeBee", WINDOW_WIDTH, WINDOW_HEIGHT)
+        .position(100, 100)
+        .opengl()
+        .build()
+        .map_err(|msg| msg.to_string())?;
+
+    // Setup audio system
+    const fps: f64 = 60.0;
+    const sample_rate: u32 = 48_000;
+    let audio_subsystem = sdl_context.audio()?;
+    let audio_buffer: Arc<Mutex<[i16; sample_rate as usize]>> =
+        Arc::new(Mutex::new([0; sample_rate as usize]));
+    let audio_sync_pair = Arc::new((Mutex::new(false), Condvar::new()));
+
+    let samples_per_frame: u32 = (sample_rate * 100) / (fps * 100.0) as u32;
+
+    let desired_audio_spec = AudioSpecDesired {
+        freq: Some(sample_rate as i32),
+        channels: Some(1),
+        samples: Some(samples_per_frame as u16),
+    };
+
+    // FIXME: validate that the received sample rate matches the desired rate
+    let audio_device = audio_subsystem
+        .open_playback(None, &desired_audio_spec, |spec| AudioBuffer {
+            buf: audio_buffer.clone(),
+            pair: audio_sync_pair.clone(),
+        })
+        .unwrap();
+
+    let mut emu = Emu::new(sample_rate);
     emu.init();
 
     println!("Loading bootstrap ROM: {}", bootstrap_rom);
@@ -210,16 +246,6 @@ fn main() -> Result<(), String> {
 
     let mut frame_counter: u32 = 0;
 
-    // Setup SDL2
-    let sdl_context = sdl2::init()?;
-    let video_subsystem = sdl_context.video()?;
-    let window = video_subsystem
-        .window("rustboy", WINDOW_WIDTH, WINDOW_HEIGHT)
-        .position(100, 100)
-        .opengl()
-        .build()
-        .map_err(|msg| msg.to_string())?;
-
     let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
 
     let texture_creator = canvas.texture_creator();
@@ -233,29 +259,6 @@ fn main() -> Result<(), String> {
     canvas.clear();
     canvas.copy(&texture, None, Some(Rect::new(150, 150, 320, 288)))?;
     canvas.present();
-
-    // Setup audio system
-    let audio_subsystem = sdl_context.audio()?;
-    let audio_buffer: Arc<Mutex<[i16; 48_000]>> = Arc::new(Mutex::new([0; 48_000]));
-    let audio_sync_pair = Arc::new((Mutex::new(false), Condvar::new()));
-
-    let sample_rate: u32 = 48_000;
-    let fps = 59.7;
-    let samples_per_frame: u32 = (sample_rate * 100) / (fps * 100.0) as u32;
-    println!("SAMPLES PER FRAME: {}", samples_per_frame);
-
-    let desired_audio_spec = AudioSpecDesired {
-        freq: Some(48_000),
-        channels: Some(1),
-        samples: Some(samples_per_frame as u16),
-    };
-
-    let audio_device = audio_subsystem
-        .open_playback(None, &desired_audio_spec, |spec| AudioBuffer {
-            buf: audio_buffer.clone(),
-            pair: audio_sync_pair.clone(),
-        })
-        .unwrap();
 
     // Start playback
     audio_device.resume();
@@ -377,6 +380,7 @@ fn main() -> Result<(), String> {
                         print_sprites(&emu.mmu);
                     }
                     "lcdc" => print_lcdc(&emu.mmu),
+                    "apu" => print_apu(&emu.mmu),
                     "" => {}
                     _ => {
                         println!("invalid command!");
@@ -403,6 +407,22 @@ fn main() -> Result<(), String> {
         }
 
         if emu.mmu.display_updated {
+            // Generate one new frame worth of audio samples.
+            {
+                let samples = &emu.mmu.apu.generate(samples_per_frame as usize);
+                let mut audio_data = audio_buffer.lock().unwrap();
+
+                for i in 0..samples.len() {
+                    audio_data[i as usize] = samples[i as usize];
+                }
+            }
+
+            {
+                let &(ref lock, ref cvar) = &*audio_sync_pair;
+                let consumed = lock.lock().unwrap();
+                cvar.wait(consumed).unwrap();
+            }
+
             if let Some(frm) = capture_at_frame {
                 if frm == frame_counter {
                     capture_frame(capture_filename, frame_counter, &emu.mmu.lcd).unwrap();
@@ -450,20 +470,6 @@ fn main() -> Result<(), String> {
 
             emu.mmu.display_updated = false;
             frame_counter = frame_counter + 1;
-
-            // Generate one new frame worth of audio samples.
-            {
-                let &(ref lock, ref cvar) = &*audio_sync_pair;
-                let consumed = lock.lock().unwrap();
-                cvar.wait(consumed).unwrap();
-            }
-
-            let samples = &emu.mmu.apu.generate(samples_per_frame as usize);
-            let mut audio_data = audio_buffer.lock().unwrap();
-
-            for i in 0..samples.len() {
-                audio_data[i as usize] = samples[i as usize];
-            }
         }
     }
 
