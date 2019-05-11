@@ -18,6 +18,8 @@ use sdl2::rect::Rect;
 use sdl2::keyboard::Keycode;
 use sdl2::event::Event;
 
+#[macro_escape]
+mod macros;
 mod cpu;
 mod debug;
 mod dma;
@@ -290,6 +292,12 @@ fn main() -> Result<(), String> {
                 let args: Vec<_> = cmd_s.split_whitespace().collect();
 
                 match args[0] {
+                    "break" => {
+                        match parse_number::<u16>(args[1]) {
+                            Ok(addr) => breakpoints.push(addr),
+                            Err(_) => println!("Not a valid address"),
+                        };
+                    }
                     "c" => {
                         stepping = false;
                         break;
