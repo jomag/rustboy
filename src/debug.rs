@@ -1,5 +1,5 @@
 use instructions::op_length;
-use mmu::{IE_REG, IF_REG, LCDC_REG, MMU, STAT_REG, SCX_REG, SCY_REG};
+use mmu::{IE_REG, IF_REG, LCDC_REG, MMU, STAT_REG, SCX_REG, SCY_REG, NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG};
 use std::fs::File;
 use std::io::Write;
 use timer::Timer;
@@ -48,7 +48,8 @@ pub fn print_sprite(mmu: &MMU, i: usize) {
     let x = mmu.direct_read(offset + 1);
     let y = mmu.direct_read(offset);
     if x != 0 && y != 0 {
-        println!(" - Sprite {} @ 0x{:04X}: X={}, Y={}, Pattern={}, Flags=0x{:02X}",
+        println!(
+            " - Sprite {} @ 0x{:04X}: X={}, Y={}, Pattern={}, Flags=0x{:02X}",
             i,
             offset,
             x,
@@ -62,8 +63,14 @@ pub fn print_sprite(mmu: &MMU, i: usize) {
 pub fn print_sprites(mmu: &MMU) {
     let lcdc = mmu.direct_read(LCDC_REG);
 
-    println!("Sprites are: {}", if lcdc & 2 == 0 { "disabled" } else { "enabled" });
-    println!("Sprite size: {}", if lcdc & 4 == 0 { "8x8"} else { "8x16" });
+    println!(
+        "Sprites are: {}",
+        if lcdc & 2 == 0 { "disabled" } else { "enabled" }
+    );
+    println!(
+        "Sprite size: {}",
+        if lcdc & 4 == 0 { "8x8" } else { "8x16" }
+    );
 
     for i in 0..40 {
         print_sprite(mmu, i);
@@ -71,20 +78,60 @@ pub fn print_sprites(mmu: &MMU) {
 }
 
 fn get_bit(bitmap: u8, bit: u8) -> u8 {
-    if bitmap & (1 << bit) == 0 { 0 } else { 1 }
+    if bitmap & (1 << bit) == 0 {
+        0
+    } else {
+        1
+    }
 }
 
 pub fn print_lcdc(mmu: &MMU) {
     let v = mmu.direct_read(LCDC_REG);
     println!("LCDC ({:04X}): {:02X}", LCDC_REG, v);
     println!("  Bit 0={} - BG Display (0=Off, 1=On)", get_bit(v, 0));
-    println!("  Bit 1={} - OBJ (Sprite) Display (0=Off, 1=On)", get_bit(v, 1));
-    println!("  Bit 2={} - OBJ (Sprite) Size (0=8x8, 1=8x16)", get_bit(v, 2));
-    println!("  Bit 3={} - BG Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)", get_bit(v, 3));
-    println!("  Bit 4={} - BG & Window Tile Data Select (0=8800-97FF, 1=8000-8FFF)", get_bit(v, 4));
-    println!("  Bit 5={} - Window Display Enable (0=Off, 1=On)", get_bit(v, 5));
-    println!("  Bit 6={} - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF", get_bit(v, 6));
-    println!("  Bit 7={} - LCD Display Enable (0=Off, 1=On)", get_bit(v, 7));
+    println!(
+        "  Bit 1={} - OBJ (Sprite) Display (0=Off, 1=On)",
+        get_bit(v, 1)
+    );
+    println!(
+        "  Bit 2={} - OBJ (Sprite) Size (0=8x8, 1=8x16)",
+        get_bit(v, 2)
+    );
+    println!(
+        "  Bit 3={} - BG Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)",
+        get_bit(v, 3)
+    );
+    println!(
+        "  Bit 4={} - BG & Window Tile Data Select (0=8800-97FF, 1=8000-8FFF)",
+        get_bit(v, 4)
+    );
+    println!(
+        "  Bit 5={} - Window Display Enable (0=Off, 1=On)",
+        get_bit(v, 5)
+    );
+    println!(
+        "  Bit 6={} - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF",
+        get_bit(v, 6)
+    );
+    println!(
+        "  Bit 7={} - LCD Display Enable (0=Off, 1=On)",
+        get_bit(v, 7)
+    );
+}
+
+pub fn print_apu(mmu: &MMU) {
+    let nr10 = mmu.direct_read(NR10_REG);
+    let nr11 = mmu.direct_read(NR11_REG);
+    let nr12 = mmu.direct_read(NR12_REG);
+    let nr13 = mmu.direct_read(NR13_REG);
+    let nr14 = mmu.direct_read(NR14_REG);
+
+    println!("Channel 1 (tone & sweep):");
+    println!("  NR10: 0x{:02X} {:08b}b ", nr10, nr10);
+    println!("  NR11: 0x{:02X} {:08b}b ", nr11, nr11);
+    println!("  NR12: 0x{:02X} {:08b}b ", nr12, nr12);
+    println!("  NR13: 0x{:02X} {:08b}b ", nr13, nr13);
+    println!("  NR14: 0x{:02X} {:08b}b ", nr14, nr14);
 }
 
 pub fn print_ppu_registers(mmu: &MMU) {

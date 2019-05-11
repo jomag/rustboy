@@ -1,12 +1,14 @@
 use mmu::MMU;
 
 pub struct Emu {
-    pub mmu: MMU
+    pub mmu: MMU,
 }
 
 impl Emu {
-    pub fn new() -> Self {
-        Emu { mmu: MMU::new() }
+    pub fn new(sample_rate: u32) -> Self {
+        Emu {
+            mmu: MMU::new(sample_rate),
+        }
     }
 
     pub fn init(&mut self) {
