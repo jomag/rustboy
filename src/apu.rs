@@ -36,6 +36,9 @@ pub struct SquareWaveSoundGenerator {
 
     // Length counter. When this reaches zero the channel is disabled.
     length_counter: u8,
+
+    // Length counter enabled (NRx4, bit 6)
+    counter_enabled: bool,
 }
 
 impl SquareWaveSoundGenerator {
@@ -57,6 +60,7 @@ impl SquareWaveSoundGenerator {
             envelope_step: 0,
             frame_sequencer: 0,
             length_counter: 0,
+            counter_enabled: false,
         }
     }
 
@@ -83,6 +87,7 @@ impl SquareWaveSoundGenerator {
             3 => self.nr13 = value,
             4 => {
                 self.nr14 = value;
+                self.counter_enabled = (value & 0x40) != 0;
                 if value & 0x80 != 0 {
                     self.trigger();
                 }
@@ -95,7 +100,6 @@ impl SquareWaveSoundGenerator {
         // See details about exactly what happens on sound trigger
         // in the document Game Boy Sound Operation by Blarrg:
         // https://gist.github.com/drhelius/3652407
-
         self.enabled = true;
 
         if self.length_counter == 0 {
@@ -118,26 +122,33 @@ impl SquareWaveSoundGenerator {
         let envelope_steps = self.nr12 & 7;
 
         if self.nr10 != 0 {
-            println!("IT SWEEP!");
+            println!("NOT IMPLEMENTED: sweep");
         }
 
         for _ in 0..samples {
+            let mut tick_256hz = false;
+            let mut tick_64hz = false;
+
             // Increment frame sequencer at 512 Hz
             if self.sample_count % (self.sample_rate / 512) == 0 {
                 self.frame_sequencer = self.frame_sequencer.wrapping_add(1);
+                tick_256hz = self.frame_sequencer & 1 == 0;
+                tick_64hz = self.frame_sequencer & 7 == 0;
             }
 
             // Length counter. When the length counter decrements to zero
             // the channel gets disabled. It decrements at 256 Hz.
-            if self.length_counter > 0 && self.frame_sequencer & 0x1 == 0 {
-                self.length_counter -= 1;
-                if self.length_counter == 0 {
-                    self.enabled = false;
+            if self.counter_enabled {
+                if self.length_counter > 0 && tick_256hz {
+                    self.length_counter -= 1;
+                    if self.length_counter == 0 {
+                        self.enabled = false;
+                    }
                 }
             }
 
             // Envelope
-            if self.frame_sequencer & 63 == 0 {
+            if tick_64hz {
                 self.envelope_step += 1;
                 if envelope_steps == 0 {
                     self.envelope_step = 0;
