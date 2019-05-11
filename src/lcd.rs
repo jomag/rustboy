@@ -182,11 +182,13 @@ impl LCD {
         let mut buf_offs = scanline as usize * pitch;
 
         let y: u8 = scanline.wrapping_add(self.scy);
+        let x: u16 = self.scx as u16 / 8;
+        let mut xo: u8 = self.scx & 7;
 
         let ty: u16 = (y / 8) as u16;
-        let mut tile_map_offset = ty * 32;
 
         // Bit 3 of LCDC selects bg tile map address
+        let mut tile_map_offset = 0;
         if self.lcdc & 8 == 0 {
             tile_map_offset += 0x9800 - 0x8000;
         } else {
@@ -207,7 +209,7 @@ impl LCD {
         ];
 
         for tx in 0..20 {
-            let tile_index = self.ram[(tile_map_offset + tx) as usize] as u16;
+            let tile_index = self.ram[(tile_map_offset + ty * 32 + ((tx + x) & 31)) as usize] as u16;
 
             if self.lcdc & 16 == 0 {
                 // Tile data at 0x8800 to 0x97FF. Tile map data (tile_index)
@@ -231,7 +233,7 @@ impl LCD {
             let b1 = self.ram[tile_data_offset as usize];
             let b2 = self.ram[(tile_data_offset + 1) as usize];
 
-            for x in 0..8 {
+            for x in xo..8 {
                 let lo = b1 & (1 << (7 - x)) != 0;
                 let hi = b2 & (1 << (7 - x)) != 0;
                 let idx = if lo { if hi { 3 } else { 1 } } else { if hi { 2 } else { 0 } };
@@ -242,6 +244,8 @@ impl LCD {
                 self.buf_rgb8[buf_offs + 2] = v;
                 buf_offs += 3;
             }
+
+            xo = 0;
         }
 
         self.render_line_sprites(scanline);
