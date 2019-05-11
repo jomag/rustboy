@@ -20,6 +20,9 @@ use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::video::SwapInterval;
 
+#[macro_escape]
+mod macros;
+
 mod apu;
 mod buttons;
 mod cpu;
@@ -33,6 +36,8 @@ mod mmu;
 mod registers;
 mod timer;
 mod ui;
+mod buttons;
+mod cartridge;
 
 use buttons::ButtonType;
 use debug::{
@@ -220,8 +225,7 @@ fn main() -> Result<(), String> {
     println!(" - {} bytes read", sz);
 
     println!("Loading cartridge ROM: {}", cartridge_rom);
-    let sz = emu.load_cartridge(cartridge_rom);
-    println!(" - {} bytes read", sz);
+    emu.load_cartridge(cartridge_rom);
 
     let mut breakpoints: Vec<u16> = Vec::new();
     let mut stepping = false;
@@ -345,6 +349,12 @@ fn main() -> Result<(), String> {
                 let args: Vec<_> = cmd_s.split_whitespace().collect();
 
                 match args[0] {
+                    "break" => {
+                        match parse_number::<u16>(args[1]) {
+                            Ok(addr) => breakpoints.push(addr),
+                            Err(_) => println!("Not a valid address"),
+                        };
+                    }
                     "c" => {
                         stepping = false;
                         break;

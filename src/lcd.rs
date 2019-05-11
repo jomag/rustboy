@@ -156,15 +156,17 @@ impl LCD {
                     let b2 = self.ram[src_offs as usize + 1];
 
                     for xo in 0..8 {
-                        let lo = b1 & (1 << (7 - xo)) != 0;
-                        let hi = b2 & (1 << (7 - xo)) != 0;
-                        let idx = if lo { if hi { 3 } else { 1 } } else { if hi { 2 } else { 0 } };
-                        let v = if flags & 16 != 0 { palette1[idx as usize] } else { palette1[idx as usize] };
+                        if xo + x > 0 {
+                            let lo = b1 & (1 << (7 - xo)) != 0;
+                            let hi = b2 & (1 << (7 - xo)) != 0;
+                            let idx = if lo { if hi { 3 } else { 1 } } else { if hi { 2 } else { 0 } };
+                            let v = if flags & 16 != 0 { palette1[idx as usize] } else { palette0[idx as usize] };
 
-                        if hi || lo {
-                            self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 0] = v;
-                            self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 1] = v;
-                            self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 2] = v;
+                            if hi || lo {
+                                self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 0] = v;
+                                self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 1] = v;
+                                self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 2] = v;
+                            }
                         }
                     }
                 }
@@ -180,11 +182,13 @@ impl LCD {
         let mut buf_offs = scanline as usize * pitch;
 
         let y: u8 = scanline.wrapping_add(self.scy);
+        let x: u16 = self.scx as u16 / 8;
+        let mut xo: u8 = self.scx & 7;
 
         let ty: u16 = (y / 8) as u16;
-        let mut tile_map_offset = ty * 32;
 
         // Bit 3 of LCDC selects bg tile map address
+        let mut tile_map_offset = 0;
         if self.lcdc & 8 == 0 {
             tile_map_offset += 0x9800 - 0x8000;
         } else {
@@ -205,7 +209,7 @@ impl LCD {
         ];
 
         for tx in 0..20 {
-            let tile_index = self.ram[(tile_map_offset + tx) as usize] as u16;
+            let tile_index = self.ram[(tile_map_offset + ty * 32 + ((tx + x) & 31)) as usize] as u16;
 
             if self.lcdc & 16 == 0 {
                 // Tile data at 0x8800 to 0x97FF. Tile map data (tile_index)
@@ -229,7 +233,7 @@ impl LCD {
             let b1 = self.ram[tile_data_offset as usize];
             let b2 = self.ram[(tile_data_offset + 1) as usize];
 
-            for x in 0..8 {
+            for x in xo..8 {
                 let lo = b1 & (1 << (7 - x)) != 0;
                 let hi = b2 & (1 << (7 - x)) != 0;
                 let idx = if lo { if hi { 3 } else { 1 } } else { if hi { 2 } else { 0 } };
@@ -240,6 +244,8 @@ impl LCD {
                 self.buf_rgb8[buf_offs + 2] = v;
                 buf_offs += 3;
             }
+
+            xo = 0;
         }
 
         self.render_line_sprites(scanline);
@@ -301,8 +307,11 @@ impl LCD {
 
                 456 => {
                     // End of line. Start next.
-                    self.scanline += 1;
                     self.scanline_cycles = 0;
+                    self.scanline += 1;
+                    if self.isel_ly && self.lyc == self.scanline {
+                        self.irq |= IF_LCDC_BIT;
+                    }
                 }
 
                 _ => {
@@ -313,13 +322,19 @@ impl LCD {
             self.scanline_cycles += 1;
 
             if self.scanline_cycles == 456 {
-                self.scanline += 1;
                 self.scanline_cycles = 0;
+                self.scanline += 1;
+                if self.isel_ly && self.lyc == self.scanline {
+                    self.irq |= IF_LCDC_BIT;
+                }
 
                 if self.scanline == 154 {
                     self.irq |= IF_VBLANK_BIT;
                     display_update = true;
                     self.scanline = 0;
+                    if self.isel_ly && self.lyc == self.scanline {
+                        self.irq |= IF_LCDC_BIT;
+                    }
                 }
             }
         }
@@ -370,6 +385,9 @@ impl LCD {
         } else {
             self.scanline += 1;
             self.scanline_cycles -= 456;
+            if self.isel_ly && self.lyc == self.scanline {
+                self.irq |= IF_LCDC_BIT;
+            }
         }
 
         return display_update;

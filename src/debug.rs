@@ -1,5 +1,5 @@
 use instructions::op_length;
-use mmu::{IE_REG, IF_REG, LCDC_REG, MMU, NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG};
+use mmu::{IE_REG, IF_REG, LCDC_REG, MMU, STAT_REG, SCX_REG, SCY_REG, NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG};
 use std::fs::File;
 use std::io::Write;
 use timer::Timer;
@@ -132,6 +132,14 @@ pub fn print_apu(mmu: &MMU) {
     println!("  NR12: 0x{:02X} {:08b}b ", nr12, nr12);
     println!("  NR13: 0x{:02X} {:08b}b ", nr13, nr13);
     println!("  NR14: 0x{:02X} {:08b}b ", nr14, nr14);
+}
+
+pub fn print_ppu_registers(mmu: &MMU) {
+    println!("  LCDC: 0x{:02X} STAT: 0x{:02X} SCX: 0x{:02X} SCY: 0x{:02X}",
+            mmu.direct_read(LCDC_REG),
+            mmu.direct_read(STAT_REG),
+            mmu.direct_read(SCX_REG),
+            mmu.direct_read(SCY_REG))
 }
 
 pub fn print_registers(mmu: &MMU) {
@@ -552,18 +560,29 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
         0xCA => format!("JP   Z, 0x{:04X}", mmu.direct_read_u16(addr + 1)),
 
         0xCB => {
+            let regs: [&str; 8] = [ "B", "C", "D", "E", "H", "L", "(HL)", "A" ];
+            let ops: [&str; 32] = [
+                "RLC", "RRC",
+                "RL", "RR",
+                "SLA", "SRA",
+                "SWAP", "SRL",
+                "BIT 0,", "BIT 1,",
+                "BIT 2,", "BIT 3,",
+                "BIT 4,", "BIT 5,",
+                "BIT 6,", "BIT 7,",
+                "RES 0,", "RES 1,",
+                "RES 2,", "RES 3,",
+                "RES 4,", "RES 5,",
+                "RES 6,", "RES 7,",
+                "SET 0,", "SET 1,",
+                "SET 2,", "SET 3,",
+                "SET 4,", "SET 5,",
+                "SET 6,", "SET 7,",
+            ];
             let op2 = mmu.direct_read(addr + 1);
-            match op2 {
-                0x11 => "RL   C".to_string(),
-                0x7C => "BIT 7, h".to_string(),
-                0x37 => "SWAP A".to_string(),
-                0x7E => "SET 4, A".to_string(),
-                0xE6 => "SET 4, (HL)".to_string(),
-                0xEE => "SET 5, (HL)".to_string(),
-                _ => {
-                    panic!("invalid instruction op code: 0x{:02X}{:02X}", op, op2);
-                }
-            }
+            let reg = regs[(op2 & 7) as usize];
+            let mnemonic = ops[(op2 >> 4) as usize];
+            format!("{} {}", mnemonic, reg)
         }
 
         0xBE => format!(
@@ -577,17 +596,19 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
 
         0xD2 => format!("JP   NC, 0x{:04X}", mmu.direct_read_u16(addr + 1)),
         0xD6 => format!("SUB  0x{:02X}", mmu.direct_read(addr + 1)),
+        0xDE => format!("SBC  A, 0x{:02X}", mmu.direct_read(addr + 1)),
 
         0xE0 => format!("LD   ($FF00+${:02X}), A", mmu.direct_read(addr + 1)),
         0xEA => format!("LD   (${:04X}), A", mmu.direct_read_u16(addr + 1)),
         0xE6 => format!("AND  ${:02X}", mmu.direct_read(addr + 1)),
+        0xED => format!("! Illegal op code: 0x{:02X}", op),
 
         0xF0 => format!("LD   A, ($FF00+${:02X})", mmu.direct_read(addr + 1)),
-        0xFA => format!("LD   A, (${:04X})", mmu.direct_read_u16(addr + 1)),
+        0xF6 => format!("OR   0x{:02X}", mmu.direct_read(addr + 1)),
         0xF8 => format!("LD   HL, SP + ${:02X}", mmu.direct_read(addr + 1)),
-        0xFE => format!("CP   ${:02X}", mmu.direct_read(addr + 1)),
-
+        0xFA => format!("LD   A, (${:04X})", mmu.direct_read_u16(addr + 1)),
         0xFC => format!("! Illegal op code: 0x{:02X}", op),
+        0xFE => format!("CP   ${:02X}", mmu.direct_read(addr + 1)),
 
         _ => {
             let easy = SIMPLE_MNEMONICS[op as usize];
