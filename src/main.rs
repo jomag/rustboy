@@ -146,6 +146,15 @@ impl AudioCallback for AudioBuffer {
     }
 }
 
+fn find_sdl_gl_driver() -> Option<u32> {
+    for (index, item) in sdl2::render::drivers().enumerate() {
+        if item.name == "opengl" {
+            return Some(index as u32);
+        }
+    }
+    None
+}
+
 fn main() -> Result<(), String> {
     let matches = clap::App::new(APPNAME)
         .version(VERSION)
@@ -184,14 +193,16 @@ fn main() -> Result<(), String> {
         .unwrap_or("capture-frame-#.png");
 
     // Setup SDL2
-    let sdl_context = sdl2::init()?;
-    let video_subsystem = sdl_context.video()?;
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
         .window("MoeGeeBee", WINDOW_WIDTH, WINDOW_HEIGHT)
         .position(100, 100)
         .opengl()
         .build()
-        .map_err(|msg| msg.to_string())?;
+        .map_err(|msg| msg.to_string()).unwrap();
+
+
 
     // Setup audio system
     const fps: f64 = 60.0;
@@ -250,7 +261,7 @@ fn main() -> Result<(), String> {
 
     let mut frame_counter: u32 = 0;
 
-    let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
+    let mut canvas = window.into_canvas().index(find_sdl_gl_driver().unwrap()).build().map_err(|e| e.to_string())?;
 
     let texture_creator = canvas.texture_creator();
     let fmt = PixelFormatEnum::RGB24;
