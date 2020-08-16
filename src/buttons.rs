@@ -1,4 +1,3 @@
-
 pub enum ButtonType {
     Up = 64,
     Down = 128,
@@ -7,13 +6,13 @@ pub enum ButtonType {
     Select = 4,
     Start = 8,
     A = 1,
-    B = 2
+    B = 2,
 }
 
 pub struct Buttons {
     button_state: u8,
     p1: u8,
-    pub irq: u8
+    pub irq: u8,
 }
 
 impl Buttons {
@@ -21,7 +20,7 @@ impl Buttons {
         Buttons {
             button_state: 0xff,
             p1: 0xff,
-            irq: 0
+            irq: 0,
         }
     }
 
@@ -38,7 +37,7 @@ impl Buttons {
     }
 
     pub fn write_p1(&mut self, v: u8) {
-        self.p1 = 0xC0 | (v & 0x30) | (self.p1 & 0xF); 
+        self.p1 = 0xC0 | (v & 0x30) | (self.p1 & 0xF);
     }
 
     pub fn read_p1(&self) -> u8 {

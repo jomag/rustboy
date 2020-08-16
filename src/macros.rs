@@ -1,5 +1,4 @@
-
-use debug::{print_registers};
+use debug::print_registers;
 
 #[macro_export]
 macro_rules! panic_debug {
@@ -8,6 +7,5 @@ macro_rules! panic_debug {
         print_registers($mmu);
         print_ppu_registers($mmu);
         panic!()
-    }
+    };
 }
-

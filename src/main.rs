@@ -25,6 +25,7 @@ mod macros;
 
 mod apu;
 mod buttons;
+mod cartridge;
 mod cpu;
 mod debug;
 mod dma;
@@ -36,8 +37,6 @@ mod mmu;
 mod registers;
 mod timer;
 mod ui;
-mod buttons;
-mod cartridge;
 
 use buttons::ButtonType;
 use debug::{
@@ -200,9 +199,8 @@ fn main() -> Result<(), String> {
         .position(100, 100)
         .opengl()
         .build()
-        .map_err(|msg| msg.to_string()).unwrap();
-
-
+        .map_err(|msg| msg.to_string())
+        .unwrap();
 
     // Setup audio system
     const fps: f64 = 60.0;
@@ -261,7 +259,11 @@ fn main() -> Result<(), String> {
 
     let mut frame_counter: u32 = 0;
 
-    let mut canvas = window.into_canvas().index(find_sdl_gl_driver().unwrap()).build().map_err(|e| e.to_string())?;
+    let mut canvas = window
+        .into_canvas()
+        .index(find_sdl_gl_driver().unwrap())
+        .build()
+        .map_err(|e| e.to_string())?;
 
     let texture_creator = canvas.texture_creator();
     let fmt = PixelFormatEnum::RGB24;

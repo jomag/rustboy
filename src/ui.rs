@@ -1,4 +1,3 @@
-
 // extern crate sdl2;
 
 // use std::time::Duration;
@@ -19,19 +18,19 @@ pub struct UI<'a> {
 impl<'a> UI<'a> {
     pub fn new() -> UI<'a> {
         UI { sdl: sdl_context, texture: texture } */
-    /*
-        'running: loop {
-            for event in event_pump.poll_iter() {
-                match event {
-                    Event::Quit {..} | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-                        break 'running
-                    },
+/*
+'running: loop {
+    for event in event_pump.poll_iter() {
+        match event {
+            Event::Quit {..} | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                break 'running
+            },
 
-                    _ => {}
-                }
-            }
-            ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
-        }*/
- /*   }
+            _ => {}
+        }
+    }
+    ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+}*/
+/*   }
 }
 */

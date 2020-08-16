@@ -13,7 +13,7 @@ struct CartridgeMBC1 {
     pub rom: [u8; 0x4000 * 128],
 
     // Current ROM offset, depending on bank selection
-    pub rom_offset: usize
+    pub rom_offset: usize,
 }
 
 impl CartridgeMBC1 {
@@ -24,7 +24,7 @@ impl CartridgeMBC1 {
         }
         CartridgeMBC1 {
             rom: rom,
-            rom_offset: 0
+            rom_offset: 0,
         }
     }
 }
@@ -41,23 +41,21 @@ impl Cartridge for CartridgeMBC1 {
     fn write(&mut self, address: u16, value: u8) {
         match address {
             0x2000...0x3FFF => self.rom_offset = (value as usize) * 0x4000,
-            _ => println!("Unhandled write to ROM: {:04x} = {:02x}", address, value)
+            _ => println!("Unhandled write to ROM: {:04x} = {:02x}", address, value),
         }
     }
 }
 
 struct Cartridge32k {
-    pub rom: [u8; 0x8000]
+    pub rom: [u8; 0x8000],
 }
 
 impl Cartridge32k {
     pub fn new(data: Vec<u8>) -> Self {
         let mut rom = [0; 0x8000];
         let bytes = &data[..data.len()];
-        rom.copy_from_slice(bytes);   
-        Cartridge32k {
-            rom: rom
-        }
+        rom.copy_from_slice(bytes);
+        Cartridge32k { rom: rom }
     }
 }
 
@@ -66,8 +64,7 @@ impl Cartridge for Cartridge32k {
         self.rom[address as usize]
     }
 
-    fn write(&mut self, address: u16, value: u8) {
-    }
+    fn write(&mut self, address: u16, value: u8) {}
 }
 
 pub struct NullCartridge;
@@ -77,8 +74,7 @@ impl Cartridge for NullCartridge {
         0
     }
 
-    fn write(&mut self, address: u16, value: u8) {
-    }
+    fn write(&mut self, address: u16, value: u8) {}
 }
 
 pub fn load_cartridge(filename: &str) -> Box<Cartridge> {
@@ -95,6 +91,6 @@ pub fn load_cartridge(filename: &str) -> Box<Cartridge> {
     match cartridge_type {
         0 => return Box::new(Cartridge32k::new(rom)) as Box<Cartridge>,
         1 => return Box::new(CartridgeMBC1::new(rom)) as Box<Cartridge>,
-        _ => panic!("Unsupported cartridge type: {:02X}", cartridge_type)
+        _ => panic!("Unsupported cartridge type: {:02X}", cartridge_type),
     }
 }

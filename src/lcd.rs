@@ -63,7 +63,7 @@ pub struct LCD {
 
     // Object Palette 0/1 Data (palette for sprites)
     pub obp0: u8,
-    pub obp1: u8
+    pub obp1: u8,
 }
 
 impl LCD {
@@ -86,7 +86,7 @@ impl LCD {
             irq: 0,
             bgp: 0,
             obp0: 0,
-            obp1: 0
+            obp1: 0,
         }
     }
 
@@ -118,22 +118,20 @@ impl LCD {
     }
 
     fn render_line_sprites(&mut self, scanline: u8) {
-        let rgb_palette: [u8; 4] = [
-            0xFF, 0xAA, 0x55, 0x00
-        ];
+        let rgb_palette: [u8; 4] = [0xFF, 0xAA, 0x55, 0x00];
 
         let palette0: [u8; 4] = [
             rgb_palette[(self.obp0 >> 0 & 3) as usize],
             rgb_palette[(self.obp0 >> 2 & 3) as usize],
             rgb_palette[(self.obp0 >> 4 & 3) as usize],
-            rgb_palette[(self.obp0 >> 6 & 3) as usize]
+            rgb_palette[(self.obp0 >> 6 & 3) as usize],
         ];
 
         let palette1: [u8; 4] = [
             rgb_palette[(self.obp1 >> 0 & 3) as usize],
             rgb_palette[(self.obp1 >> 2 & 3) as usize],
             rgb_palette[(self.obp1 >> 4 & 3) as usize],
-            rgb_palette[(self.obp1 >> 6 & 3) as usize]
+            rgb_palette[(self.obp1 >> 6 & 3) as usize],
         ];
 
         // Length of one row of pixels in bytes
@@ -159,8 +157,24 @@ impl LCD {
                         if xo + x > 0 {
                             let lo = b1 & (1 << (7 - xo)) != 0;
                             let hi = b2 & (1 << (7 - xo)) != 0;
-                            let idx = if lo { if hi { 3 } else { 1 } } else { if hi { 2 } else { 0 } };
-                            let v = if flags & 16 != 0 { palette1[idx as usize] } else { palette0[idx as usize] };
+                            let idx = if lo {
+                                if hi {
+                                    3
+                                } else {
+                                    1
+                                }
+                            } else {
+                                if hi {
+                                    2
+                                } else {
+                                    0
+                                }
+                            };
+                            let v = if flags & 16 != 0 {
+                                palette1[idx as usize]
+                            } else {
+                                palette0[idx as usize]
+                            };
 
                             if hi || lo {
                                 self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 0] = v;
@@ -197,19 +211,18 @@ impl LCD {
 
         let mut tile_data_offset: u16 = 0;
 
-        let rgb_palette: [u8; 4] = [
-            0xFF, 0xAA, 0x55, 0x00
-        ];
+        let rgb_palette: [u8; 4] = [0xFF, 0xAA, 0x55, 0x00];
 
         let palette: [u8; 4] = [
             rgb_palette[(self.bgp >> 0 & 3) as usize],
             rgb_palette[(self.bgp >> 2 & 3) as usize],
             rgb_palette[(self.bgp >> 4 & 3) as usize],
-            rgb_palette[(self.bgp >> 6 & 3) as usize]
+            rgb_palette[(self.bgp >> 6 & 3) as usize],
         ];
 
         for tx in 0..20 {
-            let tile_index = self.ram[(tile_map_offset + ty * 32 + ((tx + x) & 31)) as usize] as u16;
+            let tile_index =
+                self.ram[(tile_map_offset + ty * 32 + ((tx + x) & 31)) as usize] as u16;
 
             if self.lcdc & 16 == 0 {
                 // Tile data at 0x8800 to 0x97FF. Tile map data (tile_index)
@@ -236,7 +249,19 @@ impl LCD {
             for x in xo..8 {
                 let lo = b1 & (1 << (7 - x)) != 0;
                 let hi = b2 & (1 << (7 - x)) != 0;
-                let idx = if lo { if hi { 3 } else { 1 } } else { if hi { 2 } else { 0 } };
+                let idx = if lo {
+                    if hi {
+                        3
+                    } else {
+                        1
+                    }
+                } else {
+                    if hi {
+                        2
+                    } else {
+                        0
+                    }
+                };
                 let v = palette[idx as usize];
 
                 self.buf_rgb8[buf_offs] = v;

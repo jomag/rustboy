@@ -1,4 +1,3 @@
-
 use registers::Registers;
 
 pub struct Cpu {
@@ -8,7 +7,7 @@ pub struct Cpu {
 impl Cpu {
     pub fn new() -> Self {
         Cpu {
-        reg: Registers::new(),
+            reg: Registers::new(),
         }
     }
 }

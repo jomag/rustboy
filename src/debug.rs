@@ -1,5 +1,8 @@
 use instructions::op_length;
-use mmu::{IE_REG, IF_REG, LCDC_REG, MMU, STAT_REG, SCX_REG, SCY_REG, NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG};
+use mmu::{
+    IE_REG, IF_REG, LCDC_REG, MMU, NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, SCX_REG,
+    SCY_REG, STAT_REG,
+};
 use std::fs::File;
 use std::io::Write;
 use timer::Timer;
@@ -135,11 +138,13 @@ pub fn print_apu(mmu: &MMU) {
 }
 
 pub fn print_ppu_registers(mmu: &MMU) {
-    println!("  LCDC: 0x{:02X} STAT: 0x{:02X} SCX: 0x{:02X} SCY: 0x{:02X}",
-            mmu.direct_read(LCDC_REG),
-            mmu.direct_read(STAT_REG),
-            mmu.direct_read(SCX_REG),
-            mmu.direct_read(SCY_REG))
+    println!(
+        "  LCDC: 0x{:02X} STAT: 0x{:02X} SCX: 0x{:02X} SCY: 0x{:02X}",
+        mmu.direct_read(LCDC_REG),
+        mmu.direct_read(STAT_REG),
+        mmu.direct_read(SCX_REG),
+        mmu.direct_read(SCY_REG)
+    )
 }
 
 pub fn print_registers(mmu: &MMU) {
@@ -560,24 +565,12 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
         0xCA => format!("JP   Z, 0x{:04X}", mmu.direct_read_u16(addr + 1)),
 
         0xCB => {
-            let regs: [&str; 8] = [ "B", "C", "D", "E", "H", "L", "(HL)", "A" ];
+            let regs: [&str; 8] = ["B", "C", "D", "E", "H", "L", "(HL)", "A"];
             let ops: [&str; 32] = [
-                "RLC", "RRC",
-                "RL", "RR",
-                "SLA", "SRA",
-                "SWAP", "SRL",
-                "BIT 0,", "BIT 1,",
-                "BIT 2,", "BIT 3,",
-                "BIT 4,", "BIT 5,",
-                "BIT 6,", "BIT 7,",
-                "RES 0,", "RES 1,",
-                "RES 2,", "RES 3,",
-                "RES 4,", "RES 5,",
-                "RES 6,", "RES 7,",
-                "SET 0,", "SET 1,",
-                "SET 2,", "SET 3,",
-                "SET 4,", "SET 5,",
-                "SET 6,", "SET 7,",
+                "RLC", "RRC", "RL", "RR", "SLA", "SRA", "SWAP", "SRL", "BIT 0,", "BIT 1,",
+                "BIT 2,", "BIT 3,", "BIT 4,", "BIT 5,", "BIT 6,", "BIT 7,", "RES 0,", "RES 1,",
+                "RES 2,", "RES 3,", "RES 4,", "RES 5,", "RES 6,", "RES 7,", "SET 0,", "SET 1,",
+                "SET 2,", "SET 3,", "SET 4,", "SET 5,", "SET 6,", "SET 7,",
             ];
             let op2 = mmu.direct_read(addr + 1);
             let reg = regs[(op2 & 7) as usize];

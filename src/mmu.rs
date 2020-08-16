@@ -8,14 +8,13 @@ use interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
 
 use apu::AudioProcessingUnit;
 use buttons::Buttons;
+use cartridge::{load_cartridge, Cartridge, NullCartridge};
 use dma::DMA;
 use instructions;
 use interrupt::handle_interrupts;
 use lcd::LCD;
 use registers::Registers;
 use timer::Timer;
-use buttons::Buttons;
-use cartridge::{ Cartridge, NullCartridge, load_cartridge };
 
 use debug::print_registers;
 
