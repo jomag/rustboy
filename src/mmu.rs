@@ -1,6 +1,5 @@
 extern crate ansi_term;
 
-use mmu::ansi_term::Colour::Blue;
 use std::fs::File;
 use std::io::Read;
 
@@ -15,8 +14,6 @@ use interrupt::handle_interrupts;
 use lcd::LCD;
 use registers::Registers;
 use timer::Timer;
-
-use debug::print_registers;
 
 // Port/Mode registers
 pub const P1_REG: u16 = 0xFF00;
@@ -78,7 +75,7 @@ pub const OAM_OFFSET: u16 = 0xFE00;
 
 pub struct MMU {
     pub reg: Registers,
-    pub cartridge: Box<Cartridge>,
+    pub cartridge: Box<dyn Cartridge>,
 
     // External RAM in cartridge
     pub external_ram: [u8; 0x2000],
@@ -227,21 +224,21 @@ impl MMU {
 
     pub fn direct_read(&self, addr: u16) -> u8 {
         match addr {
-            0x0000...0x00FF => {
+            0x0000..=0x00FF => {
                 if self.bootstrap_mode {
                     self.bootstrap[addr as usize]
                 } else {
                     self.cartridge.read(addr)
                 }
             }
-            0x0100...0x3FFF => self.cartridge.read(addr),
-            0x4000...0x7FFF => self.cartridge.read(addr), // self.romx[(addr - 0x4000) as usize],
-            0x8000...0x9FFF => self.lcd.read_display_ram(addr),
-            0xA000...0xBFFF => self.external_ram[(addr - 0xA000) as usize],
-            0xC000...0xCFFF => self.ram[(addr - 0xC000) as usize], // RAM
-            0xD000...0xDFFF => self.ram[(addr - 0xC000) as usize], // RAM (switchable on GBC)
-            0xE000...0xFDFF => self.ram[(addr - 0xE000) as usize], // RAM echo
-            0xFE00...0xFE9F => {
+            0x0100..=0x3FFF => self.cartridge.read(addr),
+            0x4000..=0x7FFF => self.cartridge.read(addr), // self.romx[(addr - 0x4000) as usize],
+            0x8000..=0x9FFF => self.lcd.read_display_ram(addr),
+            0xA000..=0xBFFF => self.external_ram[(addr - 0xA000) as usize],
+            0xC000..=0xCFFF => self.ram[(addr - 0xC000) as usize], // RAM
+            0xD000..=0xDFFF => self.ram[(addr - 0xC000) as usize], // RAM (switchable on GBC)
+            0xE000..=0xFDFF => self.ram[(addr - 0xE000) as usize], // RAM echo
+            0xFE00..=0xFE9F => {
                 if self.dma.is_active() {
                     0xFF
                 } else {
@@ -249,7 +246,7 @@ impl MMU {
                 }
             }
 
-            0xFEA0...0xFEFF => {
+            0xFEA0..=0xFEFF => {
                 println!("read of unused memory area: 0x{:04X}", addr);
                 0xFF
             }
@@ -273,12 +270,12 @@ impl MMU {
             OBP1_REG => self.lcd.obp1,
 
             // Sound registers
-            0xFF10...0xFF26 => self.apu.read_reg(addr),
+            0xFF10..=0xFF26 => self.apu.read_reg(addr),
 
             // Use self.io_reg for I/O registers that have not been implemented yet
-            0xFF00...0xFF7F => self.io_reg[(addr - 0xFF00) as usize],
+            0xFF00..=0xFF7F => self.io_reg[(addr - 0xFF00) as usize],
 
-            0xFF80...0xFFFE => self.internal_ram[(addr - 0xFF80) as usize],
+            0xFF80..=0xFFFE => self.internal_ram[(addr - 0xFF80) as usize],
 
             IE_REG => self.ie_reg,
         }
@@ -318,29 +315,29 @@ impl MMU {
 
     pub fn direct_write(&mut self, addr: u16, value: u8) {
         match addr {
-            0x0000...0x3FFF => self.cartridge.write(addr, value),
-            0x4000...0x7FFF => self.cartridge.write(addr, value),
-            0x8000...0x9FFF => self.lcd.write_display_ram(addr, value),
-            0xA000...0xBFFF => self.external_ram[(addr - 0xA000) as usize] = value,
-            0xC000...0xCFFF => self.ram[(addr - 0xC000) as usize] = value,
-            0xD000...0xDFFF => self.ram[(addr - 0xC000) as usize] = value,
-            0xE000...0xFDFF => self.ram[(addr - 0xE000) as usize] = value,
-            0xFE00...0xFE9F => {
+            0x0000..=0x3FFF => self.cartridge.write(addr, value),
+            0x4000..=0x7FFF => self.cartridge.write(addr, value),
+            0x8000..=0x9FFF => self.lcd.write_display_ram(addr, value),
+            0xA000..=0xBFFF => self.external_ram[(addr - 0xA000) as usize] = value,
+            0xC000..=0xCFFF => self.ram[(addr - 0xC000) as usize] = value,
+            0xD000..=0xDFFF => self.ram[(addr - 0xC000) as usize] = value,
+            0xE000..=0xFDFF => self.ram[(addr - 0xE000) as usize] = value,
+            0xFE00..=0xFE9F => {
                 if !self.dma.is_active() {
                     self.lcd.oam[addr as usize - 0xFE00] = value
                 }
             }
 
-            0xFEA0...0xFEFF => {}
+            0xFEA0..=0xFEFF => {}
 
             // Sound registers
-            0xFF10...0xFF26 => self.apu.write_reg(addr, value),
+            0xFF10..=0xFF26 => self.apu.write_reg(addr, value),
 
             // println!(
             //     "Unhanlded write to audio register: 0x{:04X}={:02X}",
             //     addr, value
             // ),
-            0xFF30...0xFF3F => {}
+            0xFF30..=0xFF3F => {}
             // println!(
             //     "Unhandled write to wave register 0x{:04X}={:02X}",
             //     addr, value
@@ -380,8 +377,8 @@ impl MMU {
             // https://www.reddit.com/r/EmuDev/comments/5nixai/gb_tetris_writing_to_unused_memory/
             0xFF7F => {}
 
-            0xFF00...0xFF7F => self.io_reg[(addr - 0xFF00) as usize] = value,
-            0xFF80...0xFFFE => self.internal_ram[(addr - 0xFF80) as usize] = value,
+            0xFF00..=0xFF7F => self.io_reg[(addr - 0xFF00) as usize] = value,
+            0xFF80..=0xFFFE => self.internal_ram[(addr - 0xFF80) as usize] = value,
 
             IE_REG => {
                 println!("SET IE TO {}", value);

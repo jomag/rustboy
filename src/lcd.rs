@@ -1,5 +1,4 @@
 use interrupt::{IF_LCDC_BIT, IF_VBLANK_BIT};
-use sdl2::render::Texture;
 
 // Bits of LCDC register:
 // 7 - LCD Enable (0 = off, 1 = on)
@@ -138,7 +137,7 @@ impl LCD {
         let pitch = SCREEN_WIDTH * BUFFER_BYTES_PER_PIXEL;
 
         // Start point in texture
-        let mut buf_offs = scanline as usize * pitch;
+        let buf_offs = scanline as usize * pitch;
 
         for i in 0..40 {
             let offset = (i * 4) as usize;
@@ -209,7 +208,7 @@ impl LCD {
             tile_map_offset += 0x9C00 - 0x8000;
         }
 
-        let mut tile_data_offset: u16 = 0;
+        let mut tile_data_offset: u16;
 
         let rgb_palette: [u8; 4] = [0xFF, 0xAA, 0x55, 0x00];
 
@@ -375,8 +374,8 @@ impl LCD {
         display_update
     }
 
-    pub fn old_update(&mut self, cycles: u32, mmu: &mut [u8; 0x10000]) -> bool {
-        let mut display_update = false;
+    pub fn old_update(&mut self, cycles: u32, _mmu: &mut [u8; 0x10000]) -> bool {
+        let display_update = false;
         self.scanline_cycles += cycles;
 
         if cycles > 16 {

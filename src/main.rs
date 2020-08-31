@@ -5,22 +5,20 @@ extern crate png;
 extern crate sdl2;
 extern crate serde;
 
-use std::env;
 use std::io::prelude::*;
 use std::io::stdin;
 use std::io::stdout;
-use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
-use sdl2::audio::{AudioCallback, AudioQueue, AudioSpecDesired};
+use sdl2::audio::{AudioCallback, AudioSpecDesired};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::video::SwapInterval;
 
-#[macro_escape]
+#[macro_use]
 mod macros;
 
 mod apu;
@@ -140,7 +138,7 @@ impl AudioCallback for AudioBuffer {
             i = i + 1;
         }
 
-        let &(ref lock, ref cvar) = &*self.pair;
+        let &(ref _lock, ref cvar) = &*self.pair;
         cvar.notify_one();
     }
 }
@@ -178,13 +176,13 @@ fn main() -> Result<(), String> {
 
     let bootstrap_rom = matches.value_of("boot").unwrap_or(BOOTSTRAP_ROM); // done!
     let cartridge_rom = matches.value_of("ROM").unwrap_or(CARTRIDGE_ROM); // done!
-    let headless: bool = matches.is_present("headless");
-    let record: Option<&str> = matches.value_of("record");
-    let record_frame_skip: u32 = parse(matches.value_of("skip"), 3);
+    let _headless: bool = matches.is_present("headless");
+    let _record: Option<&str> = matches.value_of("record");
+    let _record_frame_skip: u32 = parse(matches.value_of("skip"), 3);
     let break_at_address: Option<u16> = parse_optional(matches.value_of("break"));
     let break_at_cycle: Option<u64> = parse_optional(matches.value_of("break-cycle"));
-    let break_at_frame: Option<u32> = parse_optional(matches.value_of("break-frame"));
-    let exit_at_cycle: Option<u32> = parse_optional(matches.value_of("exit-cycle"));
+    let _break_at_frame: Option<u32> = parse_optional(matches.value_of("break-frame"));
+    let _exit_at_cycle: Option<u32> = parse_optional(matches.value_of("exit-cycle"));
     let exit_at_frame: Option<u32> = parse_optional(matches.value_of("exit-frame"));
     let capture_at_frame: Option<u32> = parse_optional(matches.value_of("capture"));
     let capture_filename: &str = matches
@@ -203,30 +201,30 @@ fn main() -> Result<(), String> {
         .unwrap();
 
     // Setup audio system
-    const fps: f64 = 60.0;
-    const sample_rate: u32 = 48_000;
+    const FPS: f64 = 60.0;
+    const SAMPLE_RATE: u32 = 48_000;
     let audio_subsystem = sdl_context.audio()?;
-    let audio_buffer: Arc<Mutex<[i16; sample_rate as usize]>> =
-        Arc::new(Mutex::new([0; sample_rate as usize]));
+    let audio_buffer: Arc<Mutex<[i16; SAMPLE_RATE as usize]>> =
+        Arc::new(Mutex::new([0; SAMPLE_RATE as usize]));
     let audio_sync_pair = Arc::new((Mutex::new(false), Condvar::new()));
 
-    let samples_per_frame: u32 = (sample_rate * 100) / (fps * 100.0) as u32;
+    let samples_per_frame: u32 = (SAMPLE_RATE * 100) / (FPS * 100.0) as u32;
 
     let desired_audio_spec = AudioSpecDesired {
-        freq: Some(sample_rate as i32),
+        freq: Some(SAMPLE_RATE as i32),
         channels: Some(1),
         samples: Some(samples_per_frame as u16),
     };
 
     // FIXME: validate that the received sample rate matches the desired rate
     let audio_device = audio_subsystem
-        .open_playback(None, &desired_audio_spec, |spec| AudioBuffer {
+        .open_playback(None, &desired_audio_spec, |_spec| AudioBuffer {
             buf: audio_buffer.clone(),
             pair: audio_sync_pair.clone(),
         })
         .unwrap();
 
-    let mut emu = Emu::new(sample_rate);
+    let mut emu = Emu::new(SAMPLE_RATE);
     emu.init();
 
     println!("Loading bootstrap ROM: {}", bootstrap_rom);
@@ -459,7 +457,7 @@ fn main() -> Result<(), String> {
                 */
 
             texture
-                .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+                .with_lock(None, |buffer: &mut [u8], _pitch: usize| {
                     buffer.copy_from_slice(&emu.mmu.lcd.buf_rgb8);
                 })
                 .unwrap();

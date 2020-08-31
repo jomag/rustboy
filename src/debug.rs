@@ -15,16 +15,16 @@ fn add_i8_to_u16(a: u16, b: i8) -> u16 {
     }
 }
 
-pub fn log_state(file: &mut File, mmu: &MMU) {
-    let f = mmu.reg.get_f();
-    file.write_fmt(format_args!(
-        "A:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} F:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} Op: {:02x} {:02x} DIV: {:02x}\n",
-        mmu.reg.a, mmu.reg.b, mmu.reg.c, mmu.reg.d,
-        mmu.reg.e, f, mmu.reg.h, mmu.reg.l,
-        mmu.reg.sp, mmu.reg.pc, mmu.direct_read(mmu.reg.pc), mmu.direct_read(mmu.reg.pc + 1),
-        mmu.timer.read_div()
-    ));
-}
+// pub fn log_state(file: &mut File, mmu: &MMU) {
+//     let f = mmu.reg.get_f();
+//     file.write_fmt(format_args!(
+//         "A:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} F:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} Op: {:02x} {:02x} DIV: {:02x}\n",
+//         mmu.reg.a, mmu.reg.b, mmu.reg.c, mmu.reg.d,
+//         mmu.reg.e, f, mmu.reg.h, mmu.reg.l,
+//         mmu.reg.sp, mmu.reg.pc, mmu.direct_read(mmu.reg.pc), mmu.direct_read(mmu.reg.pc + 1),
+//         mmu.timer.read_div()
+//     ));
+// }
 
 pub fn print_stack(mmu: &MMU, sp: u16) {
     let mut a: u16 = 0xFFFC;

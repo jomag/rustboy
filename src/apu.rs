@@ -7,11 +7,6 @@
 // https://gist.github.com/drhelius/3652407
 
 use mmu::{NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, NR50_REG, NR51_REG, NR52_REG};
-use sdl2::audio::{AudioCallback, AudioQueue, AudioSpecDesired};
-use sdl2::init;
-use std::collections::VecDeque;
-use std::thread::sleep;
-use std::time::Duration;
 
 pub struct SquareWaveSoundGenerator {
     // Internal enabled flag.
@@ -39,6 +34,57 @@ pub struct SquareWaveSoundGenerator {
 
     // Length counter enabled (NRx4, bit 6)
     counter_enabled: bool,
+}
+
+pub struct NoiseGenerator {
+    sample_rate: u32,
+
+    nr41: u8,
+    nr42: u8,
+    nr43: u8,
+    nr44: u8,
+
+    // Length counter. When this reaches zero the channel is disabled.
+    length_counter: u8,
+}
+
+impl NoiseGenerator {
+    pub fn new(sample_rate: u32) -> Self {
+        NoiseGenerator {
+            sample_rate: sample_rate,
+            nr41: 0,
+            nr42: 0,
+            nr43: 0,
+            nr44: 0,
+            length_counter: 0,
+        }
+    }
+
+    pub fn read_reg(&self, address: u16) -> u8 {
+        match address {
+            NR41_REG => self.nr41,
+            NR42_REG => self.nr42,
+            NR43_REG => self.nr43,
+            NR44_REG => self.nr44,
+            _ => 0,
+        }
+    }
+
+    pub fn write_reg(&mut self, address: u16, value: u8) {
+        // println!("S1 write NR10 + {:02X} = {:02X}", address, value);
+        match address {
+            0 => {
+                self.nr41 = value;
+                self.length_counter = 64 - (value & 63);
+            }
+
+            1 => self.nr42 = value,
+            2 => self.nr43 = value,
+            3 => self.nr44 = value,
+
+            _ => {}
+        }
+    }
 }
 
 impl SquareWaveSoundGenerator {
@@ -236,8 +282,8 @@ impl AudioProcessingUnit {
 
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
-            0xFF10...0xFF14 => self.s1.read_reg(address),
-            0xFF15...0xFF19 => self.s2.read_reg(address),
+            0xFF10..=0xFF14 => self.s1.read_reg(address),
+            0xFF15..=0xFF19 => self.s2.read_reg(address),
             NR50_REG => self.nr50,
             NR51_REG => self.nr51,
             NR52_REG => self.nr52,
@@ -248,8 +294,9 @@ impl AudioProcessingUnit {
     pub fn write_reg(&mut self, address: u16, value: u8) {
         // println!("Write audio register 0x{:04X}: 0x{:02X}", address, value);
         match address {
-            0xFF10...0xFF14 => self.s1.write_reg(address - 0xFF10, value),
-            0xFF15...0xFF19 => self.s2.write_reg(address - 0xFF15, value),
+            0xFF10..=0xFF14 => self.s1.write_reg(address - 0xFF10, value),
+            0xFF15..=0xFF19 => self.s2.write_reg(address - 0xFF15, value),
+            // 0xFF20..=0xFF23 => self.noise.write_reg(address - 0xFF20, value),
             NR50_REG => {
                 // println!("NRF50 = {:02X}", value);
                 self.nr50 = value

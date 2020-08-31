@@ -2713,13 +2713,6 @@ pub fn step(mmu: &mut MMU) {
                 0xFF => {
                     mmu.reg.a |= 128;
                 }
-
-                _ => {
-                    panic!(
-                        "Unsupported opcode at 0x{:04X}: 0x{:02X}{:02X}",
-                        mmu.reg.pc, op, op2
-                    );
-                }
             }
         }
 

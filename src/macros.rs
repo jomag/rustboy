@@ -1,5 +1,3 @@
-use debug::print_registers;
-
 #[macro_export]
 macro_rules! panic_debug {
     ($msg:expr, $mmu:expr) => {
