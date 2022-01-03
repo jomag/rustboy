@@ -24,7 +24,6 @@ mod macros;
 mod apu;
 mod buttons;
 mod cartridge;
-mod cpu;
 mod debug;
 mod dma;
 mod emu;
@@ -440,8 +439,11 @@ fn main() -> Result<(), String> {
 
             {
                 let &(ref lock, ref cvar) = &*audio_sync_pair;
-                let consumed = lock.lock().unwrap();
-                cvar.wait(consumed).unwrap();
+                let mut consumed = lock.lock().unwrap();
+                consumed = cvar.wait(consumed).unwrap();
+                while *consumed {
+                    consumed = cvar.wait(consumed).unwrap();
+                }
             }
 
             if let Some(frm) = capture_at_frame {

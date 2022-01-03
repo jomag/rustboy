@@ -50,16 +50,16 @@ pub const NR12_REG: u16 = 0xFF12;
 pub const NR13_REG: u16 = 0xFF13;
 pub const NR14_REG: u16 = 0xFF14;
 // - Sound Generator 2
-pub const NR21_REG: u16 = 0xFF16;
-pub const NR22_REG: u16 = 0xFF17;
-pub const NR23_REG: u16 = 0xFF18;
-pub const NR24_REG: u16 = 0xFF19;
+pub const _NR21_REG: u16 = 0xFF16;
+pub const _NR22_REG: u16 = 0xFF17;
+pub const _NR23_REG: u16 = 0xFF18;
+pub const _NR24_REG: u16 = 0xFF19;
 // - Sound Generator 3
-pub const NR30_REG: u16 = 0xFF1A;
-pub const NR31_REG: u16 = 0xFF1B;
-pub const NR32_REG: u16 = 0xFF1C;
-pub const NR33_REG: u16 = 0xFF1D;
-pub const NR34_REG: u16 = 0xFF1E;
+pub const _NR30_REG: u16 = 0xFF1A;
+pub const _NR31_REG: u16 = 0xFF1B;
+pub const _NR32_REG: u16 = 0xFF1C;
+pub const _NR33_REG: u16 = 0xFF1D;
+pub const _NR34_REG: u16 = 0xFF1E;
 // - Sound Generator 4
 pub const NR41_REG: u16 = 0xFF20;
 pub const NR42_REG: u16 = 0xFF21;
@@ -71,7 +71,7 @@ pub const NR51_REG: u16 = 0xFF25;
 pub const NR52_REG: u16 = 0xFF26;
 
 // Memory areas
-pub const OAM_OFFSET: u16 = 0xFE00;
+pub const _OAM_OFFSET: u16 = 0xFE00;
 
 pub struct MMU {
     pub reg: Registers,
@@ -281,6 +281,7 @@ impl MMU {
         }
     }
 
+    #[allow(dead_code)]
     pub fn read_i8(&mut self, addr: u16) -> i8 {
         let v = self.read(addr);
         return (0 as i8).wrapping_add(v as i8);
@@ -291,6 +292,7 @@ impl MMU {
         return (0 as i8).wrapping_add(v as i8);
     }
 
+    #[allow(dead_code)]
     pub fn read_u16(&mut self, addr: u16) -> u16 {
         let lo = self.read(addr);
         let hi = self.read(addr + 1);
@@ -386,7 +388,8 @@ impl MMU {
             }
         };
     }
-
+    
+    #[allow(dead_code)]
     pub fn pop(&mut self) -> u16 {
         let sp = self.reg.sp;
         let v = self.read_u16(sp);

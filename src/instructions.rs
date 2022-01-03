@@ -1,7 +1,7 @@
 use mmu::{IE_REG, IF_REG, MMU};
 use registers::Registers;
 
-pub fn op_cycles(op: u8) -> u32 {
+pub fn _op_cycles(op: u8) -> u32 {
     const OP_CYCLES: [u32; 256] = [
         1, 3, 2, 2, 1, 1, 2, 1, 5, 2, 2, 2, 1, 1, 2, 1, 0, 3, 2, 2, 1, 1, 2, 1, 3, 2, 2, 2, 1, 1,
         2, 1, 2, 3, 2, 2, 1, 1, 2, 1, 2, 2, 2, 2, 1, 1, 2, 1, 2, 3, 2, 2, 3, 3, 3, 1, 2, 2, 2, 2,

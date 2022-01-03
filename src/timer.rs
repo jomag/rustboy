@@ -85,24 +85,6 @@ impl Timer {
         }
     }
 
-    fn x_one_cycle(&mut self) {
-        self.cycle = self.cycle.wrapping_add(1);
-
-        if self.tac & TAC_ENABLE_BIT != 0 {
-            let bit = CLOCK_SELECTION[(self.tac & 3) as usize];
-            if (self.prev_cycle & bit) != 0 && (self.cycle & bit) == 0 {
-                if self.tima == 0xFF {
-                    self.irq |= IF_TMR_BIT;
-                    self.tima = self.tma;
-                } else {
-                    self.tima = self.tima + 1;
-                }
-            }
-        }
-
-        self.prev_cycle = self.cycle;
-    }
-
     fn one_cycle(&mut self) {
         self.abs_cycle = self.abs_cycle.wrapping_add(1);
 

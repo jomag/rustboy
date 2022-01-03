@@ -31,7 +31,9 @@ struct CartridgeMBC1 {
     // Type 1 has no ram or battery
     // Type 2 has ram
     // Type 3 has ram and battery
+    #[allow(dead_code)]
     pub with_ram: bool,
+    #[allow(dead_code)]
     pub with_battery: bool,
 }
 

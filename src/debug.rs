@@ -3,8 +3,7 @@ use mmu::{
     IE_REG, IF_REG, LCDC_REG, MMU, NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, SCX_REG,
     SCY_REG, STAT_REG,
 };
-use std::fs::File;
-use std::io::Write;
+
 use timer::Timer;
 
 fn add_i8_to_u16(a: u16, b: i8) -> u16 {
@@ -137,6 +136,7 @@ pub fn print_apu(mmu: &MMU) {
     println!("  NR14: 0x{:02X} {:08b}b ", nr14, nr14);
 }
 
+#[allow(dead_code)]
 pub fn print_ppu_registers(mmu: &MMU) {
     println!(
         "  LCDC: 0x{:02X} STAT: 0x{:02X} SCX: 0x{:02X} SCY: 0x{:02X}",
@@ -627,6 +627,7 @@ pub fn print_listing(mmu: &MMU, addr: u16, line_count: i32) -> u16 {
     a
 }
 
+#[allow(dead_code)]
 pub fn address_type(addr: u16) -> String {
     if addr < 0x4000 {
         return "ROM bank #0".to_string();

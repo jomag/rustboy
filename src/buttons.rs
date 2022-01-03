@@ -62,12 +62,9 @@ impl Buttons {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const p14_mask: u8 = 1 << 4;
-    const p15_mask: u8 = 1 << 5;
-    const a_or_right_mask: u8 = 1;
-    const b_or_left_mask: u8 = 2;
-    const select_or_up_mask: u8 = 4;
-    const start_or_down_mask: u8 = 8;
+    const P14_MASK: u8 = 1 << 4;
+    const P15_MASK: u8 = 1 << 5;
+    const SELECT_OR_UP_MASK: u8 = 4;
 
     #[test]
     fn test_initial_state() {
@@ -78,24 +75,24 @@ mod tests {
     #[test]
     fn test_up_button() {
         let mut btn = Buttons::new();
-        btn.write_p1(p15_mask);
+        btn.write_p1(P15_MASK);
         btn.handle_press(ButtonType::Up);
         btn.update();
-        assert!(btn.read_p1() & select_or_up_mask == 0);
+        assert!(btn.read_p1() & SELECT_OR_UP_MASK == 0);
         btn.handle_release(ButtonType::Up);
         btn.update();
-        assert!(btn.read_p1() & select_or_up_mask != 0)
+        assert!(btn.read_p1() & SELECT_OR_UP_MASK != 0)
     }
 
     #[test]
     fn test_select_button() {
         let mut btn = Buttons::new();
-        btn.write_p1(p14_mask);
+        btn.write_p1(P14_MASK);
         btn.handle_press(ButtonType::Select);
         btn.update();
-        assert!(btn.read_p1() & select_or_up_mask == 0);
+        assert!(btn.read_p1() & SELECT_OR_UP_MASK == 0);
         btn.handle_release(ButtonType::Select);
         btn.update();
-        assert!(btn.read_p1() & select_or_up_mask != 0)
+        assert!(btn.read_p1() & SELECT_OR_UP_MASK != 0)
     }
 }

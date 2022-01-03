@@ -6,19 +6,19 @@
 // Game Boy Sound Operation by Blarrg:
 // https://gist.github.com/drhelius/3652407
 
-use mmu::{NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, NR50_REG, NR51_REG, NR52_REG};
+use mmu::{NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, NR50_REG, NR51_REG, NR52_REG, NR41_REG, NR42_REG, NR43_REG, NR44_REG};
 
 pub struct SquareWaveSoundGenerator {
     // Internal enabled flag.
     enabled: bool,
     sample_rate: u32,
     duty: u8,
-    period: u32,
-    ctr: u32,
-    volume: i16,
+    _period: u32,
+    _ctr: u32,
+    _volume: i16,
     sample_count: u32,
     nr10: u8,
-    nr11: u8,
+    _nr11: u8,
     nr12: u8,
     nr13: u8,
     nr14: u8,
@@ -37,7 +37,7 @@ pub struct SquareWaveSoundGenerator {
 }
 
 pub struct NoiseGenerator {
-    sample_rate: u32,
+    _sample_rate: u32,
 
     nr41: u8,
     nr42: u8,
@@ -49,9 +49,10 @@ pub struct NoiseGenerator {
 }
 
 impl NoiseGenerator {
+    #[allow(dead_code)]
     pub fn new(sample_rate: u32) -> Self {
         NoiseGenerator {
-            sample_rate: sample_rate,
+            _sample_rate: sample_rate,
             nr41: 0,
             nr42: 0,
             nr43: 0,
@@ -60,6 +61,7 @@ impl NoiseGenerator {
         }
     }
 
+    #[allow(dead_code)]
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
             NR41_REG => self.nr41,
@@ -70,6 +72,7 @@ impl NoiseGenerator {
         }
     }
 
+    #[allow(dead_code)]
     pub fn write_reg(&mut self, address: u16, value: u8) {
         // println!("S1 write NR10 + {:02X} = {:02X}", address, value);
         match address {
@@ -91,14 +94,14 @@ impl SquareWaveSoundGenerator {
     pub fn new(sample_rate: u32) -> Self {
         SquareWaveSoundGenerator {
             enabled: false,
-            sample_rate: sample_rate,
+            sample_rate,
             duty: 2,
-            period: 0,
-            ctr: 0,
-            volume: 16384,
+            _period: 0,
+            _ctr: 0,
+            _volume: 16384,
             sample_count: 0,
             nr10: 0,
-            nr11: 0,
+            _nr11: 0,
             nr12: 0,
             nr13: 0,
             nr14: 0,

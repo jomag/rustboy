@@ -22,6 +22,4 @@ impl Emu {
     pub fn load_cartridge(&mut self, path: &str) {
         self.mmu.load_cartridge(&path)
     }
-
-    pub fn serialize(&mut self) {}
 }
