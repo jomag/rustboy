@@ -12,8 +12,8 @@ use interrupt::{IF_LCDC_BIT, IF_VBLANK_BIT};
 
 pub const SCREEN_WIDTH: usize = 160;
 pub const SCREEN_HEIGHT: usize = 144;
-const BUFFER_BYTES_PER_PIXEL: usize = 3;
-const BUFFER_SIZE_RGB8: usize = SCREEN_WIDTH * SCREEN_HEIGHT * BUFFER_BYTES_PER_PIXEL;
+const BUFFER_BYTES_PER_PIXEL: usize = 4;
+const BUFFER_SIZE_RGBA8: usize = SCREEN_WIDTH * SCREEN_HEIGHT * BUFFER_BYTES_PER_PIXEL;
 
 pub struct LCD {
     scanline_cycles: u32,
@@ -52,7 +52,8 @@ pub struct LCD {
     // to the texture.
     //
     // The pixel format is RGB24, 3 bytes per pixel.
-    pub buf_rgb8: [u8; BUFFER_SIZE_RGB8],
+    // FIXME: changed - pixel format is now RGBA8, 4 bytes per pixel!
+    pub buf_rgba8: [u8; BUFFER_SIZE_RGBA8],
 
     // Interrupt Request
     pub irq: u8,
@@ -81,7 +82,7 @@ impl LCD {
             isel_ly: false,
             ram: [0; 8192],
             oam: [0; 0xA0],
-            buf_rgb8: [0; BUFFER_SIZE_RGB8],
+            buf_rgba8: [0; BUFFER_SIZE_RGBA8],
             irq: 0,
             bgp: 0,
             obp0: 0,
@@ -176,9 +177,10 @@ impl LCD {
                             };
 
                             if hi || lo {
-                                self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 0] = v;
-                                self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 1] = v;
-                                self.buf_rgb8[buf_offs + ((x + xo) as usize * 3) + 2] = v;
+                                self.buf_rgba8[buf_offs + ((x + xo) as usize * 4) + 0] = v;
+                                self.buf_rgba8[buf_offs + ((x + xo) as usize * 4) + 1] = v;
+                                self.buf_rgba8[buf_offs + ((x + xo) as usize * 4) + 2] = v;
+                                self.buf_rgba8[buf_offs + ((x + xo) as usize * 4) + 3] = 255;
                             }
                         }
                     }
@@ -263,10 +265,11 @@ impl LCD {
                 };
                 let v = palette[idx as usize];
 
-                self.buf_rgb8[buf_offs] = v;
-                self.buf_rgb8[buf_offs + 1] = v;
-                self.buf_rgb8[buf_offs + 2] = v;
-                buf_offs += 3;
+                self.buf_rgba8[buf_offs] = v;
+                self.buf_rgba8[buf_offs + 1] = v;
+                self.buf_rgba8[buf_offs + 2] = v;
+                self.buf_rgba8[buf_offs + 3] = 255;
+                buf_offs += BUFFER_BYTES_PER_PIXEL;
             }
 
             xo = 0;
