@@ -6,6 +6,7 @@ use std::{
     },
 };
 
+use crate::lcd::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::{
     buttons::ButtonType,
     debug::{
@@ -14,7 +15,6 @@ use crate::{
     emu::Emu,
     parse_number,
 };
-use lcd::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use sdl2::{
     event::Event, keyboard::Keycode, pixels::PixelFormatEnum, rect::Rect, video::SwapInterval,
 };

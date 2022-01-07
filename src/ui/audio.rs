@@ -17,7 +17,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use sdl2::audio::{AudioCallback, AudioSpecDesired};
 use sdl2::Sdl;
 
-use ui::FPS;
+use crate::ui::FPS;
 
 pub const SAMPLE_RATE: u32 = 48_000;
 

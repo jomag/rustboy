@@ -6,7 +6,10 @@
 // Game Boy Sound Operation by Blarrg:
 // https://gist.github.com/drhelius/3652407
 
-use mmu::{NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, NR50_REG, NR51_REG, NR52_REG, NR41_REG, NR42_REG, NR43_REG, NR44_REG};
+use crate::mmu::{
+    NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, NR41_REG, NR42_REG, NR43_REG, NR44_REG,
+    NR50_REG, NR51_REG, NR52_REG,
+};
 
 pub struct SquareWaveSoundGenerator {
     // Internal enabled flag.

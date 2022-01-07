@@ -1,7 +1,7 @@
 // RenderStats is to a large extent copied from the FrameHistory type in
 // the egui demo app.
 
-use eframe::egui::util::History;
+use egui::util::History;
 
 pub struct RenderStats {
     frame_times: History<f32>,

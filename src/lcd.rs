@@ -1,4 +1,4 @@
-use interrupt::{IF_LCDC_BIT, IF_VBLANK_BIT};
+use crate::interrupt::{IF_LCDC_BIT, IF_VBLANK_BIT};
 
 // Bits of LCDC register:
 // 7 - LCD Enable (0 = off, 1 = on)
