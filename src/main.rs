@@ -25,7 +25,7 @@ mod ui;
 use emu::Emu;
 use lcd::{LCD, SCREEN_HEIGHT, SCREEN_WIDTH};
 use ui::audio::SAMPLE_RATE;
-use ui::full::run_with_full_ui;
+use ui::full::run_with_pure_glium_ui;
 use ui::minimal::run_with_minimal_ui;
 
 const APPNAME: &str = "Rustboy?";
@@ -132,7 +132,7 @@ fn main() -> Result<(), String> {
     println!("Loading cartridge ROM: {}", cartridge_rom);
     emu.load_cartridge(cartridge_rom);
 
-    run_with_full_ui(emu);
+    run_with_pure_glium_ui(emu);
     // run_with_minimal_ui(APPNAME, None, None, &mut emu);
 
     // FIXME: add breakpoint from command line argument
