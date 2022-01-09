@@ -4,6 +4,7 @@ extern crate image;
 extern crate num_traits;
 extern crate png;
 extern crate sdl2;
+extern crate winit;
 
 #[macro_use]
 mod macros;
@@ -25,8 +26,7 @@ mod ui;
 use emu::Emu;
 use lcd::{LCD, SCREEN_HEIGHT, SCREEN_WIDTH};
 use ui::audio::SAMPLE_RATE;
-use ui::full::run_with_pure_glium_ui;
-use ui::minimal::run_with_minimal_ui;
+use ui::full::*;
 
 const APPNAME: &str = "Rustboy?";
 const VERSION: &str = "0.0.0";
@@ -132,7 +132,7 @@ fn main() -> Result<(), String> {
     println!("Loading cartridge ROM: {}", cartridge_rom);
     emu.load_cartridge(cartridge_rom);
 
-    run_with_pure_glium_ui(emu);
+    run_with_wgpu(emu);
     // run_with_minimal_ui(APPNAME, None, None, &mut emu);
 
     // FIXME: add breakpoint from command line argument
