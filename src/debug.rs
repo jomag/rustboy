@@ -1,10 +1,10 @@
-use instructions::op_length;
-use mmu::{
+use crate::instructions::op_length;
+use crate::mmu::{
     IE_REG, IF_REG, LCDC_REG, MMU, NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, SCX_REG,
     SCY_REG, STAT_REG,
 };
 
-use timer::Timer;
+use crate::timer::Timer;
 
 fn add_i8_to_u16(a: u16, b: i8) -> u16 {
     if b > 0 {

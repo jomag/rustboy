@@ -1,5 +1,5 @@
-use mmu::{IE_REG, IF_REG, MMU};
-use registers::Registers;
+use crate::mmu::{IE_REG, IF_REG, MMU};
+use crate::registers::Registers;
 
 pub fn _op_cycles(op: u8) -> u32 {
     const OP_CYCLES: [u32; 256] = [

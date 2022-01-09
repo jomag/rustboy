@@ -3,17 +3,17 @@ extern crate ansi_term;
 use std::fs::File;
 use std::io::Read;
 
-use interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
+use crate::interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
 
-use apu::AudioProcessingUnit;
-use buttons::Buttons;
-use cartridge::{load_cartridge, Cartridge, NullCartridge};
-use dma::DMA;
-use instructions;
-use interrupt::handle_interrupts;
-use lcd::LCD;
-use registers::Registers;
-use timer::Timer;
+use crate::apu::AudioProcessingUnit;
+use crate::buttons::Buttons;
+use crate::cartridge::{load_cartridge, Cartridge, NullCartridge};
+use crate::dma::DMA;
+use crate::instructions;
+use crate::interrupt::handle_interrupts;
+use crate::lcd::LCD;
+use crate::registers::Registers;
+use crate::timer::Timer;
 
 // Port/Mode registers
 pub const P1_REG: u16 = 0xFF00;
@@ -388,7 +388,7 @@ impl MMU {
             }
         };
     }
-    
+
     #[allow(dead_code)]
     pub fn pop(&mut self) -> u16 {
         let sp = self.reg.sp;

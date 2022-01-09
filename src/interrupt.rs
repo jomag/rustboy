@@ -1,5 +1,5 @@
-use instructions::push_op;
-use mmu::{IE_REG, IF_REG, MMU};
+use crate::instructions::push_op;
+use crate::mmu::{IE_REG, IF_REG, MMU};
 
 pub const IF_VBLANK_BIT: u8 = 1;
 pub const IF_LCDC_BIT: u8 = 2;
