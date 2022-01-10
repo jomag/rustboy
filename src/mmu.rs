@@ -9,11 +9,11 @@ use crate::apu::AudioProcessingUnit;
 use crate::buttons::Buttons;
 use crate::cartridge::{load_cartridge, Cartridge, NullCartridge};
 use crate::dma::DMA;
-use crate::instructions;
 use crate::interrupt::handle_interrupts;
 use crate::lcd::LCD;
 use crate::registers::Registers;
 use crate::timer::Timer;
+use crate::{instructions, CLOCK_SPEED};
 
 // Port/Mode registers
 pub const P1_REG: u16 = 0xFF00;
@@ -106,7 +106,7 @@ pub struct MMU {
 }
 
 impl MMU {
-    pub fn new(sample_rate: u32) -> Self {
+    pub fn new() -> Self {
         MMU {
             reg: Registers::new(),
             cartridge: Box::new(NullCartridge {}),
@@ -123,7 +123,7 @@ impl MMU {
             lcd: LCD::new(),
             buttons: Buttons::new(),
             display_updated: false,
-            apu: AudioProcessingUnit::new(sample_rate),
+            apu: AudioProcessingUnit::new(),
         }
     }
 
@@ -174,6 +174,10 @@ impl MMU {
 
         if self.lcd.update(cycles) {
             self.display_updated = true;
+        }
+
+        for _ in 0..(cycles / 4) {
+            self.apu.update();
         }
 
         if !self.reg.halted {

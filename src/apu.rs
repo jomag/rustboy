@@ -6,15 +6,22 @@
 // Game Boy Sound Operation by Blarrg:
 // https://gist.github.com/drhelius/3652407
 
-use crate::mmu::{
-    NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, NR41_REG, NR42_REG, NR43_REG, NR44_REG,
-    NR50_REG, NR51_REG, NR52_REG,
+use cpal::Sample;
+use ringbuf::{Producer, RingBuffer};
+
+use crate::{
+    mmu::{
+        NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, NR41_REG, NR42_REG, NR43_REG, NR44_REG,
+        NR50_REG, NR51_REG, NR52_REG,
+    },
+    CLOCK_SPEED,
 };
+
+const TMP_SAMPLE_FREQ: u32 = CLOCK_SPEED as u32 / 4;
 
 pub struct SquareWaveSoundGenerator {
     // Internal enabled flag.
     enabled: bool,
-    sample_rate: u32,
     duty: u8,
     _period: u32,
     _ctr: u32,
@@ -94,10 +101,9 @@ impl NoiseGenerator {
 }
 
 impl SquareWaveSoundGenerator {
-    pub fn new(sample_rate: u32) -> Self {
+    pub fn new() -> Self {
         SquareWaveSoundGenerator {
             enabled: false,
-            sample_rate,
             duty: 2,
             _period: 0,
             _ctr: 0,
@@ -162,12 +168,12 @@ impl SquareWaveSoundGenerator {
         self.envelope_step = 0;
     }
 
-    pub fn generate(&mut self, samples: usize) -> Vec<i16> {
+    pub fn update(&mut self) -> i16 {
         let mut buf = Vec::new();
 
         let freq_raw: u32 = ((self.nr13 as u16) | (((self.nr14 & 0x07) as u16) << 8)) as u32;
         let freq = 131072 / (2048 - freq_raw);
-        let freq_samples = self.sample_rate / freq;
+        let freq_samples = TMP_SAMPLE_FREQ / freq;
 
         // When envelope steps is non-zero, the envelope (the amplitude)
         // will increase or decrease every (envelope_steps/64) second.
@@ -177,62 +183,59 @@ impl SquareWaveSoundGenerator {
             println!("NOT IMPLEMENTED: sweep");
         }
 
-        for _ in 0..samples {
-            let mut tick_256hz = false;
-            let mut tick_64hz = false;
+        let mut tick_256hz = false;
+        let mut tick_64hz = false;
 
-            // Increment frame sequencer at 512 Hz
-            if self.sample_count % (self.sample_rate / 512) == 0 {
-                self.frame_sequencer = self.frame_sequencer.wrapping_add(1);
-                tick_256hz = self.frame_sequencer & 1 == 0;
-                tick_64hz = self.frame_sequencer & 7 == 0;
-            }
-
-            // Length counter. When the length counter decrements to zero
-            // the channel gets disabled. It decrements at 256 Hz.
-            if self.counter_enabled {
-                if self.length_counter > 0 && tick_256hz {
-                    self.length_counter -= 1;
-                    if self.length_counter == 0 {
-                        self.enabled = false;
-                    }
-                }
-            }
-
-            // Envelope
-            if tick_64hz {
-                self.envelope_step += 1;
-                if envelope_steps == 0 {
-                    self.envelope_step = 0;
-                } else if self.envelope_step == envelope_steps {
-                    if self.nr12 & 8 == 0 {
-                        if self.envelope > 0 {
-                            self.envelope -= 1;
-                        }
-                    } else {
-                        if self.envelope < 0xf {
-                            self.envelope += 1;
-                        }
-                    }
-                    self.envelope_step = 0;
-                }
-            }
-
-            let mut amplitude: i16 = 0;
-
-            if self.enabled {
-                if self.sample_count % freq_samples < (freq_samples / 2) {
-                    amplitude = self.envelope * 200;
-                } else {
-                    amplitude = -self.envelope * 200;
-                }
-            }
-
-            buf.push(amplitude);
-            self.sample_count = self.sample_count.wrapping_add(1);
+        // Increment frame sequencer at 512 Hz
+        if self.sample_count % (TMP_SAMPLE_FREQ / 512) == 0 {
+            self.frame_sequencer = self.frame_sequencer.wrapping_add(1);
+            tick_256hz = self.frame_sequencer & 1 == 0;
+            tick_64hz = self.frame_sequencer & 7 == 0;
         }
 
-        buf
+        // Length counter. When the length counter decrements to zero
+        // the channel gets disabled. It decrements at 256 Hz.
+        if self.counter_enabled {
+            if self.length_counter > 0 && tick_256hz {
+                self.length_counter -= 1;
+                if self.length_counter == 0 {
+                    self.enabled = false;
+                }
+            }
+        }
+
+        // Envelope
+        if tick_64hz {
+            self.envelope_step += 1;
+            if envelope_steps == 0 {
+                self.envelope_step = 0;
+            } else if self.envelope_step == envelope_steps {
+                if self.nr12 & 8 == 0 {
+                    if self.envelope > 0 {
+                        self.envelope -= 1;
+                    }
+                } else {
+                    if self.envelope < 0xf {
+                        self.envelope += 1;
+                    }
+                }
+                self.envelope_step = 0;
+            }
+        }
+
+        let mut amplitude: i16 = 0;
+
+        if self.enabled {
+            if self.sample_count % freq_samples < (freq_samples / 2) {
+                amplitude = self.envelope * 200;
+            } else {
+                amplitude = -self.envelope * 200;
+            }
+        }
+
+        buf.push(amplitude);
+        self.sample_count = self.sample_count.wrapping_add(1);
+        return amplitude;
     }
 }
 
@@ -242,48 +245,56 @@ pub struct AudioProcessingUnit {
     pub nr50: u8,
     pub nr51: u8,
     pub nr52: u8,
+
+    // Producer for the output ring buffer.
+    // Every cycle one sample is appended to this buffer.
+    pub buf: Option<Producer<i16>>,
 }
 
 impl AudioProcessingUnit {
-    pub fn new(sample_rate: u32) -> Self {
+    pub fn new() -> Self {
         AudioProcessingUnit {
-            s1: SquareWaveSoundGenerator::new(sample_rate),
-            s2: SquareWaveSoundGenerator::new(sample_rate),
+            s1: SquareWaveSoundGenerator::new(),
+            s2: SquareWaveSoundGenerator::new(),
             nr50: 0,
             nr51: 0,
             nr52: 0,
+            buf: None,
         }
     }
 
-    pub fn generate(&mut self, samples: usize) -> Vec<i16> {
-        if self.nr52 & 0x80 == 0 {
-            return Vec::new();
-        }
+    pub fn update(&mut self) {
+        if let Some(ref mut producer) = self.buf {
+            if producer.is_full() {
+                // eprintln!("Buffer is full");
+                return;
+            }
 
-        let mut mix: Vec<i16> = Vec::with_capacity(samples);
-        for _ in 0..samples {
-            mix.push(0);
-        }
+            if self.nr52 & 0x80 == 0 {
+                producer
+                    .push(0)
+                    .expect("Failed to push sample to audio buffer");
+                return;
+            }
 
-        if self.nr52 & 0x01 == 0 {
-            if self.nr51 & (1 | 16) != 0 {
-                let wave = self.s1.generate(samples);
-                for i in 0..wave.len() {
-                    mix[i] = wave[i] / 2;
+            let mut sample: i16 = 0;
+
+            if self.nr52 & 0x01 == 0 {
+                if self.nr51 & (1 | 16) != 0 {
+                    sample += self.s1.update();
                 }
             }
-        }
 
-        if self.nr52 & 0x02 == 0 {
-            if self.nr51 & (2 | 32) != 0 {
-                let wave = self.s2.generate(samples);
-                for i in 0..wave.len() {
-                    mix[i] = mix[i] + wave[i] / 2;
+            if self.nr52 & 0x02 == 0 {
+                if self.nr51 & (2 | 32) != 0 {
+                    sample += self.s2.update();
                 }
             }
-        }
 
-        return mix;
+            producer
+                .push(sample)
+                .expect("Failed to push sample to audio buffer");
+        }
     }
 
     pub fn read_reg(&self, address: u16) -> u8 {

@@ -19,8 +19,6 @@ use sdl2::{
     event::Event, keyboard::Keycode, pixels::PixelFormatEnum, rect::Rect, video::SwapInterval,
 };
 
-use super::{audio::SAMPLE_RATE, FPS};
-
 const WINDOW_WIDTH: u32 = (SCREEN_WIDTH * 2) as u32;
 const WINDOW_HEIGHT: u32 = (SCREEN_HEIGHT * 2) as u32;
 

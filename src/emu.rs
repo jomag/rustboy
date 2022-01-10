@@ -5,10 +5,8 @@ pub struct Emu {
 }
 
 impl Emu {
-    pub fn new(sample_rate: u32) -> Self {
-        Emu {
-            mmu: MMU::new(sample_rate),
-        }
+    pub fn new() -> Self {
+        Emu { mmu: MMU::new() }
     }
 
     pub fn init(&mut self) {
