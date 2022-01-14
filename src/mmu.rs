@@ -103,6 +103,7 @@ pub struct MMU {
     pub apu: AudioProcessingUnit,
 
     pub display_updated: bool,
+    pub sample_count: u32,
 }
 
 impl MMU {
@@ -124,6 +125,7 @@ impl MMU {
             buttons: Buttons::new(),
             display_updated: false,
             apu: AudioProcessingUnit::new(),
+            sample_count: 0,
         }
     }
 
@@ -169,6 +171,8 @@ impl MMU {
     }
 
     pub fn tick(&mut self, cycles: u32) {
+        assert!(cycles % 4 == 0);
+
         self.timer.update(cycles);
         self.buttons.update();
 

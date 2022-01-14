@@ -6,7 +6,10 @@
 // Game Boy Sound Operation by Blarrg:
 // https://gist.github.com/drhelius/3652407
 
+use std::{fs::File, io::BufWriter};
+
 use cpal::Sample;
+use hound;
 use ringbuf::{Producer, RingBuffer};
 
 use crate::{
@@ -17,7 +20,7 @@ use crate::{
     CLOCK_SPEED,
 };
 
-const TMP_SAMPLE_FREQ: u32 = CLOCK_SPEED as u32 / 4;
+const SAMPLE_FREQ: u32 = CLOCK_SPEED as u32 / 4;
 
 pub struct SquareWaveSoundGenerator {
     // Internal enabled flag.
@@ -44,6 +47,9 @@ pub struct SquareWaveSoundGenerator {
 
     // Length counter enabled (NRx4, bit 6)
     counter_enabled: bool,
+
+    frequency_timer: u16,
+    wave_duty_position: u16,
 }
 
 pub struct NoiseGenerator {
@@ -119,6 +125,9 @@ impl SquareWaveSoundGenerator {
             frame_sequencer: 0,
             length_counter: 0,
             counter_enabled: false,
+
+            frequency_timer: 0,
+            wave_duty_position: 0,
         }
     }
 
@@ -169,25 +178,31 @@ impl SquareWaveSoundGenerator {
     }
 
     pub fn update(&mut self) -> i16 {
-        let mut buf = Vec::new();
+        if self.frequency_timer >= 4 {
+            self.frequency_timer -= 4;
+        }
 
-        let freq_raw: u32 = ((self.nr13 as u16) | (((self.nr14 & 0x07) as u16) << 8)) as u32;
-        let freq = 131072 / (2048 - freq_raw);
-        let freq_samples = TMP_SAMPLE_FREQ / freq;
+        if self.frequency_timer == 0 {
+            let frequency_raw: u16 =
+                ((self.nr13 as u16) | (((self.nr14 & 0x07) as u16) << 8)) as u16;
+            self.frequency_timer = (2048 as u16 - frequency_raw) * 4;
+            self.wave_duty_position = (self.wave_duty_position + 1) % 8;
+        }
 
         // When envelope steps is non-zero, the envelope (the amplitude)
         // will increase or decrease every (envelope_steps/64) second.
         let envelope_steps = self.nr12 & 7;
 
         if self.nr10 != 0 {
-            println!("NOT IMPLEMENTED: sweep");
+            // FIXME:
+            // println!("NOT IMPLEMENTED: sweep");
         }
 
         let mut tick_256hz = false;
         let mut tick_64hz = false;
 
         // Increment frame sequencer at 512 Hz
-        if self.sample_count % (TMP_SAMPLE_FREQ / 512) == 0 {
+        if self.sample_count % (SAMPLE_FREQ / 512) == 0 {
             self.frame_sequencer = self.frame_sequencer.wrapping_add(1);
             tick_256hz = self.frame_sequencer & 1 == 0;
             tick_64hz = self.frame_sequencer & 7 == 0;
@@ -226,17 +241,24 @@ impl SquareWaveSoundGenerator {
         let mut amplitude: i16 = 0;
 
         if self.enabled {
-            if self.sample_count % freq_samples < (freq_samples / 2) {
-                amplitude = self.envelope * 200;
+            // FIXME: handle different wave duties
+            if self.wave_duty_position < 4 {
+                return self.envelope * 200;
             } else {
-                amplitude = -self.envelope * 200;
+                return -self.envelope * 200;
             }
         }
 
-        buf.push(amplitude);
         self.sample_count = self.sample_count.wrapping_add(1);
         return amplitude;
     }
+}
+
+pub trait AudioRecorder {
+    fn mono(&mut self, sample: i16);
+    fn gen1(&mut self, sample: i16);
+    fn gen2(&mut self, sample: i16);
+    fn flush(&mut self);
 }
 
 pub struct AudioProcessingUnit {
@@ -249,6 +271,8 @@ pub struct AudioProcessingUnit {
     // Producer for the output ring buffer.
     // Every cycle one sample is appended to this buffer.
     pub buf: Option<Producer<i16>>,
+
+    pub recorder: Option<Box<dyn AudioRecorder>>,
 }
 
 impl AudioProcessingUnit {
@@ -260,13 +284,14 @@ impl AudioProcessingUnit {
             nr51: 0,
             nr52: 0,
             buf: None,
+            recorder: None,
         }
     }
 
     pub fn update(&mut self) {
         if let Some(ref mut producer) = self.buf {
             if producer.is_full() {
-                // eprintln!("Buffer is full");
+                // eprintln!("Buffer is full {} {}", producer.capacity(), producer.len());
                 return;
             }
 
@@ -277,18 +302,27 @@ impl AudioProcessingUnit {
                 return;
             }
 
-            let mut sample: i16 = 0;
+            let mut gen1_sample: i16 = 0;
+            let mut gen2_sample: i16 = 0;
 
             if self.nr52 & 0x01 == 0 {
                 if self.nr51 & (1 | 16) != 0 {
-                    sample += self.s1.update();
+                    gen1_sample = self.s1.update();
                 }
             }
 
             if self.nr52 & 0x02 == 0 {
                 if self.nr51 & (2 | 32) != 0 {
-                    sample += self.s2.update();
+                    gen2_sample = self.s2.update();
                 }
+            }
+
+            let sample = gen1_sample + gen2_sample;
+
+            if let Some(ref mut rec) = self.recorder {
+                rec.gen1(gen1_sample);
+                rec.gen2(gen2_sample);
+                rec.mono(sample);
             }
 
             producer

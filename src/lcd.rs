@@ -332,7 +332,7 @@ impl LCD {
                     self.scanline_cycles += 1;
                 }
 
-                456 => {
+                455 => {
                     // End of line. Start next.
                     self.scanline_cycles = 0;
                     self.scanline += 1;

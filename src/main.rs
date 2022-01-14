@@ -31,7 +31,9 @@ const VERSION: &str = "0.0.0";
 const AUTHOR: &str = "Jonatan Magnusson <jonatan.magnusson@gmail.com>";
 const BOOTSTRAP_ROM: &str = "rom/boot.gb";
 const CARTRIDGE_ROM: &str = "rom/tetris.gb";
+
 const CLOCK_SPEED: u32 = 4194304;
+const CYCLES_PER_FRAME: u32 = 70224;
 
 fn parse_number<T: num_traits::Num>(text: &str) -> Result<T, T::FromStrRadixErr> {
     if text.starts_with("0x") {

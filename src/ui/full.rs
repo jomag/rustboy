@@ -1,9 +1,10 @@
-use std::{iter, thread::sleep, time::Instant};
+use std::{fs::File, io::BufWriter, iter, thread::sleep, time::Instant};
 
 use crate::{
+    apu::AudioRecorder,
     emu::Emu,
     lcd::{SCREEN_HEIGHT, SCREEN_WIDTH},
-    APPNAME, CLOCK_SPEED,
+    APPNAME, CLOCK_SPEED, CYCLES_PER_FRAME,
 };
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
@@ -52,8 +53,63 @@ struct MoeApp {
     emu_render_stats: RenderStats,
 }
 
+pub struct WaveAudioRecorder {
+    pub mono_writer: Option<hound::WavWriter<BufWriter<File>>>,
+    pub gen1_writer: Option<hound::WavWriter<BufWriter<File>>>,
+    pub gen2_writer: Option<hound::WavWriter<BufWriter<File>>>,
+}
+
+impl AudioRecorder for WaveAudioRecorder {
+    fn mono(&mut self, sample: i16) {
+        if let Some(ref mut wr) = self.mono_writer {
+            wr.write_sample(sample);
+        }
+    }
+
+    fn gen1(&mut self, sample: i16) {
+        if let Some(ref mut wr) = self.gen1_writer {
+            wr.write_sample(sample);
+        }
+    }
+
+    fn gen2(&mut self, sample: i16) {
+        if let Some(ref mut wr) = self.gen2_writer {
+            wr.write_sample(sample);
+        }
+    }
+
+    fn flush(&mut self) {
+        if let Some(ref mut wr) = self.mono_writer {
+            wr.flush();
+        }
+
+        if let Some(ref mut wr) = self.gen1_writer {
+            wr.flush();
+        }
+
+        if let Some(ref mut wr) = self.gen2_writer {
+            wr.flush();
+        }
+    }
+}
+
 impl MoeApp {
     pub fn setup_audio(&mut self) -> Stream {
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 48000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+
+        let recorder = WaveAudioRecorder {
+            mono_writer: Some(hound::WavWriter::create("mono.wav", spec).unwrap()),
+            gen1_writer: Some(hound::WavWriter::create("gen1.wav", spec).unwrap()),
+            gen2_writer: Some(hound::WavWriter::create("gen2.wav", spec).unwrap()),
+        };
+
+        self.emu.mmu.apu.recorder = Some(Box::new(recorder));
+
         let host = cpal::default_host();
         let device = host
             .default_output_device()
@@ -70,7 +126,9 @@ impl MoeApp {
 
         println!("Selected audio config: {:?}", config);
 
-        let buf = RingBuffer::<i16>::new(CLOCK_SPEED as usize / 10);
+        // Generate ringbuffer big enough to fit 4 frames of audio.
+        // A new sample is generated every fourth clock cycle.
+        let buf = RingBuffer::<i16>::new((CYCLES_PER_FRAME as usize / 4) * 4);
         let (producer, mut consumer) = buf.split();
         self.emu.mmu.apu.buf = Some(producer);
 
@@ -83,7 +141,7 @@ impl MoeApp {
 
         let mut next_value = move || {
             // println!("enter next_value");
-            consumer.discard(CLOCK_SPEED as usize / 44100 / 4);
+            consumer.discard(22);
             // println!("remaining samples: {}", consumer.remaining());
             match consumer.pop() {
                 Some(sample) => {
@@ -91,7 +149,7 @@ impl MoeApp {
                     sample
                 }
                 None => {
-                    println!("Oops! Out of audio data");
+                    // println!("Oops! Out of audio data");
                     0
                 }
             }
@@ -431,6 +489,12 @@ pub fn run_with_wgpu(emu: Emu) {
                     while !app.emu.mmu.display_updated {
                         app.emu.mmu.exec_op();
                     }
+
+                    // Flush recorded audio every frame
+                    if let Some(ref mut rec) = app.emu.mmu.apu.recorder {
+                        rec.flush()
+                    }
+
                     emulator_frame_timestamp = now;
                     *control_flow = ControlFlow::Wait;
                     window.request_redraw();
