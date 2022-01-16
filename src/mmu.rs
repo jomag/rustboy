@@ -181,7 +181,9 @@ impl MMU {
         }
 
         for _ in 0..(cycles / 4) {
-            self.apu.update();
+            // Update APU. The APU needs the full 16-bit
+            // DIV counter for the frame sequencer.
+            self.apu.update(self.timer.cycle);
         }
 
         if !self.reg.halted {
@@ -209,7 +211,10 @@ impl MMU {
     }
 
     pub fn load_cartridge(&mut self, filename: &str) {
-        self.cartridge = load_cartridge(filename);
+        println!("enter mmu load_cart {}", filename);
+        // self.cartridge =
+        load_cartridge(filename.to_string());
+        println!("leave mmu load_cart");
     }
 
     pub fn fetch(&mut self) -> u8 {
@@ -279,6 +284,7 @@ impl MMU {
 
             // Sound registers
             0xFF10..=0xFF26 => self.apu.read_reg(addr),
+            0xFF30..=0xFF3F => self.apu.read_reg(addr),
 
             // Use self.io_reg for I/O registers that have not been implemented yet
             0xFF00..=0xFF7F => self.io_reg[(addr - 0xFF00) as usize],
@@ -342,16 +348,8 @@ impl MMU {
 
             // Sound registers
             0xFF10..=0xFF26 => self.apu.write_reg(addr, value),
+            0xFF30..=0xFF3F => self.apu.write_reg(addr, value),
 
-            // println!(
-            //     "Unhanlded write to audio register: 0x{:04X}={:02X}",
-            //     addr, value
-            // ),
-            0xFF30..=0xFF3F => {}
-            // println!(
-            //     "Unhandled write to wave register 0x{:04X}={:02X}",
-            //     addr, value
-            // ),
             P1_REG => self.buttons.write_p1(value),
             SB_REG => {}
             SC_REG => {}

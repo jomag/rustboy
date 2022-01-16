@@ -21,7 +21,7 @@ use winit::{
     event_loop::ControlFlow,
 };
 
-use super::render_stats::RenderStats;
+use super::{audio_window::render_audio_window, render_stats::RenderStats};
 
 const TARGET_FPS: u64 = 60;
 
@@ -108,7 +108,7 @@ impl MoeApp {
             gen2_writer: Some(hound::WavWriter::create("gen2.wav", spec).unwrap()),
         };
 
-        self.emu.mmu.apu.recorder = Some(Box::new(recorder));
+        // self.emu.mmu.apu.recorder = Some(Box::new(recorder));
 
         let host = cpal::default_host();
         let device = host
@@ -128,7 +128,10 @@ impl MoeApp {
 
         // Generate ringbuffer big enough to fit 4 frames of audio.
         // A new sample is generated every fourth clock cycle.
-        let buf = RingBuffer::<i16>::new((CYCLES_PER_FRAME as usize / 4) * 4);
+        // FIXME: the buffer is way too big as it is, so that there is some time
+        // before it runs out of space. This is because the data is not pulled in
+        // the right speed.
+        let buf = RingBuffer::<i16>::new((CYCLES_PER_FRAME as usize / 4) * 4 * 100);
         let (producer, mut consumer) = buf.split();
         self.emu.mmu.apu.buf = Some(producer);
 
@@ -139,9 +142,17 @@ impl MoeApp {
         let sample_rate = config.sample_rate.0 as f32;
         let channels = config.channels as usize;
 
+        let mut avg: u8 = 0;
+
         let mut next_value = move || {
             // println!("enter next_value");
-            consumer.discard(22);
+            avg = (avg + 1) % 3;
+            if avg == 0 {
+                consumer.discard(23);
+            } else {
+                consumer.discard(22);
+            }
+
             // println!("remaining samples: {}", consumer.remaining());
             match consumer.pop() {
                 Some(sample) => {
@@ -149,7 +160,7 @@ impl MoeApp {
                     sample
                 }
                 None => {
-                    // println!("Oops! Out of audio data");
+                    println!("Oops! Out of audio data");
                     0
                 }
             }
@@ -240,10 +251,13 @@ impl MoeApp {
             });
         }
 
+        render_audio_window(ctx, &mut self.emu);
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading(APPNAME);
             ui.label(format!("UI FPS: {:.1}", self.ui_render_stats.fps()));
             ui.label(format!("Emulator FPS: {:.1}", self.emu_render_stats.fps()));
+            egui::warn_if_debug_build(ui);
         });
     }
 }

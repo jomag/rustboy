@@ -40,9 +40,11 @@ struct CartridgeMBC1 {
 impl CartridgeMBC1 {
     pub fn new(data: Vec<u8>, with_ram: bool, with_battery: bool) -> Self {
         let mut rom = [0; 0x4000 * 128];
+        println!("CREATING MBC1 1");
         for (src, dst) in rom.iter_mut().zip(data.iter()) {
             *src = *dst
         }
+        println!("CREATING MBC1");
         CartridgeMBC1 {
             rom: rom,
             ram: [0; 0x8000],
@@ -158,11 +160,12 @@ impl Cartridge for NullCartridge {
     fn write(&mut self, _address: u16, _value: u8) {}
 }
 
-pub fn load_cartridge(filename: &str) -> Box<dyn Cartridge> {
+pub fn load_cartridge(filename: String) -> Box<dyn Cartridge> {
+    println!("enter cart load cart {}", filename);
     let mut file = File::open(filename).unwrap();
     let mut rom: Vec<u8> = Vec::new();
 
-    // Returns amount of bytes read and append the result to the buffer
+    // Returns amount of bytes read and append the rebsult to the buffer
     let result = file.read_to_end(&mut rom).unwrap();
     println!("Read {} bytes", result);
 
@@ -171,9 +174,16 @@ pub fn load_cartridge(filename: &str) -> Box<dyn Cartridge> {
 
     match cartridge_type {
         0 => return Box::new(Cartridge32k::new(rom)) as Box<dyn Cartridge>,
-        1 => return Box::new(CartridgeMBC1::new(rom, false, false)) as Box<dyn Cartridge>,
+        1 => {
+            println!("eoajrhaoejrhea");
+            let a = CartridgeMBC1::new(rom, false, false);
+            println!("aojfgawpoejfjjjjj....");
+            let b = Box::new(a) as Box<dyn Cartridge>;
+            println!("aaaaa");
+            return b;
+        }
         2 => return Box::new(CartridgeMBC1::new(rom, true, false)) as Box<dyn Cartridge>,
         3 => return Box::new(CartridgeMBC1::new(rom, false, false)) as Box<dyn Cartridge>,
         _ => panic!("Unsupported cartridge type: {:02X}", cartridge_type),
-    }
+    };
 }
