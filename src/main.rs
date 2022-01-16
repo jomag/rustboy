@@ -87,13 +87,6 @@ fn capture_frame(filename: &str, frame: u32, lcd: &LCD) -> Result<(), std::io::E
 }
 
 fn main() -> Result<(), String> {
-    let cartridge_rom = "rom/ducktales.gb";
-    println!("EARLY Loading cartridge ROM: {}", cartridge_rom);
-    println!("HERE1");
-    let mut emu = Emu::new();
-    emu.load_cartridge(cartridge_rom);
-    println!("HERE2");
-
     let matches = clap::App::new(APPNAME)
         .version(VERSION)
         .author(AUTHOR)
@@ -138,9 +131,7 @@ fn main() -> Result<(), String> {
     println!(" - {} bytes read", sz);
 
     println!("Loading cartridge ROM: {}", cartridge_rom);
-    println!("HERE1");
     emu.load_cartridge(cartridge_rom);
-    println!("HERE2");
 
     run_with_wgpu(emu);
     // run_with_minimal_ui(APPNAME, None, None, &mut emu);

@@ -5,6 +5,9 @@
 //
 // Game Boy Sound Operation by Blarrg:
 // https://gist.github.com/drhelius/3652407
+//
+// GB Sound Emulation by Nightshade:
+// https://nightshade256.github.io/2021/03/27/gb-sound-emulation.html
 
 use std::{fs::File, io::BufWriter};
 
@@ -22,56 +25,103 @@ use crate::{
 
 const SAMPLE_FREQ: u32 = CLOCK_SPEED as u32 / 4;
 
-pub struct NoiseGenerator {
-    _sample_rate: u32,
+pub struct NoiseSoundGenerator {
+    // ---------
+    // Registers
+    // ---------
 
+    // NR41 (0xFF20): length load
+    // 5..0: load sound length (write only)
     nr41: u8,
+
+    // NR42 (0xFF21): Volume envelope
+    // bit 7..4: initial volume
+    // bit 3:    envelope direction
+    // bit 2..0: sweep count
     nr42: u8,
+
+    // NR43 (0xFF22): polynomial counter
+    // bit 7..4: shift clock frequency
+    // bit 3:    counter step/width (0=15 bits, 1=7 bits)
+    // bit 2..0: dividing ratio of frequencies
     nr43: u8,
+
+    // NR44 (0xFF23): counter/consecutive, initial
+    // bit 7: initial, 1=restart sound
+    // bit 6: counter/consecutive selection (1=stop when length expires)
     nr44: u8,
 
-    // Length counter. When this reaches zero the channel is disabled.
-    length_counter: u8,
+    // Internal register. When this counter reaches zero,
+    // it is reset to the frequency value.
+    frequency_timer: u16,
+
+    // LFSR register. Internal. 15 bits.
+    pub lfsr: u16,
+
+    // Polynomial counter. Internal.
+    polynomial_counter: u8,
 }
 
-impl NoiseGenerator {
-    #[allow(dead_code)]
-    pub fn new(sample_rate: u32) -> Self {
-        NoiseGenerator {
-            _sample_rate: sample_rate,
+const NOISE_DIVISOR_MAP: [u8; 8] = [8, 16, 32, 48, 64, 80, 96, 112];
+
+impl NoiseSoundGenerator {
+    pub fn new() -> Self {
+        NoiseSoundGenerator {
             nr41: 0,
             nr42: 0,
             nr43: 0,
             nr44: 0,
-            length_counter: 0,
+            frequency_timer: 0,
+            lfsr: 0,
+            polynomial_counter: 0,
         }
     }
 
-    #[allow(dead_code)]
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
-            NR41_REG => self.nr41,
-            NR42_REG => self.nr42,
-            NR43_REG => self.nr43,
-            NR44_REG => self.nr44,
-            _ => 0,
+            0 => self.nr41,
+            1 => self.nr42,
+            2 => self.nr43,
+            3 => self.nr44,
+            _ => panic!("invalid register {}", address),
         }
     }
 
-    #[allow(dead_code)]
     pub fn write_reg(&mut self, address: u16, value: u8) {
-        // println!("S1 write NR10 + {:02X} = {:02X}", address, value);
         match address {
-            0 => {
-                self.nr41 = value;
-                self.length_counter = 64 - (value & 63);
-            }
-
+            0 => self.nr41 = value,
             1 => self.nr42 = value,
             2 => self.nr43 = value,
             3 => self.nr44 = value,
+            _ => panic!("invalid register {}", address),
+        }
+    }
 
-            _ => {}
+    pub fn update(&mut self, hz64: bool, hz256: bool) -> i16 {
+        // Decrement frequency timer
+        if self.frequency_timer >= 4 {
+            self.frequency_timer -= 4;
+        }
+
+        if self.frequency_timer == 0 {
+            let divisor_code = self.nr43 & 7;
+            let divisor = NOISE_DIVISOR_MAP[divisor_code as usize];
+            let shift_amount = (self.nr43 & 0xF0) >> 4;
+            self.frequency_timer = (divisor as u16) << (shift_amount as u16);
+
+            let xor_result = (self.lfsr & 1) ^ ((self.lfsr & 2) >> 1);
+            self.lfsr = (self.lfsr >> 1) | (xor_result << 14);
+
+            if self.nr43 & 0b1000 != 0 {
+                self.lfsr &= !(1 << 6);
+                self.lfsr |= xor_result << 6;
+            }
+        }
+
+        if (self.lfsr & 1) == 0 {
+            return -200;
+        } else {
+            return 200;
         }
     }
 }
@@ -92,7 +142,7 @@ pub struct WaveSoundGenerator {
     // 7..0: load sound length (write only)
     nr31: u8,
 
-    // NR32 (0xFF1C): Volume code
+    // NR32 (0xFF1C): Volume envelope
     // bit 7, 4..0: not used
     // bit 6..5: volume code (0=0%, 1=100%, 2=50%, 3=25%)
     nr32: u8,
@@ -345,14 +395,12 @@ impl SquareWaveSoundGenerator {
 
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
-            NR10_REG => self.nr10,
-
-            // FIXME: bit 0..5 are write only
-            NR11_REG => self.nr11,
-            NR12_REG => self.nr12,
-            NR13_REG => self.nr13,
-            NR14_REG => self.nr14,
-            _ => 0,
+            0 => self.nr10,
+            1 => self.nr11,
+            2 => self.nr12,
+            3 => self.nr13,
+            4 => self.nr14,
+            _ => panic!("invalid register {}", address),
         }
     }
 
@@ -372,7 +420,7 @@ impl SquareWaveSoundGenerator {
                     self.trigger();
                 }
             }
-            _ => {}
+            _ => panic!("invalid register {}", address),
         }
     }
 
@@ -479,6 +527,7 @@ pub struct AudioProcessingUnit {
     pub s1: SquareWaveSoundGenerator,
     pub s2: SquareWaveSoundGenerator,
     pub ch3: WaveSoundGenerator,
+    pub ch4: NoiseSoundGenerator,
     pub nr50: u8,
     pub nr51: u8,
     pub nr52: u8,
@@ -496,6 +545,7 @@ impl AudioProcessingUnit {
             s1: SquareWaveSoundGenerator::new(),
             s2: SquareWaveSoundGenerator::new(),
             ch3: WaveSoundGenerator::new(),
+            ch4: NoiseSoundGenerator::new(),
             nr50: 0,
             nr51: 0,
             nr52: 0,
@@ -553,6 +603,7 @@ impl AudioProcessingUnit {
         let mut ch1_output: i16 = 0;
         let mut ch2_output: i16 = 0;
         let mut ch3_output: i16 = 0;
+        let mut ch4_output: i16 = 0;
 
         if self.nr52 & 0x01 == 0 {
             if self.nr51 & (1 | 16) != 0 {
@@ -566,9 +617,15 @@ impl AudioProcessingUnit {
             }
         }
 
-        ch3_output = self.ch3.update(hz256);
+        if self.nr52 & 0x04 == 0 {
+            ch3_output = self.ch3.update(hz256);
+        }
 
-        let sample = ch1_output + ch2_output + ch3_output;
+        if self.nr52 & 0x08 == 0 {
+            ch4_output = self.ch4.update(hz64, hz256);
+        }
+
+        let sample = ch1_output + ch2_output + ch3_output + ch4_output;
 
         if let Some(ref mut rec) = self.recorder {
             rec.gen1(ch1_output);
@@ -593,6 +650,7 @@ impl AudioProcessingUnit {
             0xFF10..=0xFF14 => self.s1.read_reg(address - 0xFF10),
             0xFF15..=0xFF19 => self.s2.read_reg(address - 0xFF15),
             0xFF1A..=0xFF1E => self.ch3.read_reg(address - 0xFF1A),
+            0xFF20..=0xFF23 => self.ch4.read_reg(address - 0xFF20),
             0xFF30..=0xFF3F => self.ch3.read_wave_reg(address as usize - 0xFF30),
             NR50_REG => self.nr50,
             NR51_REG => self.nr51,
@@ -607,8 +665,8 @@ impl AudioProcessingUnit {
             0xFF10..=0xFF14 => self.s1.write_reg(address - 0xFF10, value),
             0xFF15..=0xFF19 => self.s2.write_reg(address - 0xFF15, value),
             0xFF1A..=0xFF1E => self.ch3.write_reg(address - 0xFF1A, value),
+            0xFF20..=0xFF23 => self.ch4.write_reg(address - 0xFF20, value),
             0xFF30..=0xFF3F => self.ch3.write_wave_reg(address as usize - 0xFF30, value),
-            // 0xFF20..=0xFF23 => self.noise.write_reg(address - 0xFF20, value),
             NR50_REG => {
                 // println!("NRF50 = {:02X}", value);
                 self.nr50 = value

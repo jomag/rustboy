@@ -211,10 +211,7 @@ impl MMU {
     }
 
     pub fn load_cartridge(&mut self, filename: &str) {
-        println!("enter mmu load_cart {}", filename);
-        // self.cartridge =
-        load_cartridge(filename.to_string());
-        println!("leave mmu load_cart");
+        self.cartridge = load_cartridge(filename.to_string());
     }
 
     pub fn fetch(&mut self) -> u8 {

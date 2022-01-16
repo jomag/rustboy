@@ -18,9 +18,6 @@ impl Emu {
     }
 
     pub fn load_cartridge(&mut self, path: &str) {
-        println!("enter load cartridge");
-        let x = self.mmu.load_cartridge(path);
-        println!("lkeave load cartridge");
-        x
+        self.mmu.load_cartridge(path);
     }
 }
