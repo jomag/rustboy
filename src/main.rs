@@ -1,6 +1,5 @@
 extern crate clap;
 extern crate ctrlc;
-extern crate image;
 extern crate num_traits;
 extern crate png;
 extern crate sdl2;
@@ -25,7 +24,6 @@ mod ui;
 
 use emu::Emu;
 use lcd::{LCD, SCREEN_HEIGHT, SCREEN_WIDTH};
-use ui::audio::SAMPLE_RATE;
 use ui::full::*;
 
 const APPNAME: &str = "Rustboy?";
@@ -33,6 +31,9 @@ const VERSION: &str = "0.0.0";
 const AUTHOR: &str = "Jonatan Magnusson <jonatan.magnusson@gmail.com>";
 const BOOTSTRAP_ROM: &str = "rom/boot.gb";
 const CARTRIDGE_ROM: &str = "rom/tetris.gb";
+
+const CLOCK_SPEED: u32 = 4194304;
+const CYCLES_PER_FRAME: u32 = 70224;
 
 fn parse_number<T: num_traits::Num>(text: &str) -> Result<T, T::FromStrRadixErr> {
     if text.starts_with("0x") {
@@ -122,7 +123,7 @@ fn main() -> Result<(), String> {
         .value_of("capture-to")
         .unwrap_or("capture-frame-#.png");
 
-    let mut emu = Emu::new(SAMPLE_RATE);
+    let mut emu = Emu::new();
     emu.init();
 
     println!("Loading bootstrap ROM: {}", bootstrap_rom);

@@ -1,4 +1,5 @@
 pub mod audio;
+pub mod audio_window;
 pub mod full;
 pub mod minimal;
 pub mod render_stats;

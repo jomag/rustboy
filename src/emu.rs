@@ -5,10 +5,8 @@ pub struct Emu {
 }
 
 impl Emu {
-    pub fn new(sample_rate: u32) -> Self {
-        Emu {
-            mmu: MMU::new(sample_rate),
-        }
+    pub fn new() -> Self {
+        Emu { mmu: MMU::new() }
     }
 
     pub fn init(&mut self) {
@@ -20,6 +18,6 @@ impl Emu {
     }
 
     pub fn load_cartridge(&mut self, path: &str) {
-        self.mmu.load_cartridge(&path)
+        self.mmu.load_cartridge(path);
     }
 }

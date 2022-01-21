@@ -10,10 +10,10 @@ struct CartridgeMBC1 {
     // Cartridges of type MBC1 can hold 125 banks of 16k.
     // Three banks are reserved, which is the reason for
     // the odd number instead of 128.
-    pub rom: [u8; 0x4000 * 128],
+    pub rom: Box<[u8]>,
 
     // 32k RAM
-    pub ram: [u8; 0x8000],
+    pub ram: Box<[u8]>,
 
     // 5 LSB of the ROM bank
     pub rom_bank_lower: u8,
@@ -39,13 +39,15 @@ struct CartridgeMBC1 {
 
 impl CartridgeMBC1 {
     pub fn new(data: Vec<u8>, with_ram: bool, with_battery: bool) -> Self {
-        let mut rom = [0; 0x4000 * 128];
+        let mut rom = vec![0; 0x4000 * 128].into_boxed_slice();
+
         for (src, dst) in rom.iter_mut().zip(data.iter()) {
             *src = *dst
         }
+
         CartridgeMBC1 {
             rom: rom,
-            ram: [0; 0x8000],
+            ram: vec![0; 0x8000].into_boxed_slice(),
             rom_bank_lower: 0,
             rom_ram_bank: 0,
             rom_ram_mode: 0,
@@ -128,15 +130,15 @@ impl Cartridge for CartridgeMBC1 {
 }
 
 struct Cartridge32k {
-    pub rom: [u8; 0x8000],
+    pub rom: Box<[u8]>,
 }
 
 impl Cartridge32k {
     pub fn new(data: Vec<u8>) -> Self {
-        let mut rom = [0; 0x8000];
+        let mut rom = vec![0; 0x8000].into_boxed_slice();
         let bytes = &data[..data.len()];
         rom.copy_from_slice(bytes);
-        Cartridge32k { rom: rom }
+        Cartridge32k { rom }
     }
 }
 
@@ -158,11 +160,11 @@ impl Cartridge for NullCartridge {
     fn write(&mut self, _address: u16, _value: u8) {}
 }
 
-pub fn load_cartridge(filename: &str) -> Box<dyn Cartridge> {
+pub fn load_cartridge(filename: String) -> Box<dyn Cartridge> {
     let mut file = File::open(filename).unwrap();
     let mut rom: Vec<u8> = Vec::new();
 
-    // Returns amount of bytes read and append the result to the buffer
+    // Returns amount of bytes read and append the rebsult to the buffer
     let result = file.read_to_end(&mut rom).unwrap();
     println!("Read {} bytes", result);
 
@@ -171,9 +173,13 @@ pub fn load_cartridge(filename: &str) -> Box<dyn Cartridge> {
 
     match cartridge_type {
         0 => return Box::new(Cartridge32k::new(rom)) as Box<dyn Cartridge>,
-        1 => return Box::new(CartridgeMBC1::new(rom, false, false)) as Box<dyn Cartridge>,
+        1 => {
+            let a = CartridgeMBC1::new(rom, false, false);
+            let b = Box::new(a) as Box<dyn Cartridge>;
+            return b;
+        }
         2 => return Box::new(CartridgeMBC1::new(rom, true, false)) as Box<dyn Cartridge>,
         3 => return Box::new(CartridgeMBC1::new(rom, false, false)) as Box<dyn Cartridge>,
         _ => panic!("Unsupported cartridge type: {:02X}", cartridge_type),
-    }
+    };
 }

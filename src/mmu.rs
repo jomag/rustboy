@@ -9,11 +9,11 @@ use crate::apu::AudioProcessingUnit;
 use crate::buttons::Buttons;
 use crate::cartridge::{load_cartridge, Cartridge, NullCartridge};
 use crate::dma::DMA;
-use crate::instructions;
 use crate::interrupt::handle_interrupts;
 use crate::lcd::LCD;
 use crate::registers::Registers;
 use crate::timer::Timer;
+use crate::{instructions, CLOCK_SPEED};
 
 // Port/Mode registers
 pub const P1_REG: u16 = 0xFF00;
@@ -103,10 +103,11 @@ pub struct MMU {
     pub apu: AudioProcessingUnit,
 
     pub display_updated: bool,
+    pub sample_count: u32,
 }
 
 impl MMU {
-    pub fn new(sample_rate: u32) -> Self {
+    pub fn new() -> Self {
         MMU {
             reg: Registers::new(),
             cartridge: Box::new(NullCartridge {}),
@@ -123,7 +124,8 @@ impl MMU {
             lcd: LCD::new(),
             buttons: Buttons::new(),
             display_updated: false,
-            apu: AudioProcessingUnit::new(sample_rate),
+            apu: AudioProcessingUnit::new(),
+            sample_count: 0,
         }
     }
 
@@ -169,11 +171,19 @@ impl MMU {
     }
 
     pub fn tick(&mut self, cycles: u32) {
+        assert!(cycles % 4 == 0);
+
         self.timer.update(cycles);
         self.buttons.update();
 
         if self.lcd.update(cycles) {
             self.display_updated = true;
+        }
+
+        for _ in 0..(cycles / 4) {
+            // Update APU. The APU needs the full 16-bit
+            // DIV counter for the frame sequencer.
+            self.apu.update(self.timer.cycle);
         }
 
         if !self.reg.halted {
@@ -201,7 +211,7 @@ impl MMU {
     }
 
     pub fn load_cartridge(&mut self, filename: &str) {
-        self.cartridge = load_cartridge(filename);
+        self.cartridge = load_cartridge(filename.to_string());
     }
 
     pub fn fetch(&mut self) -> u8 {
@@ -271,6 +281,7 @@ impl MMU {
 
             // Sound registers
             0xFF10..=0xFF26 => self.apu.read_reg(addr),
+            0xFF30..=0xFF3F => self.apu.read_reg(addr),
 
             // Use self.io_reg for I/O registers that have not been implemented yet
             0xFF00..=0xFF7F => self.io_reg[(addr - 0xFF00) as usize],
@@ -334,16 +345,8 @@ impl MMU {
 
             // Sound registers
             0xFF10..=0xFF26 => self.apu.write_reg(addr, value),
+            0xFF30..=0xFF3F => self.apu.write_reg(addr, value),
 
-            // println!(
-            //     "Unhanlded write to audio register: 0x{:04X}={:02X}",
-            //     addr, value
-            // ),
-            0xFF30..=0xFF3F => {}
-            // println!(
-            //     "Unhandled write to wave register 0x{:04X}={:02X}",
-            //     addr, value
-            // ),
             P1_REG => self.buttons.write_p1(value),
             SB_REG => {}
             SC_REG => {}

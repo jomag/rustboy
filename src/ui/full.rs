@@ -1,21 +1,27 @@
-use std::{iter, time::Instant};
+use std::{fs::File, io::BufWriter, iter, thread::sleep, time::Instant};
 
 use crate::{
+    apu::AudioRecorder,
     emu::Emu,
     lcd::{SCREEN_HEIGHT, SCREEN_WIDTH},
-    APPNAME,
+    APPNAME, CLOCK_SPEED, CYCLES_PER_FRAME,
+};
+use cpal::{
+    traits::{DeviceTrait, HostTrait, StreamTrait},
+    Sample, SampleFormat, Stream, StreamConfig,
 };
 use egui::FontDefinitions;
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use epi::*;
+use ringbuf::RingBuffer;
 use wgpu::FilterMode;
 use winit::{
     event::{Event::*, StartCause},
     event_loop::ControlFlow,
 };
 
-use super::render_stats::RenderStats;
+use super::{audio_window::render_audio_window, render_stats::RenderStats};
 
 const TARGET_FPS: u64 = 60;
 
@@ -47,7 +53,167 @@ struct MoeApp {
     emu_render_stats: RenderStats,
 }
 
+pub struct WaveAudioRecorder {
+    pub mono_writer: Option<hound::WavWriter<BufWriter<File>>>,
+    pub gen1_writer: Option<hound::WavWriter<BufWriter<File>>>,
+    pub gen2_writer: Option<hound::WavWriter<BufWriter<File>>>,
+}
+
+impl AudioRecorder for WaveAudioRecorder {
+    fn mono(&mut self, sample: i16) {
+        if let Some(ref mut wr) = self.mono_writer {
+            wr.write_sample(sample);
+        }
+    }
+
+    fn gen1(&mut self, sample: i16) {
+        if let Some(ref mut wr) = self.gen1_writer {
+            wr.write_sample(sample);
+        }
+    }
+
+    fn gen2(&mut self, sample: i16) {
+        if let Some(ref mut wr) = self.gen2_writer {
+            wr.write_sample(sample);
+        }
+    }
+
+    fn flush(&mut self) {
+        if let Some(ref mut wr) = self.mono_writer {
+            wr.flush();
+        }
+
+        if let Some(ref mut wr) = self.gen1_writer {
+            wr.flush();
+        }
+
+        if let Some(ref mut wr) = self.gen2_writer {
+            wr.flush();
+        }
+    }
+}
+
 impl MoeApp {
+    pub fn setup_audio(&mut self) -> Stream {
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 48000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+
+        let recorder = WaveAudioRecorder {
+            mono_writer: Some(hound::WavWriter::create("mono.wav", spec).unwrap()),
+            gen1_writer: Some(hound::WavWriter::create("gen1.wav", spec).unwrap()),
+            gen2_writer: Some(hound::WavWriter::create("gen2.wav", spec).unwrap()),
+        };
+
+        // self.emu.mmu.apu.recorder = Some(Box::new(recorder));
+
+        let host = cpal::default_host();
+        let device = host
+            .default_output_device()
+            .expect("no output device available");
+
+        let mut supported_configs_range = device
+            .supported_output_configs()
+            .expect("error while querying configs");
+
+        let config = supported_configs_range
+            .next()
+            .expect("no supported config?")
+            .with_max_sample_rate();
+
+        println!("Selected audio config: {:?}", config);
+
+        // Generate ringbuffer big enough to fit 4 frames of audio.
+        // A new sample is generated every fourth clock cycle.
+        // FIXME: the buffer is way too big as it is, so that there is some time
+        // before it runs out of space. This is because the data is not pulled in
+        // the right speed.
+        let buf = RingBuffer::<i16>::new((CYCLES_PER_FRAME as usize / 4) * 4 * 100);
+        let (producer, mut consumer) = buf.split();
+        self.emu.mmu.apu.buf = Some(producer);
+
+        let err_fn = |err| eprintln!("an error occured on the output audio stream: {}", err);
+        let sample_format = config.sample_format();
+        let config: StreamConfig = config.into();
+
+        let sample_rate = config.sample_rate.0 as f32;
+        let channels = config.channels as usize;
+
+        let mut avg: u8 = 0;
+
+        let mut next_value = move || {
+            // println!("enter next_value");
+            avg = (avg + 1) % 3;
+            if avg == 0 {
+                consumer.discard(23);
+            } else {
+                consumer.discard(22);
+            }
+
+            // println!("remaining samples: {}", consumer.remaining());
+            match consumer.pop() {
+                Some(sample) => {
+                    // println!("Sample: {}", sample);
+                    sample
+                }
+                None => {
+                    println!("Oops! Out of audio data");
+                    0
+                }
+            }
+        };
+
+        let stream = match sample_format {
+            SampleFormat::F32 => device.build_output_stream(
+                &config,
+                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                    // println!("HERE");
+                    write_beep::<f32>(data, channels, &mut next_value)
+                },
+                err_fn,
+            ),
+
+            SampleFormat::I16 => device.build_output_stream(
+                &config,
+                move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
+                    // println!("HERE2");
+                    write_beep::<i16>(data, channels, &mut next_value)
+                },
+                err_fn,
+            ),
+
+            SampleFormat::U16 => device.build_output_stream(
+                &config,
+                move |data: &mut [u16], _: &cpal::OutputCallbackInfo| {
+                    // println!("HERE3");
+                    write_beep::<u16>(data, channels, &mut next_value)
+                },
+                err_fn,
+            ),
+        }
+        .unwrap();
+
+        fn write_beep<T: Sample>(
+            output: &mut [T],
+            channels: usize,
+            next_sample: &mut dyn FnMut() -> i16,
+        ) {
+            // println!("BEEP?!");
+            for frame in output.chunks_mut(channels) {
+                let value: T = cpal::Sample::from::<i16>(&next_sample());
+                for sample in frame.iter_mut() {
+                    *sample = value;
+                }
+            }
+        }
+
+        stream.play().unwrap();
+        stream
+    }
+
     pub fn new(emu: Emu) -> Self {
         MoeApp {
             emu,
@@ -85,10 +251,13 @@ impl MoeApp {
             });
         }
 
+        render_audio_window(ctx, &mut self.emu);
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading(APPNAME);
             ui.label(format!("UI FPS: {:.1}", self.ui_render_stats.fps()));
             ui.label(format!("Emulator FPS: {:.1}", self.emu_render_stats.fps()));
+            egui::warn_if_debug_build(ui);
         });
     }
 }
@@ -102,8 +271,8 @@ pub fn run_with_wgpu(emu: Emu) {
         .with_transparent(false)
         .with_title("egui-wgpu_winit example")
         .with_inner_size(winit::dpi::PhysicalSize {
-            width: 800,
-            height: 600,
+            width: 2000,
+            height: 1200,
         })
         .build(&event_loop)
         .unwrap();
@@ -168,22 +337,26 @@ pub fn run_with_wgpu(emu: Emu) {
     // for the next frame to be rendered in order to keep the FPS stable.
     let mut emulator_frame_timestamp = Instant::now();
 
+    let _stream = app.setup_audio();
+
     event_loop.run(move |event, _, control_flow| {
         // Debugging: print all events
-        match &event {
-            NewEvents(start_cause) => match start_cause {
-                // StartCause::ResumeTimeReached { .. } => assert!(false, "RESUME TIME REACHED!"),
-                _ => println!("\n--> NewEvents: {:?}", start_cause),
-            },
-            RedrawRequested(..) => println!("--> RedrawRequested"),
-            WindowEvent { event, .. } => println!("--> WindowEvent {:?}", event),
-            DeviceEvent { event, .. } => println!("--> DeviceEvent {:?}", event),
-            UserEvent(..) => println!("--> UserEvent"),
-            Suspended => println!("--> Suspended"),
-            Resumed => println!("--> Resumed"),
-            MainEventsCleared => println!("--> MainEventsCleared"),
-            RedrawEventsCleared => println!("--> RedrawEventsCleared"),
-            LoopDestroyed => println!("--> LoopDestroyed"),
+        if false {
+            match &event {
+                NewEvents(start_cause) => match start_cause {
+                    // StartCause::ResumeTimeReached { .. } => assert!(false, "RESUME TIME REACHED!"),
+                    _ => println!("\n--> NewEvents: {:?}", start_cause),
+                },
+                RedrawRequested(..) => println!("--> RedrawRequested"),
+                WindowEvent { event, .. } => println!("--> WindowEvent {:?}", event),
+                DeviceEvent { event, .. } => println!("--> DeviceEvent {:?}", event),
+                UserEvent(..) => println!("--> UserEvent"),
+                Suspended => println!("--> Suspended"),
+                Resumed => println!("--> Resumed"),
+                MainEventsCleared => println!("--> MainEventsCleared"),
+                RedrawEventsCleared => println!("--> RedrawEventsCleared"),
+                LoopDestroyed => println!("--> LoopDestroyed"),
+            }
         }
 
         // Pass the winit events to the platform integration.
@@ -330,6 +503,12 @@ pub fn run_with_wgpu(emu: Emu) {
                     while !app.emu.mmu.display_updated {
                         app.emu.mmu.exec_op();
                     }
+
+                    // Flush recorded audio every frame
+                    if let Some(ref mut rec) = app.emu.mmu.apu.recorder {
+                        rec.flush()
+                    }
+
                     emulator_frame_timestamp = now;
                     *control_flow = ControlFlow::Wait;
                     window.request_redraw();
@@ -338,12 +517,12 @@ pub fn run_with_wgpu(emu: Emu) {
                     app.emu_render_stats
                         .on_new_frame(abs_elapsed_time, Some(0.0));
 
-                    println!("New frame ready!");
+                    // println!("New frame ready!");
                 } else {
                     let wait_us = us_per_frame - elapsed_time;
                     let new_inst = start_time + std::time::Duration::from_micros(wait_us);
                     *control_flow = ControlFlow::WaitUntil(new_inst);
-                    println!("New timeout in: {} us", wait_us);
+                    // println!("New timeout in: {} us", wait_us);
                 }
             }
 
