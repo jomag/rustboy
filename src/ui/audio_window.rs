@@ -55,6 +55,7 @@ pub fn render_audio_window(ctx: &CtxRef, emu: &mut Emu) {
 
         ui.heading("Channel 3");
         ui.label(format!("Enabled: {}", emu.mmu.apu.ch3.enabled));
+        ui.label(format!("Volume Code: {}", emu.mmu.apu.ch3.volume_code));
         ui.label(format!(
             "Length counter: {}",
             emu.mmu.apu.ch3.length_counter
@@ -67,6 +68,11 @@ pub fn render_audio_window(ctx: &CtxRef, emu: &mut Emu) {
         render_wavetable(ui, emu);
 
         ui.heading("Channel 4");
+        ui.label(format!("Enabled: {}", emu.mmu.apu.ch4.enabled));
         ui.label(format!("LFSR: {}", emu.mmu.apu.ch4.lfsr));
+        ui.label(format!(
+            "Frequency timer: {}",
+            emu.mmu.apu.ch4.frequency_timer
+        ));
     });
 }

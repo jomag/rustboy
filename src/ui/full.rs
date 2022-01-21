@@ -271,8 +271,8 @@ pub fn run_with_wgpu(emu: Emu) {
         .with_transparent(false)
         .with_title("egui-wgpu_winit example")
         .with_inner_size(winit::dpi::PhysicalSize {
-            width: 800,
-            height: 600,
+            width: 2000,
+            height: 1200,
         })
         .build(&event_loop)
         .unwrap();
