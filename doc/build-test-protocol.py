@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 import os
 
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 RELEASE_MODE = True
-MOONEYE_DIR = "./test/mooneye-test-suite"
-RUSTBOY = "./target/release/rustboy" if RELEASE_MODE else "./target/debug/rustboy"
+MOONEYE_DIR = f"{SCRIPT_DIR}/../test/mooneye-test-suite"
+RUSTBOY = (
+    f"{SCRIPT_DIR}/../target/release/rustboy"
+    if RELEASE_MODE
+    else f"{SCRIPT_DIR}/../target/debug/rustboy"
+)
 TESTS_PER_ROW = 10
 PASS_EMOJI = ":green_heart:"
 FAIL_EMOJI = ":red_circle:"
+OUTPUT_DIR = SCRIPT_DIR
 
 test_suites = []
 
@@ -57,5 +63,5 @@ for group in mooneye_tests:
             mooneye_report += f'| [{status}](x "{test}") '
         mooneye_report += "|\n"
 
-with open("mooneye.md", "w") as f:
+with open(os.path.join(SCRIPT_DIR, "mooneye.md"), "w") as f:
     f.write(mooneye_report)

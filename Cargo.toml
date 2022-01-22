@@ -5,6 +5,11 @@ name = "rustboy"
 resolver = "2"
 version = "0.1.0"
 
+[features]
+default = ["full-ui", "minimal-ui"]
+full-ui = []
+minimal-ui = []
+
 [dependencies]
 ansi_term = "0.12.1"
 clap = "*"

@@ -1,0 +1,40 @@
+on:
+  push
+
+jobs:
+  update_test_report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libsdl2-dev
+          sudo pip3 install jinja2-cli
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v1
+
+      - name: Build emulator
+        run: cargo build --release
+      
+      - name: Run MoonEye tests
+        run: |
+          git clone git@github.com:Gekkio/mooneye-test-suite test/mooneye-test-suite
+          python3 ./doc/build-test-protocols.py
+      
+      - name: Generate README
+        run: jinja2-cli doc/README.tpl.md -o README.md.new
+
+      - name: Commit if README was changed        
+        run: |
+          git config --global user.name 'Test Runner Bot'
+          git config --global user.email 'jonatan.magnusson@gmail.com'
+          git commit -am "Auto-updated README"
+          git push
