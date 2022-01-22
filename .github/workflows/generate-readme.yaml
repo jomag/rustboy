@@ -32,7 +32,7 @@ jobs:
           python3 ./doc/build-test-protocol.py
       
       - name: Generate README
-        run: jinja2 doc/README.tpl.md -o README.md.new
+        run: jinja2 doc/README.tpl.md -o README.md
 
       - name: Commit if README was changed        
         run: |
