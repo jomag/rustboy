@@ -26,11 +26,13 @@ jobs:
       
       - name: Run MoonEye tests
         run: |
-          git clone https://github.com/Gekkio/mooneye-test-suite test/mooneye-test-suite
+          curl https://gekkio.fi/files/mooneye-test-suite/mts-20211031-2031-86d1acf/mts-20211031-2031-86d1acf.tar.xz -o https://gekkio.fi/files/mooneye-test-suite/mts-20211031-2031-86d1acf/mts-20211031-2031-86d1acf.tar.xz
+          tar xf mts-20211031-2031-86d1acf.tar.xz
+          mv mts-20211031-2031-86d1acf test/mooneye-test-suite
           python3 ./doc/build-test-protocol.py
       
       - name: Generate README
-        run: jinja2-cli doc/README.tpl.md -o README.md.new
+        run: jinja2 doc/README.tpl.md -o README.md.new
 
       - name: Commit if README was changed        
         run: |
