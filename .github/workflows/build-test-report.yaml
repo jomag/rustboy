@@ -1,0 +1,14 @@
+on:
+  push
+
+jobs:
+  update_test_report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      
+      - name: Build emulator
+        run: cargo build --release
+      
+      
