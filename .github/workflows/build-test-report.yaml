@@ -5,10 +5,12 @@ jobs:
   update_test_report:
     runs-on: ubuntu-latest
     steps:
+      - name: Install prerequisites
+        run: apt install libasound2-dev
+
       - name: Checkout repository
         uses: actions/checkout@v2
       
       - name: Build emulator
         run: cargo build --release
-      
       
