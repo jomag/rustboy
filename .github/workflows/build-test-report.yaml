@@ -9,7 +9,7 @@ jobs:
         uses: actions/checkout@v2
       
       - name: Install prerequisites
-        run: sudo apt-get install -y libasound2-dev
+        run: sudo apt-get install -y libasound2-dev libsdl2-dev
 
       - uses: actions-rs/toolchain@v1
         with:
