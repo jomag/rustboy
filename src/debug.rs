@@ -1,3 +1,4 @@
+use crate::emu::Emu;
 use crate::instructions::op_length;
 use crate::mmu::{
     IE_REG, IF_REG, LCDC_REG, MMU, NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, SCX_REG,
@@ -5,6 +6,24 @@ use crate::mmu::{
 };
 
 use crate::timer::Timer;
+
+pub struct Debug {
+    // If true, execution will break on "software breakpoints",
+    // aka "ld b, b" instructions (0x40).
+    pub source_code_breakpoints: bool,
+}
+
+impl Debug {
+    pub fn check_breakpoints(&self, emu: &Emu) -> bool {
+        if self.source_code_breakpoints {
+            if emu.mmu.direct_read(emu.mmu.reg.pc) == 0x40 {
+                return true;
+            }
+        }
+
+        false
+    }
+}
 
 fn add_i8_to_u16(a: u16, b: i8) -> u16 {
     if b > 0 {

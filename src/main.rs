@@ -19,6 +19,8 @@ mod interrupt;
 mod lcd;
 mod mmu;
 mod registers;
+mod serial;
+mod test_runner;
 mod timer;
 mod ui;
 
@@ -92,25 +94,25 @@ fn main() -> Result<(), String> {
         .author(AUTHOR)
         .about("Your less than average GameBoy emulator")
         .args_from_usage(
-            "<ROM>              'The ROM to run'
-            -B, --boot=[FILE]   'Path to bootstrap ROM'
-            -H, --headless      'Run headless'
-            -b, --break=[ADDR]  'Break at address ADDR'
-            --break-cycle=[N]   'Break at cycle N'
-            --break-frame=[N]   'Break at frame N'
-            --exit-cycle=[N]    'Exit at cycle N'
-            --exit-frame=[N]    'Exit at frame N'
-            -R, --record=[PATH] 'Record into directory'
-            -s, --skip=[N]      'Frames to skip while recording'
-            -C, --capture=[N]   'Capture screen at frame N'
-            --capture-to=[FILE] 'Capture filename'
+            "<ROM>               'The ROM to run'
+            -B, --boot=[FILE]    'Path to bootstrap ROM'
+            -b, --break=[ADDR]   'Break at address ADDR'
+            --break-cycle=[N]    'Break at cycle N'
+            --break-frame=[N]    'Break at frame N'
+            --exit-cycle=[N]     'Exit at cycle N'
+            --exit-frame=[N]     'Exit at frame N'
+            -R, --record=[PATH]  'Record into directory'
+            -s, --skip=[N]       'Frames to skip while recording'
+            -C, --capture=[N]    'Capture screen at frame N'
+            --capture-to=[FILE]  'Capture filename'
+            -t, --test=[VARIANT] 'Run test mode'
             ",
         )
         .get_matches();
 
     let bootstrap_rom = matches.value_of("boot").unwrap_or(BOOTSTRAP_ROM); // done!
     let cartridge_rom = matches.value_of("ROM").unwrap_or(CARTRIDGE_ROM); // done!
-    let _headless: bool = matches.is_present("headless");
+    let test_runner_variant = matches.value_of("test");
     let _record: Option<&str> = matches.value_of("record");
     let _record_frame_skip: u32 = parse(matches.value_of("skip"), 3);
     let break_at_address: Option<u16> = parse_optional(matches.value_of("break"));
@@ -119,6 +121,7 @@ fn main() -> Result<(), String> {
     let _exit_at_cycle: Option<u32> = parse_optional(matches.value_of("exit-cycle"));
     let exit_at_frame: Option<u32> = parse_optional(matches.value_of("exit-frame"));
     let capture_at_frame: Option<u32> = parse_optional(matches.value_of("capture"));
+
     let capture_filename: &str = matches
         .value_of("capture-to")
         .unwrap_or("capture-frame-#.png");
@@ -132,6 +135,11 @@ fn main() -> Result<(), String> {
 
     println!("Loading cartridge ROM: {}", cartridge_rom);
     emu.load_cartridge(cartridge_rom);
+
+    if let Some(variant) = test_runner_variant {
+        // This never returns
+        test_runner::test_runner(variant, &mut emu);
+    }
 
     run_with_wgpu(emu);
     // run_with_minimal_ui(APPNAME, None, None, &mut emu);
