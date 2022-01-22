@@ -27,7 +27,7 @@ jobs:
       - name: Run MoonEye tests
         run: |
           git clone https://github.com/Gekkio/mooneye-test-suite test/mooneye-test-suite
-          python3 ./doc/build-test-protocols.py
+          python3 ./doc/build-test-protocol.py
       
       - name: Generate README
         run: jinja2-cli doc/README.tpl.md -o README.md.new
