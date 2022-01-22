@@ -26,7 +26,7 @@ jobs:
       
       - name: Run MoonEye tests
         run: |
-          git clone git@github.com:Gekkio/mooneye-test-suite test/mooneye-test-suite
+          git clone https://github.com/Gekkio/mooneye-test-suite test/mooneye-test-suite
           python3 ./doc/build-test-protocols.py
       
       - name: Generate README
