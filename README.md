@@ -37,63 +37,21 @@ Individual CPU instruction tests:
 
 ## Mooneye GB
 
-The Mooneye GB emulator (which also happens to be written in Rust)
+The Mooneye GB emulator (w`hich also happens to be written in Rust)
 includes a number of tests as well. Here's current state of some:
 
-- `acceptance/bits/mem_oam`: **pass**
-- `acceptance/bits/reg_f`: **pass**
-- `acceptance/bits/unused_hwio-GS`: fail
+## Mooneye Test Suite
 
-- `acceptance/instr/daa`: **pass**
+### Acceptance tests
 
-- `acceptance/interrupts/ie_push`: fail with "R1: not cancelled"
+|       |       |       |       |       |       |       |       |       |       |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| [:green_heart:](x "rst_timing.gb") | [:green_heart:](x "jp_timing.gb") | [:green_heart:](x "reti_timing.gb") | [:green_heart:](x "oam_dma_timing.gb") | [:red_circle:](x "if_ie_registers.gb") | [:red_circle:](x "boot_regs-mgb.gb") | [:red_circle:](x "rapid_di_ei.gb") | [:green_heart:](x "oam_dma_restart.gb") | [:green_heart:](x "pop_timing.gb") | [:green_heart:](x "jp_cc_timing.gb") |
+| [:green_heart:](x "oam_dma_start.gb") | [:green_heart:](x "push_timing.gb") | [:red_circle:](x "boot_regs-sgb2.gb") | [:green_heart:](x "add_sp_e_timing.gb") | [:red_circle:](x "di_timing-GS.gb") | [:red_circle:](x "intr_timing.gb") | [:green_heart:](x "ld_hl_sp_e_timing.gb") | [:red_circle:](x "boot_div2-S.gb") | [:red_circle:](x "boot_div-S.gb") | [:red_circle:](x "reti_intr_timing.gb") |
+| [:green_heart:](x "call_cc_timing2.gb") | [:red_circle:](x "halt_ime0_nointr_timing.gb") | [:green_heart:](x "div_timing.gb") | [:green_heart:](x "halt_ime0_ei.gb") | [:red_circle:](x "boot_hwio-S.gb") | [:green_heart:](x "call_cc_timing.gb") | [:red_circle:](x "ei_sequence.gb") | [:green_heart:](x "boot_regs-dmgABC.gb") | [:green_heart:](x "ret_cc_timing.gb") | [:red_circle:](x "boot_div-dmg0.gb") |
+| [:red_circle:](x "halt_ime1_timing2-GS.gb") | [:red_circle:](x "boot_div-dmgABCmgb.gb") | [:red_circle:](x "boot_hwio-dmgABCmgb.gb") | [:red_circle:](x "boot_regs-dmg0.gb") | [:green_heart:](x "call_timing2.gb") | [:green_heart:](x "call_timing.gb") | [:red_circle:](x "ei_timing.gb") | [:red_circle:](x "boot_hwio-dmg0.gb") | [:red_circle:](x "boot_regs-sgb.gb") | [:green_heart:](x "halt_ime1_timing.gb") |
+| [:green_heart:](x "ret_timing.gb") |
 
-- `acceptance/oam_dma/basic`: **pass**
-- `acceptance/oam_dma/reg_read`: **pass**
-- `acceptance/oam_dma/sources-dmgABCmgbS`: **pass**
-
-- `acceptance/timer/div_write`: **pass**
-- `acceptance/timer/rapid_toggle`: fail
-- `acceptance/timer/tim00`: **pass**
-- `acceptance/timer/tim00_div_trigger`: **pass**
-- `acceptance/timer/tim01`: **pass**
-- `acceptance/timer/tim01_div_trigger`: **pass**
-- `acceptance/timer/tim10`: **pass**
-- `acceptance/timer/tim10_div_trigger`: **pass**
-- `acceptance/timer/tim11`: **pass**
-- `acceptance/timer/tim11_div_trigger`: **pass**
-- `acceptance/timer/tima_reload`: fail
-- `acceptance/timer/tima_write_reloading`: fail
-- `acceptance/timer/tma_write_reloading`: fail
-
-- `acceptance/add_sp_e_timing`: **pass**
-- `acceptance/boot_regs-dmgABC.gb`: **pass**
-- `acceptance/call_cc_timing`: **pass**
-- `acceptance/call_cc_timing2`: **pass**
-- `acceptance/call_timing`: **pass**
-- `acceptance/call_timing2`: **pass**
-- `acceptance/div_timing`: **pass**
-- `acceptance/ei_sequence`: fail (used to pass?)
-- `acceptance/ei_timing`: fail (used to pass?)
-- `acceptance/halt_ime0_ei`: fail
-- `acceptance/halt_ime0_nointr_timing`: fail
-- `acceptance/halt_ime1_timing`: fail
-- `acceptance/if_ei_registers`: fail (because serial interrupt not impl.)
-- `acceptance/intr_timing`: fail: round 1
-- `acceptance/jp_cc_timing`: **pass**
-- `acceptance/jp_timing`: **pass**
-- `acceptance/ld_hl_sp_e_timing`: **pass**
-- `acceptance/oam_dma_restart`: **pass**
-- `acceptance/oam_dma_start`: **pass**
-- `acceptance/oam_dma_timing`: **pass**
-- `acceptance/pop_timing`: **pass**
-- `acceptance/push_timing`: **pass**
-- `acceptance/rapid_di_ei`: fail! (used to pass?)
-- `acceptance/ret_cc_timing`: **pass**
-- `acceptance/reti_intr_timing`: fail! (used to pass?)
-- `acceptance/reti_timing`: **pass**
-- `acceptance/ret_timing`: **pass**
-- `acceptance/rst_timing`: **pass**
 
 ## Graphics
 
