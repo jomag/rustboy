@@ -1,0 +1,55 @@
+on:
+  push
+
+jobs:
+  update_test_report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libsdl2-dev
+          sudo pip3 install jinja2-cli
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v1
+
+      - name: Download and extract Mooneye tests
+        run: |
+          curl https://gekkio.fi/files/mooneye-test-suite/mts-20211031-2031-86d1acf/mts-20211031-2031-86d1acf.tar.xz -o mts.tar.xz
+          tar xf mts.tar.xz
+          mv mts-20211031-2031-86d1acf test/mooneye-test-suite
+
+      - name: Download boot ROM
+        run: |
+          mkdir rom
+          curl http://www.neviksti.com/DMG/DMG_ROM.bin -o rom/boot.gb
+
+      - name: Download and extract Blargg tests
+        run: git clone https://github.com/retrio/gb-test-roms.git test/blargg
+
+      - name: Build emulator
+        run: cargo build --release
+
+      - name: Run Mooneye tests
+        run: ./run-tests.py mooneye --report doc/mooneye.md
+
+      - name: Run Blargg tests
+        run: ./run-tests.py blargg --report doc/blargg.md
+      
+      - name: Generate README
+        run: jinja2 doc/README.tpl.md -o README.md
+
+      - name: Commit if README was changed        
+        run: |
+          git config --global user.name 'Test Runner Bot'
+          git config --global user.email 'jonatan.magnusson@gmail.com'
+          git commit -am "Auto-updated README"
+          git push

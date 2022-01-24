@@ -8,17 +8,19 @@ use crate::interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
 use crate::apu::AudioProcessingUnit;
 use crate::buttons::Buttons;
 use crate::cartridge::{load_cartridge, Cartridge, NullCartridge};
+use crate::debug::Debug;
 use crate::dma::DMA;
+use crate::instructions;
 use crate::interrupt::handle_interrupts;
 use crate::lcd::LCD;
 use crate::registers::Registers;
+use crate::serial::Serial;
 use crate::timer::Timer;
-use crate::{instructions, CLOCK_SPEED};
 
 // Port/Mode registers
 pub const P1_REG: u16 = 0xFF00;
-pub const SB_REG: u16 = 0xFF01;
-pub const SC_REG: u16 = 0xFF02;
+pub const SB_REG: u16 = 0xFF01; // serial transfer data
+pub const SC_REG: u16 = 0xFF02; // serial transfer control
 pub const DIV_REG: u16 = 0xFF04;
 pub const TIMA_REG: u16 = 0xFF05; // timer counter
 pub const TMA_REG: u16 = 0xFF06; // timer modulo
@@ -101,6 +103,7 @@ pub struct MMU {
     pub lcd: LCD,
     pub buttons: Buttons,
     pub apu: AudioProcessingUnit,
+    pub serial: Serial,
 
     pub display_updated: bool,
     pub sample_count: u32,
@@ -126,6 +129,7 @@ impl MMU {
             display_updated: false,
             apu: AudioProcessingUnit::new(),
             sample_count: 0,
+            serial: Serial::new(None),
         }
     }
 
@@ -262,6 +266,7 @@ impl MMU {
             }
 
             // Special registers in area 0xFF00 to 0xFFFF
+            SB_REG..=SC_REG => self.serial.read_reg(addr),
             P1_REG => self.buttons.read_p1(),
             IF_REG => self.get_if_reg(),
             DIV_REG => self.timer.read_div(),
@@ -348,8 +353,8 @@ impl MMU {
             0xFF30..=0xFF3F => self.apu.write_reg(addr, value),
 
             P1_REG => self.buttons.write_p1(value),
-            SB_REG => {}
-            SC_REG => {}
+            SB_REG => self.serial.write_reg(SB_REG, value),
+            SC_REG => self.serial.write_reg(SC_REG, value),
             DIV_REG => self.timer.write_div(value),
             TIMA_REG => self.timer.tima = value,
             TMA_REG => self.timer.tma = value,
