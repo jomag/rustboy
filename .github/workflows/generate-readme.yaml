@@ -51,5 +51,8 @@ jobs:
         run: |
           git config --global user.name 'Test Runner Bot'
           git config --global user.email 'jonatan.magnusson@gmail.com'
-          git commit -am "Auto-updated README"
-          git push
+          git add README.md
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "Auto-updated README"
+            git push origin main
+          fi
