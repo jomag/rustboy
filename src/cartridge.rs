@@ -207,13 +207,11 @@ impl Cartridge for NullCartridge {
 }
 
 pub fn load_cartridge(filename: String) -> Box<dyn Cartridge> {
-    println!("Opening {}", filename);
     let mut file = File::open(filename).unwrap();
     let mut rom: Vec<u8> = Vec::new();
 
     // Returns amount of bytes read and append the rebsult to the buffer
-    let result = file.read_to_end(&mut rom).unwrap();
-    println!("Read {} bytes", result);
+    file.read_to_end(&mut rom).unwrap();
 
     let cartridge_type = rom[0x147];
     println!(

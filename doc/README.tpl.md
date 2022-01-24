@@ -2,27 +2,22 @@
 
 A personal project to learn Rust and basic emulator development.
 
-## Blargg tests
-
-Slowly this emulator learns to pass more and more Blargg tests.
+## Blargg Test Suite
 
 {% include "./blargg.md" %}
 
-## Mooneye GB
-
-The Mooneye GB emulator (w`hich also happens to be written in Rust)
-includes a number of tests as well. Here's current state of some:
+## Mooneye Test Suite
 
 {% include "./mooneye.md" %}
 
 ## Graphics
 
-Resolution: 160 x 144
-Real resolution: 256 x 256
-Tiles: 32 x 32
-Real resolution: 256 x 256 (32 x (8 x 32) x 8)
-Clock speed: 4.194304 MHz (2 \*\* 22)
-Vertical sync: 59.73 Hz
+- Resolution: 160 x 144
+- Real resolution: 256 x 256
+- Tiles: 32 x 32
+- Real resolution: 256 x 256 (32 x (8 x 32) x 8)
+- Clock speed: 4.194304 MHz (2 \*\* 22)
+- Vertical sync: 59.73 Hz
 
 ## References
 
