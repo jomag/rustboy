@@ -28,7 +28,9 @@ jobs:
           mv mts-20211031-2031-86d1acf test/mooneye-test-suite
 
       - name: Download boot ROM
-        run: curl http://www.neviksti.com/DMG/DMG_ROM.bin -o rom/boot.gb
+        run: |
+          mkdir rom
+          curl http://www.neviksti.com/DMG/DMG_ROM.bin -o rom/boot.gb
 
       - name: Download and extract Blargg tests
         run: git clone https://github.com/retrio/gb-test-roms.git test/blargg
