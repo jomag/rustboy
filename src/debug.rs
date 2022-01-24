@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use crate::emu::Emu;
 use crate::instructions::op_length;
 use crate::mmu::{
@@ -11,10 +13,56 @@ pub struct Debug {
     // If true, execution will break on "software breakpoints",
     // aka "ld b, b" instructions (0x40).
     pub source_code_breakpoints: bool,
+
+    pub debug_log: Option<std::fs::File>,
 }
 
 impl Debug {
-    pub fn check_breakpoints(&self, emu: &Emu) -> bool {
+    pub fn start_debug_log(&mut self, filename: &str) {
+        self.debug_log = Some(
+            std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .append(true)
+                .open(filename)
+                .unwrap(),
+        );
+    }
+
+    pub fn finalize(&mut self) {
+        match self.debug_log {
+            Some(ref mut f) => {
+                f.sync_all();
+            }
+            None => {}
+        };
+    }
+
+    // Perform debugging actions before every op.
+    // Returns true if a breakpoint has been triggered.
+    pub fn before_op(&mut self, emu: &Emu) -> bool {
+        match self.debug_log {
+            Some(ref mut f) => {
+                let reg = &emu.mmu.reg;
+                let pc = reg.pc;
+                if pc >= 0x100 {
+                    let m0 = emu.mmu.direct_read(pc);
+                    let m1 = emu.mmu.direct_read(pc + 1);
+                    let m2 = emu.mmu.direct_read(pc + 2);
+                    let m3 = emu.mmu.direct_read(pc + 3);
+                    let res = writeln!(
+                        f, "A: {:02X} F: {:02X} B: {:02X} C: {:02X} D: {:02X} E: {:02X} H: {:02X} L: {:02X} SP: {:04X} PC: 00:{:04X} ({:02X} {:02X} {:02X} {:02X}) {}",
+                        reg.a,reg.get_f(),reg.b,reg.c,reg.d,reg.e,reg.h,reg.l,reg.sp,pc,m0,m1,m2,m3, format_mnemonic(&emu.mmu, pc),
+                    );
+                    match res {
+                        Ok(_) => {}
+                        Err(_) => {}
+                    };
+                }
+            }
+            None => {}
+        }
+
         if self.source_code_breakpoints {
             if emu.mmu.direct_read(emu.mmu.reg.pc) == 0x40 {
                 return true;
@@ -603,6 +651,7 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
             mmu.direct_read(mmu.reg.hl())
         ),
 
+        0xC6 => format!("ADD  A, 0x{:02X}", mmu.direct_read(addr + 1)),
         0xCD => format!("CALL ${:04X}", mmu.direct_read_u16(addr + 1)),
         0xCE => format!("ADC  A, 0x{:02X}", mmu.direct_read(addr + 1)),
 
@@ -614,6 +663,7 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
         0xEA => format!("LD   (${:04X}), A", mmu.direct_read_u16(addr + 1)),
         0xE6 => format!("AND  ${:02X}", mmu.direct_read(addr + 1)),
         0xED => format!("! Illegal op code: 0x{:02X}", op),
+        0xEE => format!("XOR  0x{:02X}", mmu.direct_read(addr + 1)),
 
         0xF0 => format!("LD   A, ($FF00+${:02X})", mmu.direct_read(addr + 1)),
         0xF6 => format!("OR   0x{:02X}", mmu.direct_read(addr + 1)),

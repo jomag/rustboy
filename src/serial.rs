@@ -22,7 +22,7 @@ pub struct Serial {
     // Bit 0: shift clock (0 = external, 1 = internal)
     reg_sc: u8,
 
-    output: Option<Producer<u8>>,
+    pub output: Option<Producer<u8>>,
 }
 
 impl Serial {

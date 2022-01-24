@@ -21,15 +21,23 @@ jobs:
 
       - uses: Swatinem/rust-cache@v1
 
-      - name: Build emulator
-        run: cargo build --release
-      
-      - name: Run MoonEye tests
+      - name: Download and extract Mooneye tests
         run: |
           curl https://gekkio.fi/files/mooneye-test-suite/mts-20211031-2031-86d1acf/mts-20211031-2031-86d1acf.tar.xz -o mts.tar.xz
           tar xf mts.tar.xz
           mv mts-20211031-2031-86d1acf test/mooneye-test-suite
-          python3 ./doc/build-test-protocol.py
+
+      - name: Download and extract Blargg tests
+        run: git clone https://github.com/retrio/gb-test-roms.git test/blargg
+
+      - name: Build emulator
+        run: cargo build --release
+
+      - name: Run Mooneye tests
+        run: ./run-tests.py mooneye --report doc/mooneye.md
+
+      - name: Run Blargg tests
+        run: ./run-tests.py blargg --report doc/blargg.md
       
       - name: Generate README
         run: jinja2 doc/README.tpl.md -o README.md

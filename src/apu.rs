@@ -3,7 +3,7 @@
 // Pan Doc:
 // http://bgb.bircd.org/pandocs.htm#soundoverview
 //
-// Game Boy Sound Operation by Blarrg:
+// Game Boy Sound Operation by Blargg:
 // https://gist.github.com/drhelius/3652407
 //
 // GB Sound Emulation by Nightshade:
@@ -138,7 +138,7 @@ impl SquareWaveSoundGenerator {
 
     fn trigger(&mut self) {
         // See details about exactly what happens on sound trigger
-        // in the document Game Boy Sound Operation by Blarrg:
+        // in the document Game Boy Sound Operation by Blargg:
         // https://gist.github.com/drhelius/3652407
         self.enabled = true;
 

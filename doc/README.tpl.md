@@ -6,34 +6,7 @@ A personal project to learn Rust and basic emulator development.
 
 Slowly this emulator learns to pass more and more Blargg tests.
 
-Currently the following tests has been tried:
-
-### CPU instructions
-
-- `instr_timing.gb`: **pass**
-- `interrupt_time.gb`: fail
-- `mem_timing/mem_timing.gb`: **pass**
-- `mem_timing-2/mem_timing.gb`: **pass**
-
-Individual memory timing tests:
-
-- `mem_timing/01-read_timing.gb`: **pass**
-- `mem_timing/02-write_timing.gb`: **pass**
-- `mem_timing/03-modify_timing.gb`: **pass**
-
-Individual CPU instruction tests:
-
-- `01-special.gb`: **pass**
-- `02-interrupts.gb`: **pass**
-- `03-op sp,hl.gb`: **pass**
-- `04-op r,imm.gb`: **pass**
-- `05-op rp.gb`: **pass**
-- `06-ld r,r.gb`: **pass**
-- `07-jr,jp,call,ret,rst.gb`: **pass**
-- `08-misc instrs.gb`: **pass**
-- `09-op r,r.gb`: **pass**
-- `10-bit ops.gb`: **pass**
-- `11-op a,(hl).gb`: **pass**
+{% include "./blargg.md" %}
 
 ## Mooneye GB
 
