@@ -2,9 +2,7 @@
 
 A personal project to learn Rust and basic emulator development.
 
-## Blargg tests
-
-Slowly this emulator learns to pass more and more Blargg tests.
+## Blargg Test Suite
 
 |       |       |       |       |       |       |       |       |       |       |       |       |       |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -18,10 +16,7 @@ Slowly this emulator learns to pass more and more Blargg tests.
 | oam_bug | [:red_circle:](x "1-lcd_sync: FAIL") | [:red_circle:](x "2-causes: FAIL") | [:green_heart:](x "3-non_causes: PASS") | [:red_circle:](x "4-scanline_timing: FAIL") | [:red_circle:](x "5-timing_bug: FAIL") | [:green_heart:](x "6-timing_no_bug: PASS") | [:red_circle:](x "7-timing_effect: FAIL") | [:red_circle:](x "8-instr_effect: FAIL") |
 
 
-## Mooneye GB
-
-The Mooneye GB emulator (w`hich also happens to be written in Rust)
-includes a number of tests as well. Here's current state of some:
+## Mooneye Test Suite
 
 |       |       |       |       |       |       |       |       |       |       |       |       |       |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -41,12 +36,12 @@ includes a number of tests as well. Here's current state of some:
 
 ## Graphics
 
-Resolution: 160 x 144
-Real resolution: 256 x 256
-Tiles: 32 x 32
-Real resolution: 256 x 256 (32 x (8 x 32) x 8)
-Clock speed: 4.194304 MHz (2 \*\* 22)
-Vertical sync: 59.73 Hz
+- Resolution: 160 x 144
+- Real resolution: 256 x 256
+- Tiles: 32 x 32
+- Real resolution: 256 x 256 (32 x (8 x 32) x 8)
+- Clock speed: 4.194304 MHz (2 \*\* 22)
+- Vertical sync: 59.73 Hz
 
 ## References
 
