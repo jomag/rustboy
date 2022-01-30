@@ -4,6 +4,7 @@ on:
 jobs:
   update_test_report:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -54,5 +55,5 @@ jobs:
           git add README.md
           if ! git diff-index --quiet HEAD; then
             git commit -m "Auto-updated README"
-            git push origin main
+            git push
           fi
