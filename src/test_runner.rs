@@ -62,7 +62,7 @@ pub fn test_runner(variant: &str, emu: &mut Emu, debug: &mut Debug) {
             // Details: https://github.com/Gekkio/mooneye-test-suite
             debug.source_code_breakpoints = true;
 
-            while !debug.before_op(emu) {
+            while debug.before_op(emu) {
                 emu.mmu.exec_op();
             }
 

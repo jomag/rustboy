@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::Write;
 
 use crate::emu::Emu;
@@ -9,15 +10,91 @@ use crate::mmu::{
 
 use crate::timer::Timer;
 
+#[derive(PartialEq)]
+pub enum ExecState {
+    // Continuous execution
+    RUN,
+
+    // Continue execution after a breakpoint.
+    // State will change to RUN after next operation.
+    CONTINUE,
+
+    // Single-stepping
+    STEP,
+}
+
+pub struct Breakpoint {
+    pub enabled: bool,
+}
+
+impl Breakpoint {
+    pub fn evaluate(&self, emu: &Emu) -> bool {
+        self.enabled
+    }
+}
+
 pub struct Debug {
     // If true, execution will break on "software breakpoints",
     // aka "ld b, b" instructions (0x40).
     pub source_code_breakpoints: bool,
-
     pub debug_log: Option<std::fs::File>,
+    pub state: ExecState,
+
+    // When single-stepping, steps holds the number of steps
+    // queued for execution.
+    pub steps: u32,
+
+    pub breakpoints: HashMap<u16, Vec<Breakpoint>>,
 }
 
 impl Debug {
+    pub fn new() -> Self {
+        Debug {
+            source_code_breakpoints: false,
+            debug_log: None,
+            state: ExecState::RUN,
+            steps: 0,
+            breakpoints: HashMap::new(),
+        }
+    }
+
+    pub fn add_breakpoint(&mut self, adr: u16, bp: Breakpoint) {
+        self.breakpoints.entry(adr).or_insert(vec![]).push(bp);
+    }
+
+    pub fn break_execution(&mut self) {
+        println!("Breaking execution");
+        self.state = ExecState::STEP;
+        self.steps = 0;
+    }
+
+    pub fn continue_execution(&mut self) {
+        println!("Continue execution");
+        self.state = ExecState::CONTINUE;
+    }
+
+    pub fn next(&mut self) -> bool {
+        match self.state {
+            ExecState::RUN => true,
+            ExecState::CONTINUE => {
+                self.state = ExecState::RUN;
+                true
+            }
+            ExecState::STEP => {
+                if self.steps > 0 {
+                    self.steps -= 1;
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    pub fn step(&mut self) {
+        self.steps += 1;
+    }
+
     pub fn start_debug_log(&mut self, filename: &str) {
         self.debug_log = Some(
             std::fs::OpenOptions::new()
@@ -41,6 +118,8 @@ impl Debug {
     // Perform debugging actions before every op.
     // Returns true if a breakpoint has been triggered.
     pub fn before_op(&mut self, emu: &Emu) -> bool {
+        // FIXME: this will be executed even if next op is not executed
+        // because execution is stopped.
         match self.debug_log {
             Some(ref mut f) => {
                 let reg = &emu.mmu.reg;
@@ -63,13 +142,28 @@ impl Debug {
             None => {}
         }
 
-        if self.source_code_breakpoints {
-            if emu.mmu.direct_read(emu.mmu.reg.pc) == 0x40 {
-                return true;
+        // Check breakpoints, unless current state is CONTINUE
+        // which means that we're continuing after a breakpoint
+        // was reached.
+        if self.state != ExecState::CONTINUE {
+            let pc = emu.mmu.reg.pc;
+            if self.breakpoints.contains_key(&pc) {
+                for bp in self.breakpoints[&pc].iter() {
+                    if bp.evaluate(emu) {
+                        self.state = ExecState::STEP;
+                    }
+                }
+            }
+
+            if self.source_code_breakpoints {
+                match emu.mmu.direct_read(emu.mmu.reg.pc) {
+                    0x40 => self.state = ExecState::STEP,
+                    _ => {}
+                }
             }
         }
 
-        false
+        return self.next();
     }
 }
 
@@ -625,9 +719,24 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
             format!("LD   SP, ${:02X}{:02X}", hi, lo)
         }
 
+        0x36 => format!("LD   (HL), 0x{:02X}", mmu.direct_read(addr + 1)),
+
+        0x38 => {
+            let rel = mmu.direct_read_i8(addr + 1);
+            let abs = add_i8_to_u16(addr + 2, rel);
+            format!("JR   C, {}        ; jump to 0x{:04X}", rel, abs)
+        }
+
+        0xBE => format!(
+            "CP   (HL)  ; HL=0x{:04X} (HL)=0x{:02X}",
+            mmu.reg.hl(),
+            mmu.direct_read(mmu.reg.hl())
+        ),
+
         0xC2 => format!("JP   NZ, 0x{:04X}", mmu.direct_read_u16(addr + 1)),
         0xC3 => format!("JP   0x{:04X}", mmu.direct_read_u16(addr + 1)),
         0xC4 => format!("CALL  NZ, ${:04X}", mmu.direct_read_u16(addr + 1)),
+        0xC6 => format!("ADD  A, 0x{:02X}", mmu.direct_read(addr + 1)),
 
         0xCA => format!("JP   Z, 0x{:04X}", mmu.direct_read_u16(addr + 1)),
 
@@ -645,18 +754,14 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
             format!("{} {}", mnemonic, reg)
         }
 
-        0xBE => format!(
-            "CP   (HL)  ; HL=0x{:04X} (HL)=0x{:02X}",
-            mmu.reg.hl(),
-            mmu.direct_read(mmu.reg.hl())
-        ),
-
-        0xC6 => format!("ADD  A, 0x{:02X}", mmu.direct_read(addr + 1)),
+        0xCC => format!("CALL Z, 0x{:02X}", mmu.direct_read_u16(addr + 1)),
         0xCD => format!("CALL ${:04X}", mmu.direct_read_u16(addr + 1)),
         0xCE => format!("ADC  A, 0x{:02X}", mmu.direct_read(addr + 1)),
 
         0xD2 => format!("JP   NC, 0x{:04X}", mmu.direct_read_u16(addr + 1)),
         0xD6 => format!("SUB  0x{:02X}", mmu.direct_read(addr + 1)),
+        0xDC => format!("CALL C, 0x{:02X}", mmu.direct_read_u16(addr + 1)),
+        0xDD => format!("! Illegal op code: 0x{:02X}", op),
         0xDE => format!("SBC  A, 0x{:02X}", mmu.direct_read(addr + 1)),
 
         0xE0 => format!("LD   ($FF00+${:02X}), A", mmu.direct_read(addr + 1)),
@@ -688,12 +793,15 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
 }
 
 pub fn print_listing(mmu: &MMU, addr: u16, line_count: i32) -> u16 {
-    let mut a = addr;
+    let mut a = addr as usize;
     for _n in 0..line_count {
-        println!("0x{:04X}: {}", a, format_mnemonic(&mmu, a));
-        a = a + (op_length(mmu.direct_read(addr)) as u16);
+        println!("0x{:04X}: {}", a, format_mnemonic(&mmu, a as u16));
+        match op_length(mmu.direct_read(addr)) {
+            Some(len) => a = a + len,
+            None => break,
+        }
     }
-    a
+    a as u16
 }
 
 #[allow(dead_code)]

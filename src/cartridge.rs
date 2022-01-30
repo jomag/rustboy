@@ -4,6 +4,7 @@ use std::io::Read;
 pub trait Cartridge {
     fn read(&self, address: u16) -> u8;
     fn write(&mut self, address: u16, value: u8);
+    fn reset(&mut self);
 }
 
 pub fn cartridge_type_name(cartridge_type: u8) -> String {
@@ -123,6 +124,13 @@ impl CartridgeMBC1 {
 }
 
 impl Cartridge for CartridgeMBC1 {
+    fn reset(&mut self) {
+        self.ram.fill(0);
+        self.rom_bank_lower = 1;
+        self.rom_ram_bank = 0;
+        self.ram_enabled = false;
+    }
+
     fn read(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x3FFF => self.rom[address as usize],
@@ -189,6 +197,8 @@ impl Cartridge32k {
 }
 
 impl Cartridge for Cartridge32k {
+    fn reset(&mut self) {}
+
     fn read(&self, address: u16) -> u8 {
         self.rom[address as usize]
     }
@@ -199,6 +209,8 @@ impl Cartridge for Cartridge32k {
 pub struct NullCartridge;
 
 impl Cartridge for NullCartridge {
+    fn reset(&mut self) {}
+
     fn read(&self, _address: u16) -> u8 {
         0
     }

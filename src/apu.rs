@@ -8,50 +8,63 @@
 //
 // GB Sound Emulation by Nightshade:
 // https://nightshade256.github.io/2021/03/27/gb-sound-emulation.html
+//
+
+// TODO:
+// - For DMG hardware only, the length counters should be usable even
+//   when NR52 is powered off. See the Blargg doc above.
+// - After the sound hardware is powered on, frame sequencer should be
+//   reset so next step is step 0.
+// - Should register reads work even when powered off?
 
 use ringbuf::Producer;
 
 use crate::mmu::{NR50_REG, NR51_REG, NR52_REG};
 
+// SquareWaveSoundGenerator
+// ------------------------
+//
 // Note that this type is used for both sound channel 1 and 2.
 // The only difference is that channel 2 does not have any sweep
 // generator and the registers starts at NR20 instead of NR10.
+//
+// ---------
+// Registers
+// ---------
+//
+// NR10 (0xFF10): Sweep. Only for sound channel 1.
+// - bit 6..4: sweep time
+// - bit 3:    sweep direction
+// - bit 2..0: number of sweep shifts
+//
+// NR11 (0xFF11), NR21 (0xFF16): Wave pattern and sound length
+// - bit 7..6: wave pattern, aka "duty".
+// - bit 5..0: sound length (write only)
+//
+// NR12 (0xFF12), NR22 (0xFF17): Envelope
+// - bit 7..4: initial volume
+// - bit 3:    envelope direction
+// - bit 2..0: number of envelope sweeps
+//
+// NR13 (0xFF13), NR23 (0xFF18): lo bits of frequency
+// - bit 7..0: lo bits of frequency (write only)
+//
+// NR14 (0xFF14), NR24 (0xFF19): hi bits of frequency + more
+// - bit 7: initial, 1 = restart sound (write only)
+// - bit 6: length counter/consecutive selection
+// - bit 2..0: hi bits of frequency (write only)
+
 pub struct SquareWaveSoundGenerator {
-    // ---------
-    // Registers
-    // ---------
-
-    // NR10 (0xFF10): Sweep. Only for sound channel 1.
-    // - bit 6..4: sweep time
-    // - bit 3:    sweep direction
-    // - bit 2..0: number of sweep shifts
-    nr10: u8,
-
-    // NR11 (0xFF11), NR21 (0xFF16): Wave pattern and sound length
-    // - bit 7..6: wave pattern
-    // - bit 5..0: sound length (write only)
-    nr11: u8,
-
-    // NR12 (0xFF12), NR22 (0xFF17): Envelope
-    // - bit 7..4: initial volume
-    // - bit 3:    envelope direction
-    // - bit 2..0: number of envelope sweeps
-    nr12: u8,
-
-    // NR13 (0xFF13), NR23 (0xFF18): lo bits of frequency
-    // - bit 7..0: lo bits of frequency (write only)
-    nr13: u8,
-
-    // NR14 (0xFF14), NR24 (0xFF19): hi bits of frequency + more
-    // - bit 7: initial, 1 = restart sound (write only)
-    // - bit 6: length counter/consecutive selection
-    // - bit 2..0: hi bits of frequency (write only)
-    nr14: u8,
+    // Frequency. 10 bits. Bit 7..0 in NR13 + bit 9..8 in NR14.
+    frequency: u16,
 
     // Internal register. When this counter reaches zero,
     // it is reset to the frequency value (NR13, NR14) and
     // wave_duty_position moves to next position
     frequency_timer: u16,
+
+    // Duty Cycle Pattern. Bit 7..6 of NR11. R/W.
+    duty: usize,
 
     // Internal register. Holds a value between 0 and 7
     // and decides if the current output of the square wave
@@ -66,11 +79,30 @@ pub struct SquareWaveSoundGenerator {
     //
     wave_duty_position: u16,
 
+    // Initial volume of the envelope filter. Bit 7..4 in NR12
+    initial_volume: u8,
+
+    // Direction of the envelope. Bit 3 in NR12.
+    // 0 (false) = decreasing, 1 (true) = increasing.
+    envelope_increasing: bool,
+
+    // Period count to initate envelope filter with on trigger.
+    // Bits 2..0 of NR12.
+    // FIXME: should there *be* a separate start-value,
+    // or does the value count down and must be reset
+    // before each trigger?
+    envelope_periods_initial: u8,
+
     // Current volume of the envelope filter. Internal register.
     pub envelope: i16,
 
     // The envelope change period counter. Internal register.
     envelope_period: u8,
+
+    // Length counter enabled. Bit 6 of NR14.
+    // If true, the length counter is used.
+    // Otherwise, ...
+    length_counter_enabled: bool,
 
     // Length counter. Internal register.
     // When this reaches zero the channel is disabled.
@@ -78,6 +110,18 @@ pub struct SquareWaveSoundGenerator {
 
     // Internal enabled flag.
     pub enabled: bool,
+
+    // Sweep time. Bit 6..4 of NR10. DOCUMENT ME!
+    sweep_time: u8,
+
+    // Sweep direction. Bit 3 of NR10. DOCUMENT ME!
+    sweep_direction: bool,
+
+    // Number of sweep shifts. Bit 2..0 of NR10. DOCUMENT ME!
+    sweep_shift_count: u8,
+
+    // Sweep is only enabled for the first square wave channel
+    pub with_sweep: bool,
 }
 
 const WAVE_DUTY: [[i16; 8]; 4] = [
@@ -88,47 +132,84 @@ const WAVE_DUTY: [[i16; 8]; 4] = [
 ];
 
 impl SquareWaveSoundGenerator {
-    pub fn new() -> Self {
+    pub fn new(with_sweep: bool) -> Self {
         SquareWaveSoundGenerator {
             enabled: false,
-            nr10: 0,
-            nr11: 0,
-            nr12: 0,
-            nr13: 0,
-            nr14: 0,
             envelope: 0,
             envelope_period: 0,
+            envelope_periods_initial: 0,
+            envelope_increasing: false,
+            initial_volume: 0,
+            length_counter_enabled: false,
             length_counter: 0,
-
+            frequency: 0,
             frequency_timer: 0,
+            duty: 0,
             wave_duty_position: 0,
+            sweep_time: 0,
+            sweep_shift_count: 0,
+            sweep_direction: false,
+            with_sweep,
         }
     }
 
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
-            0 => self.nr10,
-            1 => self.nr11,
-            2 => self.nr12,
-            3 => self.nr13,
-            4 => self.nr14,
+            0 => match self.with_sweep {
+                true => {
+                    let v =
+                        ((self.sweep_time & 0b111) << 4) | (self.sweep_shift_count & 0b111) | 0x80;
+                    if self.sweep_direction {
+                        v | 0b1000
+                    } else {
+                        v
+                    }
+                }
+                false => 0xFF,
+            },
+            1 => ((self.duty as u8) << 6) | 0b0011_1111,
+            2 => {
+                let v = (self.initial_volume << 4) | (self.envelope_periods_initial & 0b111);
+                if self.envelope_increasing {
+                    v | 0b1000
+                } else {
+                    v
+                }
+            }
+            3 => 0xFF,
+            4 => {
+                if self.length_counter_enabled {
+                    0xFF
+                } else {
+                    0b1011_1111
+                }
+            }
             _ => panic!("invalid register {}", address),
         }
     }
 
     pub fn write_reg(&mut self, address: u16, value: u8) {
-        // println!("S1 write NR10 + {:02X} = {:02X}", address, value);
         match address {
-            0 => self.nr10 = value, // FIXME!
+            0 => {
+                self.sweep_time = (value >> 4) & 0b111;
+                self.sweep_direction = (value & 0b1000) != 0;
+                self.sweep_shift_count = value & 0b111;
+            }
             1 => {
-                self.nr11 = value;
+                self.duty = ((value >> 6) & 3) as usize;
                 self.length_counter = 64 - (value & 63);
             }
-            2 => self.nr12 = value,
-            3 => self.nr13 = value,
+            2 => {
+                self.initial_volume = (value >> 4) & 0xF;
+                self.envelope_increasing = (value & 0b1000) != 0;
+                self.envelope_periods_initial = value & 0b111;
+            }
+            3 => self.frequency = (self.frequency & 0b11_0000_0000) | value as u16,
             4 => {
-                self.nr14 = value;
-                if value & 0x80 != 0 {
+                self.frequency =
+                    (self.frequency & 0b00_1111_1111) | (((value & 0b111) as u16) << 8);
+                self.length_counter_enabled = value & 0b0100_0000 != 0;
+                if value & 0b1000_0000 != 0 {
                     self.trigger();
                 }
             }
@@ -146,11 +227,10 @@ impl SquareWaveSoundGenerator {
             self.length_counter = 64;
         }
 
-        let frequency: u16 = ((self.nr13 as u16) | (((self.nr14 & 0x07) as u16) << 8)) as u16;
-        self.frequency_timer = (2048 - frequency) * 4;
+        self.frequency_timer = (2048 - self.frequency) * 4;
 
-        self.envelope = ((self.nr12 >> 4) & 0xF) as i16;
-        self.envelope_period = self.nr12 & 7;
+        self.envelope = self.initial_volume as i16;
+        self.envelope_period = self.envelope_periods_initial;
     }
 
     pub fn update(&mut self, hz64: bool, hz256: bool) -> i16 {
@@ -161,9 +241,7 @@ impl SquareWaveSoundGenerator {
             // If frequency timer reaches 0, reset it to the selected frequency
             // (NR13, NR14) and increment the wave duty position
             if self.frequency_timer == 0 {
-                let frequency: u16 =
-                    ((self.nr13 as u16) | (((self.nr14 & 0x07) as u16) << 8)) as u16;
-                self.frequency_timer = (2048 - frequency) * 4;
+                self.frequency_timer = (2048 - self.frequency) * 4;
                 self.wave_duty_position = (self.wave_duty_position + 1) & 7;
             }
         }
@@ -177,18 +255,17 @@ impl SquareWaveSoundGenerator {
         // 3: 75%   - 00111111
         //
         // The duty pattern is stored in bit 6-7 of NR11 (NR21)
-        let pattern = ((self.nr11 >> 6) & 3) as usize;
-        let out = WAVE_DUTY[pattern][self.wave_duty_position as usize];
+        let out = WAVE_DUTY[self.duty][self.wave_duty_position as usize];
 
-        if self.nr10 != 0 {
-            // FIXME:
-            // println!("NOT IMPLEMENTED: sweep");
-        }
+        // if self.nr10 != 0 {
+        // FIXME:
+        // println!("NOT IMPLEMENTED: sweep");
+        // }
 
         // Length counter. When length counter is enabled (bit 6 of NRx4)
         // and there is a 256 Hz clock, the length counter decrements.
         // If it reaches zero the channel gets disabled.
-        if hz256 && (self.nr14 & 0x40) != 0 && self.length_counter > 0 {
+        if hz256 && self.length_counter_enabled && self.length_counter > 0 {
             self.length_counter -= 1;
             if self.length_counter == 0 {
                 self.enabled = false;
@@ -197,23 +274,22 @@ impl SquareWaveSoundGenerator {
 
         // When envelope steps is non-zero, the envelope (the amplitude)
         // will increase or decrease every (envelope_steps/64) second.
-        let envelope_period = self.nr12 & 7;
 
         // Envelope
-        if hz64 && envelope_period > 0 {
+        if hz64 && self.envelope_periods_initial > 0 {
             if self.envelope_period > 0 {
                 self.envelope_period -= 1;
 
                 if self.envelope_period == 0 {
-                    self.envelope_period = envelope_period;
+                    self.envelope_period = self.envelope_periods_initial;
 
                     // Not max volume and volume should increase
-                    if self.envelope < 0xF && (self.nr12 & 8) != 0 {
+                    if self.envelope < 0xF && self.envelope_increasing {
                         self.envelope += 1;
                     }
 
                     // Not min volume and volume should decrease
-                    if self.envelope > 0 && (self.nr12 & 8) == 0 {
+                    if self.envelope > 0 && !self.envelope_increasing {
                         self.envelope -= 1;
                     }
                 }
@@ -305,13 +381,27 @@ impl WaveSoundGenerator {
         }
     }
 
+    // Reset everything except wave, which is what happens
+    // when the sound hardware is powered off by NR52.
+    pub fn power_off_reset(&mut self) {
+        self.nr30 = 0;
+        self.nr31 = 0;
+        self.nr33 = 0;
+        self.nr34 = 0;
+        self.length_counter = 0;
+        self.wave_position = 0;
+        self.frequency_timer = 0;
+        self.enabled = false;
+        self.volume_code = 0;
+    }
+
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
-            0 => self.nr30,
-            1 => self.nr31,
-            2 => self.volume_code << 5,
-            3 => self.nr33,
-            4 => self.nr34,
+            0 => self.nr30 | 0b0111_1111,
+            1 => 0xFF,
+            2 => self.volume_code << 5 | 0b1001_1111,
+            3 => 0xFF,
+            4 => self.nr34 | 0b1011_1111,
             _ => panic!("invalid register in channel 3: {}", address),
         }
     }
@@ -491,10 +581,10 @@ impl NoiseSoundGenerator {
 
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
-            0 => self.nr41,
+            0 => 0xFF,
             1 => self.nr42,
             2 => self.nr43,
-            3 => self.nr44,
+            3 => self.nr44 | 0b1011_1111,
             _ => panic!("invalid register {}", address),
         }
     }
@@ -617,8 +707,8 @@ pub struct AudioProcessingUnit {
     pub nr50: u8,
     pub nr51: u8,
 
-    // Bit 7 of NR52
-    pub enabled: bool,
+    // Bit 7 of NR52. Controls power to the audio hardware
+    pub powered_on: bool,
 
     // Producer for the output ring buffer.
     // Every cycle one sample is appended to this buffer.
@@ -630,21 +720,35 @@ pub struct AudioProcessingUnit {
 impl AudioProcessingUnit {
     pub fn new() -> Self {
         AudioProcessingUnit {
-            s1: SquareWaveSoundGenerator::new(),
-            s2: SquareWaveSoundGenerator::new(),
+            s1: SquareWaveSoundGenerator::new(true),
+            s2: SquareWaveSoundGenerator::new(false),
             ch3: WaveSoundGenerator::new(),
             ch4: NoiseSoundGenerator::new(),
             nr50: 0,
             nr51: 0,
             buf: None,
             recorder: None,
-            enabled: false,
+            powered_on: false,
         }
+    }
+
+    // Perform a complete reset. Used when resetting the whole machine.
+    // Note that the APU can't easily be recreated, as it has a ringbuf
+    // producer that can't be moved to a new instance of it, so instead
+    // we must reset all values.
+    pub fn reset(&mut self) {
+        self.s1 = SquareWaveSoundGenerator::new(true);
+        self.s2 = SquareWaveSoundGenerator::new(false);
+        self.ch3 = WaveSoundGenerator::new();
+        self.ch4 = NoiseSoundGenerator::new();
+        self.nr50 = 0;
+        self.nr51 = 0;
+        self.powered_on = false;
     }
 
     pub fn update(&mut self, div_counter: u16) {
         // NR52 bit 7 is used to disable the sound system completely
-        if !self.enabled {
+        if !self.powered_on {
             if let Some(ref mut prod) = self.buf {
                 prod.push(0).expect("Failed to push sample to audio buffer");
             }
@@ -731,7 +835,7 @@ impl AudioProcessingUnit {
 
     pub fn read_nr52(&self) -> u8 {
         let mut nr52: u8 = 0;
-        if self.enabled {
+        if self.powered_on {
             nr52 = 0x80;
         }
         if self.s1.enabled {
@@ -754,32 +858,62 @@ impl AudioProcessingUnit {
             0xFF10..=0xFF14 => self.s1.read_reg(address - 0xFF10),
             0xFF15..=0xFF19 => self.s2.read_reg(address - 0xFF15),
             0xFF1A..=0xFF1E => self.ch3.read_reg(address - 0xFF1A),
+            0xFF1F => 0xFF,
             0xFF20..=0xFF23 => self.ch4.read_reg(address - 0xFF20),
-            0xFF30..=0xFF3F => self.ch3.read_wave_reg(address as usize - 0xFF30),
             NR50_REG => self.nr50,
             NR51_REG => self.nr51,
-            NR52_REG => self.read_nr52(),
+            NR52_REG => self.read_nr52() | 0b0111_0000,
+            0xFF27..=0xFF2F => 0xFF,
+            0xFF30..=0xFF3F => self.ch3.read_wave_reg(address as usize - 0xFF30),
             _ => 0,
         }
     }
 
+    fn power_on(&mut self) {
+        if !self.powered_on {
+            self.powered_on = true;
+        }
+    }
+
+    fn power_off(&mut self) {
+        if self.powered_on {
+            self.powered_on = false;
+            self.s1 = SquareWaveSoundGenerator::new(true);
+            self.s2 = SquareWaveSoundGenerator::new(false);
+            self.ch3.power_off_reset();
+            self.ch4 = NoiseSoundGenerator::new();
+            self.nr50 = 0;
+            self.nr51 = 0;
+        }
+    }
+
     pub fn write_reg(&mut self, address: u16, value: u8) {
-        // println!("Write audio register 0x{:04X}: 0x{:02X}", address, value);
+        // Writes to NR52 and the wave memory allways work, even
+        // when the sound hardware is powered off.
         match address {
-            0xFF10..=0xFF14 => self.s1.write_reg(address - 0xFF10, value),
-            0xFF15..=0xFF19 => self.s2.write_reg(address - 0xFF15, value),
-            0xFF1A..=0xFF1E => self.ch3.write_reg(address - 0xFF1A, value),
-            0xFF20..=0xFF23 => self.ch4.write_reg(address - 0xFF20, value),
+            NR52_REG => {
+                if value & 0x80 != 0 {
+                    self.power_on();
+                } else {
+                    self.power_off();
+                }
+            }
             0xFF30..=0xFF3F => self.ch3.write_wave_reg(address as usize - 0xFF30, value),
-            NR50_REG => self.nr50 = value,
-            NR51_REG => self.nr51 = value,
-
-            // Note that for proper emulation, when sound is disabled:
-            // - All sound registers gets destroyed
-            // - It's not possible to access any sound registers except NR52
-            NR52_REG => self.enabled = value & 0x80 != 0,
-
             _ => {}
+        }
+
+        if self.powered_on {
+            match address {
+                0xFF10..=0xFF14 => self.s1.write_reg(address - 0xFF10, value),
+                0xFF15..=0xFF19 => self.s2.write_reg(address - 0xFF15, value),
+                0xFF1A..=0xFF1E => self.ch3.write_reg(address - 0xFF1A, value),
+                0xFF1F => {}
+                0xFF20..=0xFF23 => self.ch4.write_reg(address - 0xFF20, value),
+                NR50_REG => self.nr50 = value,
+                NR51_REG => self.nr51 = value,
+                0xFF27..=0xFF2F => {}
+                _ => {}
+            }
         }
     }
 }

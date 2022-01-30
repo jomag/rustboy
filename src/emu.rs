@@ -1,12 +1,24 @@
 use crate::mmu::MMU;
 
+pub enum Machine {
+    GameBoyDMG,
+}
+
 pub struct Emu {
     pub mmu: MMU,
+    pub machine: Machine,
 }
 
 impl Emu {
     pub fn new() -> Self {
-        Emu { mmu: MMU::new() }
+        Emu {
+            mmu: MMU::new(),
+            machine: Machine::GameBoyDMG,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.mmu.reset();
     }
 
     pub fn init(&mut self) {

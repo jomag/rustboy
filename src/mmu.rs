@@ -133,6 +133,28 @@ impl MMU {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.reg = Registers::new();
+        self.cartridge.reset();
+        self.external_ram.fill(0);
+        self.ram.fill(0);
+        self.io_reg.fill(0);
+        self.ie_reg = 0;
+        self.internal_ram.fill(0);
+        self.bootstrap_mode = true;
+        self.watch_triggered = false;
+        self.timer = Timer::new();
+        self.dma = DMA::new();
+        self.lcd = LCD::new();
+        self.buttons = Buttons::new();
+        self.display_updated = false;
+
+        // The APU shares a ringbuf with audio code so it can't be recreated
+        self.apu.reset();
+
+        self.serial = Serial::new(None);
+    }
+
     pub fn init(&mut self) {
         self.io_reg[0xFF00 & 0x7F] = 0xCF;
         self.io_reg[0xFF01 & 0x7F] = 0x00;
@@ -285,8 +307,7 @@ impl MMU {
             OBP1_REG => self.lcd.obp1,
 
             // Sound registers
-            0xFF10..=0xFF26 => self.apu.read_reg(addr),
-            0xFF30..=0xFF3F => self.apu.read_reg(addr),
+            0xFF10..=0xFF3F => self.apu.read_reg(addr),
 
             // Use self.io_reg for I/O registers that have not been implemented yet
             0xFF00..=0xFF7F => self.io_reg[(addr - 0xFF00) as usize],

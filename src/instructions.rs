@@ -17,8 +17,8 @@ pub fn _op_cycles(op: u8) -> u32 {
     return OP_CYCLES[op as usize] * 4;
 }
 
-pub fn op_length(op: u8) -> u32 {
-    const INSTRUCTION_LENGTH: [u32; 256] = [
+pub fn op_length(op: u8) -> Option<usize> {
+    const INSTRUCTION_LENGTH: [usize; 256] = [
         1, 3, 1, 1, 1, 1, 2, 1, 3, 1, 1, 1, 1, 1, 2, 1, 1, 3, 1, 1, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1,
         2, 1, 2, 3, 1, 1, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 2, 1, 2, 3, 1, 1, 1, 1, 2, 1, 2, 1, 1, 1,
         1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
@@ -32,16 +32,17 @@ pub fn op_length(op: u8) -> u32 {
 
     if op == 0xCB {
         // All prefix 0xCB opcodes have same length
-        return 2;
+        return Some(2);
     }
 
     let len = INSTRUCTION_LENGTH[op as usize];
 
     if len == 0 {
-        panic!("length unknown for instructions with op code 0x{:02X}", op);
+        println!("length unknown for instruction with op code 0x{:02X}", op);
+        return None;
     }
 
-    return len;
+    return Some(len);
 }
 
 // 16-bit push operation

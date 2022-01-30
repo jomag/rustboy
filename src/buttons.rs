@@ -36,6 +36,11 @@ impl Buttons {
         // println!("Handle Release! {:x} {:x}", self.p1, self.button_state);
     }
 
+    pub fn release_all(&mut self) {
+        self.button_state = 0;
+        self.update();
+    }
+
     pub fn write_p1(&mut self, v: u8) {
         self.p1 = 0xC0 | (v & 0x30) | (self.p1 & 0xF);
     }
