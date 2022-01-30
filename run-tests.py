@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import sys
 import argparse
 from cgi import test
 import os
@@ -62,11 +63,13 @@ class Test:
         print(f"{BRIGHT}{YELLOW}{self.name}{RESET_ALL}")
         if self.expect:
             print(f"[{self.expect}]")
+            sys.stdout.flush()
             result = os.system(
                 f'{RUSTBOY} --test-expect="{self.expect}" "{self.rom_path}"'
             )
             self.result = result == 0
         elif self.variant:
+            sys.stdout.flush()
             result = os.system(f'{RUSTBOY} --test="{self.variant}" "{self.rom_path}"')
             self.result = result == 0
         else:
