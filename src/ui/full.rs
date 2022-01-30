@@ -2,6 +2,8 @@ use std::{fs::File, io::BufWriter, iter, thread::sleep, time::Instant};
 
 use crate::{
     apu::AudioRecorder,
+    buttons::ButtonType,
+    debug::Debug,
     emu::Emu,
     lcd::{SCREEN_HEIGHT, SCREEN_WIDTH},
     APPNAME, CLOCK_SPEED, CYCLES_PER_FRAME,
@@ -10,18 +12,21 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Sample, SampleFormat, Stream, StreamConfig,
 };
-use egui::FontDefinitions;
+use egui::{FontDefinitions, Key};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use epi::*;
-use ringbuf::RingBuffer;
+use ringbuf::{Consumer, RingBuffer};
 use wgpu::FilterMode;
 use winit::{
     event::{Event::*, StartCause},
     event_loop::ControlFlow,
 };
 
-use super::{audio_window::render_audio_window, render_stats::RenderStats};
+use super::{
+    audio_window::render_audio_window, breakpoints_window::BreakpointsWindow,
+    debug_window::DebugWindow, render_stats::RenderStats, serial_window::SerialWindow,
+};
 
 const TARGET_FPS: u64 = 60;
 
@@ -45,12 +50,18 @@ struct MoeApp {
     fb_width: usize,
     fb_height: usize,
     fb_texture: Option<egui::TextureId>,
+    serial_buffer_consumer: Option<Consumer<u8>>,
 
     // Statistics for the UI frame rate
     ui_render_stats: RenderStats,
 
     // Statistics for the emulator frame rate
     emu_render_stats: RenderStats,
+
+    // Windows
+    debug_window: DebugWindow,
+    breakpoints_window: BreakpointsWindow,
+    serial_window: SerialWindow,
 }
 
 pub struct WaveAudioRecorder {
@@ -94,6 +105,13 @@ impl AudioRecorder for WaveAudioRecorder {
 }
 
 impl MoeApp {
+    pub fn setup_serial(&mut self) {
+        let buf = RingBuffer::<u8>::new(128);
+        let (producer, consumer) = buf.split();
+        self.emu.mmu.serial.output = Some(producer);
+        self.serial_buffer_consumer = Some(consumer);
+    }
+
     pub fn setup_audio(&mut self) -> Stream {
         let spec = hound::WavSpec {
             channels: 1,
@@ -160,7 +178,7 @@ impl MoeApp {
                     sample
                 }
                 None => {
-                    println!("Oops! Out of audio data");
+                    // println!("Oops! Out of audio data");
                     0
                 }
             }
@@ -222,12 +240,90 @@ impl MoeApp {
             fb_texture: None,
             ui_render_stats: Default::default(),
             emu_render_stats: Default::default(),
+            debug_window: DebugWindow::new(),
+            breakpoints_window: BreakpointsWindow::new(),
+            serial_window: SerialWindow::new(),
+            serial_buffer_consumer: None,
         }
     }
-}
 
-impl MoeApp {
-    fn update(&mut self, ctx: &egui::CtxRef, frame: &epi::Frame) {
+    fn update(&mut self, ctx: &egui::CtxRef, frame: &epi::Frame, debug: &mut Debug) {
+        if let Some(ref mut consumer) = self.serial_buffer_consumer {
+            while let Some(ch) = consumer.pop() {
+                self.serial_window.append(ch);
+            }
+        }
+
+        if ctx.wants_keyboard_input() {
+            self.emu.mmu.buttons.release_all();
+        } else {
+            let inp = ctx.input();
+
+            if inp.key_down(Key::ArrowLeft) {
+                self.emu.mmu.buttons.handle_press(ButtonType::Left)
+            }
+
+            if inp.key_down(Key::ArrowRight) {
+                self.emu.mmu.buttons.handle_press(ButtonType::Right)
+            }
+
+            if inp.key_down(Key::ArrowUp) {
+                self.emu.mmu.buttons.handle_press(ButtonType::Up)
+            }
+
+            if inp.key_down(Key::ArrowDown) {
+                self.emu.mmu.buttons.handle_press(ButtonType::Down)
+            }
+
+            if inp.key_down(Key::Z) {
+                self.emu.mmu.buttons.handle_press(ButtonType::A)
+            }
+
+            if inp.key_down(Key::X) {
+                self.emu.mmu.buttons.handle_press(ButtonType::B)
+            }
+
+            if inp.key_down(Key::Enter) {
+                self.emu.mmu.buttons.handle_press(ButtonType::Select)
+            }
+
+            if inp.key_down(Key::Space) {
+                self.emu.mmu.buttons.handle_press(ButtonType::Start)
+            }
+
+            if inp.key_released(Key::ArrowLeft) {
+                self.emu.mmu.buttons.handle_release(ButtonType::Left)
+            }
+
+            if inp.key_released(Key::ArrowRight) {
+                self.emu.mmu.buttons.handle_release(ButtonType::Right)
+            }
+
+            if inp.key_released(Key::ArrowUp) {
+                self.emu.mmu.buttons.handle_release(ButtonType::Up)
+            }
+
+            if inp.key_released(Key::ArrowDown) {
+                self.emu.mmu.buttons.handle_release(ButtonType::Down)
+            }
+
+            if inp.key_released(Key::Z) {
+                self.emu.mmu.buttons.handle_release(ButtonType::A)
+            }
+
+            if inp.key_released(Key::X) {
+                self.emu.mmu.buttons.handle_release(ButtonType::B)
+            }
+
+            if inp.key_released(Key::Enter) {
+                self.emu.mmu.buttons.handle_release(ButtonType::Select)
+            }
+
+            if inp.key_released(Key::Space) {
+                self.emu.mmu.buttons.handle_release(ButtonType::Start)
+            }
+        }
+
         // Update render stats with new frame info
         self.ui_render_stats
             .on_new_frame(ctx.input().time, frame.info().cpu_usage);
@@ -252,6 +348,9 @@ impl MoeApp {
         }
 
         render_audio_window(ctx, &mut self.emu);
+        self.debug_window.render(ctx, &mut self.emu, debug);
+        self.breakpoints_window.render(ctx, &mut self.emu, debug);
+        self.serial_window.render(ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading(APPNAME);
@@ -262,7 +361,7 @@ impl MoeApp {
     }
 }
 
-pub fn run_with_wgpu(emu: Emu) {
+pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
     let mut app = MoeApp::new(emu);
     let event_loop = winit::event_loop::EventLoop::with_user_event();
     let window = winit::window::WindowBuilder::new()
@@ -271,8 +370,8 @@ pub fn run_with_wgpu(emu: Emu) {
         .with_transparent(false)
         .with_title("egui-wgpu_winit example")
         .with_inner_size(winit::dpi::PhysicalSize {
-            width: 2000,
-            height: 1200,
+            width: 2800,
+            height: 1800,
         })
         .build(&event_loop)
         .unwrap();
@@ -338,6 +437,7 @@ pub fn run_with_wgpu(emu: Emu) {
     let mut emulator_frame_timestamp = Instant::now();
 
     let _stream = app.setup_audio();
+    app.setup_serial();
 
     event_loop.run(move |event, _, control_flow| {
         // Debugging: print all events
@@ -445,7 +545,7 @@ pub fn run_with_wgpu(emu: Emu) {
                 }
 
                 // Build the whole app UI
-                app.update(&platform.context(), &mut frame);
+                app.update(&platform.context(), &mut frame, &mut debug);
 
                 // End the UI frame
                 let (output, paint_commands) = platform.end_frame(Some(&window));
@@ -500,7 +600,9 @@ pub fn run_with_wgpu(emu: Emu) {
                 if elapsed_time >= us_per_frame {
                     // Run emulator until next frame is ready
                     app.emu.mmu.display_updated = false;
-                    while !app.emu.mmu.display_updated {
+
+                    // FIXME: Fix this complicated logic. Also in test_runner.rs
+                    while debug.before_op(&app.emu) && !app.emu.mmu.display_updated {
                         app.emu.mmu.exec_op();
                     }
 

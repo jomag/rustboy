@@ -3,6 +3,7 @@ pub const N_BIT: u8 = 1 << 6; // subtract flag
 pub const H_BIT: u8 = 1 << 5; // half carry flag
 pub const C_BIT: u8 = 1 << 4; // carry flag
 
+#[derive(Copy, Clone)]
 pub struct Registers {
     // Registers
     pub a: u8,

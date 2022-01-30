@@ -141,10 +141,7 @@ fn main() -> Result<(), String> {
     println!("Loading cartridge ROM: {}", cartridge_rom);
     emu.load_cartridge(cartridge_rom);
 
-    let mut debug = crate::debug::Debug {
-        source_code_breakpoints: false,
-        debug_log: None,
-    };
+    let mut debug = crate::debug::Debug::new();
 
     match debug_log {
         Some(filename) => debug.start_debug_log(filename),
@@ -161,7 +158,7 @@ fn main() -> Result<(), String> {
         test_runner::test_runner(variant, &mut emu, &mut debug);
     }
 
-    run_with_wgpu(emu);
+    run_with_wgpu(emu, debug);
     // run_with_minimal_ui(APPNAME, None, None, &mut emu);
 
     // FIXME: add breakpoint from command line argument
