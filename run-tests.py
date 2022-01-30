@@ -311,7 +311,7 @@ if all_suites or "mooneye" in args.suites:
 if all_suites or "blargg" in args.suites:
     blargg = BlarggTestSuite(BLARGG_DIR)
     blargg.setup()
-    blargg.run(skip=["04-sweep", "05-sweep details", "07-len sweep period sync"])
+    blargg.run(skip=["04-sweep", "05-sweep details", "07-len sweep period sync", "11-regs after power"])
     blargg.pretty_print()
     if args.report:
         reports.append(
