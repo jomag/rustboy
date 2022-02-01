@@ -88,6 +88,7 @@ impl RegistersView {
             ui.horizontal(|ui| {
                 RegistersView::render_register(ui, "SP:", reg.sp, self.compare_with.sp);
                 RegistersView::render_register(ui, "PC:", reg.pc, self.compare_with.pc);
+                ui.label(format!("Cycle: {}", emu.mmu.timer.abs_cycle));
             });
         });
 

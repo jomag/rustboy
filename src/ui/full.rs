@@ -71,19 +71,19 @@ pub struct WaveAudioRecorder {
 }
 
 impl AudioRecorder for WaveAudioRecorder {
-    fn mono(&mut self, sample: i16) {
+    fn mono(&mut self, sample: f32) {
         if let Some(ref mut wr) = self.mono_writer {
             wr.write_sample(sample);
         }
     }
 
-    fn gen1(&mut self, sample: i16) {
+    fn gen1(&mut self, sample: f32) {
         if let Some(ref mut wr) = self.gen1_writer {
             wr.write_sample(sample);
         }
     }
 
-    fn gen2(&mut self, sample: i16) {
+    fn gen2(&mut self, sample: f32) {
         if let Some(ref mut wr) = self.gen2_writer {
             wr.write_sample(sample);
         }
@@ -149,7 +149,7 @@ impl MoeApp {
         // FIXME: the buffer is way too big as it is, so that there is some time
         // before it runs out of space. This is because the data is not pulled in
         // the right speed.
-        let buf = RingBuffer::<i16>::new((CYCLES_PER_FRAME as usize / 4) * 4 * 100);
+        let buf = RingBuffer::<f32>::new((CYCLES_PER_FRAME as usize / 4) * 4 * 100);
         let (producer, mut consumer) = buf.split();
         self.emu.mmu.apu.buf = Some(producer);
 
@@ -179,7 +179,7 @@ impl MoeApp {
                 }
                 None => {
                     // println!("Oops! Out of audio data");
-                    0
+                    0.0
                 }
             }
         };
@@ -217,11 +217,11 @@ impl MoeApp {
         fn write_beep<T: Sample>(
             output: &mut [T],
             channels: usize,
-            next_sample: &mut dyn FnMut() -> i16,
+            next_sample: &mut dyn FnMut() -> f32,
         ) {
             // println!("BEEP?!");
             for frame in output.chunks_mut(channels) {
-                let value: T = cpal::Sample::from::<i16>(&next_sample());
+                let value: T = cpal::Sample::from::<f32>(&next_sample());
                 for sample in frame.iter_mut() {
                     *sample = value;
                 }

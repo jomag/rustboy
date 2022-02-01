@@ -399,10 +399,7 @@ impl MMU {
             0xFF4D => println!("write to 0xFF4D - KEY1 (CGB only): {}", value),
 
             // 0xFF50: write 1 to disable bootstrap ROM
-            0xFF50 => {
-                println!("bootstrap disabled!");
-                self.bootstrap_mode = false
-            }
+            0xFF50 => self.bootstrap_mode = false,
 
             // Invalid registers, that are still used by for example Tetris
             // https://www.reddit.com/r/EmuDev/comments/5nixai/gb_tetris_writing_to_unused_memory/

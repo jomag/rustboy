@@ -102,6 +102,7 @@ fn main() -> Result<(), String> {
             --break-frame=[N]    'Break at frame N'
             --exit-cycle=[N]     'Exit at cycle N'
             --exit-frame=[N]     'Exit at frame N'
+            --ff-bootstrap       'Fast forward bootstrap'
             -R, --record=[PATH]  'Record into directory'
             -s, --skip=[N]       'Frames to skip while recording'
             -C, --capture=[N]    'Capture screen at frame N'
@@ -126,6 +127,7 @@ fn main() -> Result<(), String> {
     let exit_at_frame: Option<u32> = parse_optional(matches.value_of("exit-frame"));
     let capture_at_frame: Option<u32> = parse_optional(matches.value_of("capture"));
     let debug_log: Option<&str> = matches.value_of("debug-log");
+    let ff_bootstrap = matches.is_present("ff-bootstrap");
 
     let capture_filename: &str = matches
         .value_of("capture-to")
@@ -147,6 +149,14 @@ fn main() -> Result<(), String> {
         Some(filename) => debug.start_debug_log(filename),
         None => {}
     };
+
+    if ff_bootstrap {
+        println!("Fast forward bootstrap ...");
+        while emu.mmu.bootstrap_mode {
+            emu.mmu.exec_op();
+        }
+        println!("Bootstrap mode disabled");
+    }
 
     if let Some(expect) = test_expect {
         // This never returns
