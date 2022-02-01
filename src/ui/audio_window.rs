@@ -58,7 +58,7 @@ pub fn render_audio_window(ctx: &CtxRef, emu: &mut Emu) {
         ui.label(format!("Volume Code: {}", emu.mmu.apu.ch3.volume_code));
         ui.label(format!(
             "Length counter: {}",
-            emu.mmu.apu.ch3.length_counter
+            emu.mmu.apu.ch3.length_counter.value,
         ));
         ui.label(format!(
             "Frequency timer: {}",
