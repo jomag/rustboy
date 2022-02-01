@@ -448,13 +448,14 @@ impl WaveSoundGenerator {
         self.frequency_timer = 0;
         self.enabled = false;
         self.volume_code = 0;
+        self.dac = DAC::new();
     }
 
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
             0 => {
-                if self.enabled {
-                    0xFF
+                if self.dac.powered_on {
+                    0b1111_1111
                 } else {
                     0b0111_1111
                 }
