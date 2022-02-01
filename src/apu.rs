@@ -15,11 +15,79 @@
 //   when NR52 is powered off. See the Blargg doc above.
 // - After the sound hardware is powered on, frame sequencer should be
 //   reset so next step is step 0.
-// - Should register reads work even when powered off?
+// - Need to differentiate between a channel being "enabled" and the
+//   DAC being enabled?
+// - Remove duplicated envelope code
 
 use ringbuf::Producer;
 
 use crate::mmu::{NR50_REG, NR51_REG, NR52_REG};
+
+// All channels have a length counter which counts down and disables
+// the channel when it reaches zero. The length counter can be
+// disabled.
+pub struct LengthCounter {
+    pub enabled: bool,
+    pub value: u16,
+}
+
+impl LengthCounter {
+    fn new() -> Self {
+        LengthCounter {
+            enabled: false,
+            value: 0,
+        }
+    }
+
+    // When triggered, if length counter is 0 it should
+    // be reset to 64 (256 for wave channel).
+    fn trigger(&mut self, reset_value: u16) {
+        if self.value == 0 {
+            self.value = reset_value;
+        }
+    }
+
+    // This function should be called by the 256 Hz frame sequencer
+    // tick. If it returns true, it has reached zero and the channel
+    // should be disabled.
+    fn count_down(&mut self) -> bool {
+        if self.enabled {
+            match self.value {
+                0 => return false,
+                1 => {
+                    self.value = 0;
+                    return true;
+                }
+                _ => {
+                    self.value -= 1;
+                    return false;
+                }
+            }
+        } else {
+            return false;
+        }
+    }
+}
+
+// Every channel has a DAC: a 4-bit digital-to-analog converter
+// that generates a voltage from -1 to +1 for values 0 to 15.
+pub struct DAC {
+    powered_on: bool,
+}
+
+impl DAC {
+    fn new() -> Self {
+        DAC { powered_on: false }
+    }
+
+    fn convert(&self, inp: u8) -> f32 {
+        assert!(inp & 0xF0 == 0);
+        match self.powered_on {
+            true => inp as f32 * (2.0 / 15.0) - 1.0,
+            false => 0.0,
+        }
+    }
+}
 
 // SquareWaveSoundGenerator
 // ------------------------
@@ -27,6 +95,7 @@ use crate::mmu::{NR50_REG, NR51_REG, NR52_REG};
 // Note that this type is used for both sound channel 1 and 2.
 // The only difference is that channel 2 does not have any sweep
 // generator and the registers starts at NR20 instead of NR10.
+// To differentiate between them, there's the `with_sweep` boolean.
 //
 // ---------
 // Registers
@@ -53,7 +122,7 @@ use crate::mmu::{NR50_REG, NR51_REG, NR52_REG};
 // - bit 7: initial, 1 = restart sound (write only)
 // - bit 6: length counter/consecutive selection
 // - bit 2..0: hi bits of frequency (write only)
-
+//
 pub struct SquareWaveSoundGenerator {
     // Frequency. 10 bits. Bit 7..0 in NR13 + bit 9..8 in NR14.
     frequency: u16,
@@ -94,19 +163,10 @@ pub struct SquareWaveSoundGenerator {
     envelope_periods_initial: u8,
 
     // Current volume of the envelope filter. Internal register.
-    pub envelope: i16,
+    pub envelope: u8,
 
     // The envelope change period counter. Internal register.
     envelope_period: u8,
-
-    // Length counter enabled. Bit 6 of NR14.
-    // If true, the length counter is used.
-    // Otherwise, ...
-    length_counter_enabled: bool,
-
-    // Length counter. Internal register.
-    // When this reaches zero the channel is disabled.
-    pub length_counter: u8,
 
     // Internal enabled flag.
     pub enabled: bool,
@@ -122,9 +182,12 @@ pub struct SquareWaveSoundGenerator {
 
     // Sweep is only enabled for the first square wave channel
     pub with_sweep: bool,
+
+    pub length_counter: LengthCounter,
+    pub dac: DAC,
 }
 
-const WAVE_DUTY: [[i16; 8]; 4] = [
+const WAVE_DUTY: [[u8; 8]; 4] = [
     [0, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 0, 0, 0, 1, 1, 1],
@@ -140,8 +203,7 @@ impl SquareWaveSoundGenerator {
             envelope_periods_initial: 0,
             envelope_increasing: false,
             initial_volume: 0,
-            length_counter_enabled: false,
-            length_counter: 0,
+            length_counter: LengthCounter::new(),
             frequency: 0,
             frequency_timer: 0,
             duty: 0,
@@ -150,6 +212,7 @@ impl SquareWaveSoundGenerator {
             sweep_shift_count: 0,
             sweep_direction: false,
             with_sweep,
+            dac: DAC::new(),
         }
     }
 
@@ -178,7 +241,7 @@ impl SquareWaveSoundGenerator {
             }
             3 => 0xFF,
             4 => {
-                if self.length_counter_enabled {
+                if self.length_counter.enabled {
                     0xFF
                 } else {
                     0b1011_1111
@@ -197,10 +260,12 @@ impl SquareWaveSoundGenerator {
             }
             1 => {
                 self.duty = ((value >> 6) & 3) as usize;
-                self.length_counter = 64 - (value & 63);
+                self.length_counter.value = (64 - (value & 63)) as u16;
             }
             2 => {
                 self.initial_volume = (value >> 4) & 0xF;
+                self.dac.powered_on = value & 0b1111_1000 != 0;
+                self.enabled = self.enabled && self.dac.powered_on;
                 self.envelope_increasing = (value & 0b1000) != 0;
                 self.envelope_periods_initial = value & 0b111;
             }
@@ -208,7 +273,7 @@ impl SquareWaveSoundGenerator {
             4 => {
                 self.frequency =
                     (self.frequency & 0b00_1111_1111) | (((value & 0b111) as u16) << 8);
-                self.length_counter_enabled = value & 0b0100_0000 != 0;
+                self.length_counter.enabled = value & 0b0100_0000 != 0;
                 if value & 0b1000_0000 != 0 {
                     self.trigger();
                 }
@@ -218,22 +283,21 @@ impl SquareWaveSoundGenerator {
     }
 
     fn trigger(&mut self) {
-        // See details about exactly what happens on sound trigger
-        // in the document Game Boy Sound Operation by Blargg:
-        // https://gist.github.com/drhelius/3652407
         self.enabled = true;
-
-        if self.length_counter == 0 {
-            self.length_counter = 64;
-        }
-
+        self.length_counter.trigger(64);
         self.frequency_timer = (2048 - self.frequency) * 4;
-
-        self.envelope = self.initial_volume as i16;
         self.envelope_period = self.envelope_periods_initial;
+        self.envelope = self.initial_volume;
+
+        // FIXME: add sweep trigger handling
+
+        // If DAC is not powered, immediately disable the channel again
+        if !self.dac.powered_on {
+            self.enabled = false
+        }
     }
 
-    pub fn update(&mut self, hz64: bool, hz256: bool) -> i16 {
+    pub fn update(&mut self, hz64: bool, hz256: bool) -> f32 {
         // Decrement frequency timer
         if self.frequency_timer >= 4 {
             self.frequency_timer -= 4;
@@ -262,14 +326,9 @@ impl SquareWaveSoundGenerator {
         // println!("NOT IMPLEMENTED: sweep");
         // }
 
-        // Length counter. When length counter is enabled (bit 6 of NRx4)
-        // and there is a 256 Hz clock, the length counter decrements.
-        // If it reaches zero the channel gets disabled.
-        if hz256 && self.length_counter_enabled && self.length_counter > 0 {
-            self.length_counter -= 1;
-            if self.length_counter == 0 {
-                self.enabled = false;
-            }
+        // Update length counter at 256 Hz
+        if hz256 && self.length_counter.count_down() {
+            self.enabled = false;
         }
 
         // When envelope steps is non-zero, the envelope (the amplitude)
@@ -298,10 +357,10 @@ impl SquareWaveSoundGenerator {
 
         if self.enabled {
             let dac_input = out * self.envelope;
-            return dac_input * 200 - 100;
+            return self.dac.convert(dac_input);
         }
 
-        return 0;
+        0.0
     }
 }
 pub const CH3_WAVE_LENGTH: usize = 32;
@@ -314,7 +373,6 @@ pub struct WaveSoundGenerator {
     // NR30 (0xFF1A): DAC power
     // bit 7:    dac power
     // bit 6..0: not used
-    nr30: u8,
 
     // NR31 (0xFF1B): length load
     // 7..0: load sound length (write only)
@@ -327,28 +385,25 @@ pub struct WaveSoundGenerator {
 
     // NR33 (0xFF1D): lo bits of frequency
     // - bit 7..0: lo bits of frequency (write only)
-    nr33: u8,
 
     // NR34 (0xFF1E): hi bits of frequency + more
     // - bit 7:    trigger (write only)
     // - bit 6:    length counter enable
     // - bit 5..3: not used
     // - bit 2..0: hi bits of frequency (write only)
-    nr34: u8,
 
     // ---------------
     // Internal values
     // ---------------
+
+    // Frequency. 10 bits. Bit 7..0 in NR13 + bit 9..8 in NR14.
+    frequency: u16,
 
     // Wave pattern containing 32 4-bit samples.
     // These are accessed through 16 registers: 0xFF30 - 0xFF3F.
     // Each register holds two 4-bit samples. The upper bits are
     // played first.
     pub wave: [u8; CH3_WAVE_LENGTH],
-
-    // Length counter. Internal register.
-    // When this reaches zero the channel is disabled.
-    pub length_counter: u16,
 
     // Internal enabled flag.
     pub enabled: bool,
@@ -363,32 +418,32 @@ pub struct WaveSoundGenerator {
     // Volume code (0=0%, 1=100%, 2=50%, 3=25%)
     // Bits 6..5 of NR32
     pub volume_code: u8,
+
+    pub length_counter: LengthCounter,
+    pub dac: DAC,
 }
 
 impl WaveSoundGenerator {
     pub fn new() -> Self {
         WaveSoundGenerator {
-            nr30: 0,
             nr31: 0,
-            nr33: 0,
-            nr34: 0,
+            frequency: 0,
             wave: [0; CH3_WAVE_LENGTH],
-            length_counter: 0,
+            length_counter: LengthCounter::new(),
             wave_position: 0,
             frequency_timer: 0,
             enabled: false,
             volume_code: 0,
+            dac: DAC::new(),
         }
     }
 
     // Reset everything except wave, which is what happens
     // when the sound hardware is powered off by NR52.
     pub fn power_off_reset(&mut self) {
-        self.nr30 = 0;
         self.nr31 = 0;
-        self.nr33 = 0;
-        self.nr34 = 0;
-        self.length_counter = 0;
+        self.frequency = 0;
+        self.length_counter = LengthCounter::new();
         self.wave_position = 0;
         self.frequency_timer = 0;
         self.enabled = false;
@@ -397,11 +452,24 @@ impl WaveSoundGenerator {
 
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
-            0 => self.nr30 | 0b0111_1111,
+            0 => {
+                if self.enabled {
+                    0xFF
+                } else {
+                    0b0111_1111
+                }
+            }
+
             1 => 0xFF,
             2 => self.volume_code << 5 | 0b1001_1111,
             3 => 0xFF,
-            4 => self.nr34 | 0b1011_1111,
+            4 => {
+                if self.length_counter.enabled {
+                    0xFF
+                } else {
+                    0b1011_1111
+                }
+            }
             _ => panic!("invalid register in channel 3: {}", address),
         }
     }
@@ -416,19 +484,19 @@ impl WaveSoundGenerator {
     pub fn write_reg(&mut self, address: u16, value: u8) {
         match address {
             0 => {
-                self.nr30 = value;
-                if value & 0x80 == 0 {
-                    self.enabled = false;
-                }
+                self.dac.powered_on = value & 0x80 != 0;
+                self.enabled = self.enabled && self.dac.powered_on;
             }
             1 => {
                 self.nr31 = value;
-                self.length_counter = 256 - value as u16;
+                self.length_counter.value = 256 - value as u16;
             }
             2 => self.volume_code = (value & 0b0110_0000) >> 5,
-            3 => self.nr33 = value,
+            3 => self.frequency = (self.frequency & 0b11_0000_0000) | value as u16,
             4 => {
-                self.nr34 = value;
+                self.frequency =
+                    (self.frequency & 0b00_1111_1111) | (((value & 0b111) as u16) << 8);
+                self.length_counter.enabled = value & 0b0100_0000 != 0;
                 if value & 0x80 != 0 {
                     self.trigger();
                 }
@@ -444,22 +512,17 @@ impl WaveSoundGenerator {
 
     fn trigger(&mut self) {
         self.enabled = true;
-
-        if self.length_counter == 0 {
-            self.length_counter = 256;
-        }
-
-        let frequency: u16 = ((self.nr33 as u16) | (((self.nr34 & 0x07) as u16) << 8)) as u16;
-        self.frequency_timer = (2048 - frequency) * 2;
-
+        self.length_counter.trigger(256);
+        self.frequency_timer = (2048 - self.frequency) * 2;
         self.wave_position = 0;
+
+        // If DAC is not powered on, immediately disable the channel again
+        if !self.dac.powered_on {
+            self.enabled = false
+        }
     }
 
-    pub fn update(&mut self, hz256: bool) -> i16 {
-        if self.nr30 & 0x80 == 0 {
-            self.enabled = false;
-        }
-
+    pub fn update(&mut self, hz256: bool) -> f32 {
         // Decrement frequency timer
         // FIXME: this timer can end up at value 2, as the frequency is multiplied by 2.
         // This is problematic as the APU is updated on every 4'th cycle.
@@ -473,9 +536,7 @@ impl WaveSoundGenerator {
             // If frequency timer reaches 0, reset it to the selected frequency
             // (NR13, NR14) and increment the wave position
             if self.frequency_timer == 0 {
-                let frequency: u16 =
-                    ((self.nr33 as u16) | (((self.nr34 & 0x07) as u16) << 8)) as u16;
-                self.frequency_timer = (2048 - frequency) * 2;
+                self.frequency_timer = (2048 - self.frequency) * 2;
                 self.wave_position = (self.wave_position + 1) & 31;
             }
         } else {
@@ -484,15 +545,9 @@ impl WaveSoundGenerator {
 
         let mut out = self.wave[self.wave_position as usize];
 
-        // Length counter. When length counter is enabled (bit 6 of NRx4)
-        // and there is a 256 Hz clock, the length counter decrements.
-        // If it reaches zero the channel gets disabled.
-        if hz256 && (self.nr34 & 0x40) != 0 && self.length_counter > 0 {
-            println!("Never happens?");
-            self.length_counter -= 1;
-            if self.length_counter == 0 {
-                self.enabled = false;
-            }
+        // Update length counter at 256 Hz
+        if hz256 && self.length_counter.count_down() {
+            self.enabled = false;
         }
 
         out = match self.volume_code {
@@ -504,10 +559,10 @@ impl WaveSoundGenerator {
         };
 
         if self.enabled {
-            return (out as i16) * 200 - 100;
+            return self.dac.convert(out);
         }
 
-        return 0;
+        return 0.0;
     }
 }
 
@@ -518,13 +573,11 @@ pub struct NoiseSoundGenerator {
 
     // NR41 (0xFF20): length load
     // 5..0: load sound length (write only)
-    nr41: u8,
 
     // NR42 (0xFF21): Volume envelope
     // bit 7..4: initial volume
     // bit 3:    envelope direction
     // bit 2..0: sweep count
-    nr42: u8,
 
     // NR43 (0xFF22): polynomial counter
     // bit 7..4: shift clock frequency
@@ -550,14 +603,26 @@ pub struct NoiseSoundGenerator {
     // Internal register
     pub enabled: bool,
 
-    // Internal register
-    length_counter: u8,
-
     // Current volume of the envelope filter. Internal register.
-    pub envelope: i16,
+    pub envelope: u8,
 
     // The envelope change period counter. Internal register.
     envelope_period: u8,
+
+    // Period count to initate envelope filter with on trigger.
+    // Bits 2..0 of NR12.
+    // FIXME: should there *be* a separate start-value,
+    // or does the value count down and must be reset
+    // before each trigger?
+    envelope_periods_initial: u8,
+
+    envelope_increasing: bool,
+
+    // Initial volume of the envelope filter. Bit 7..4 in NR12
+    initial_volume: u8,
+
+    pub length_counter: LengthCounter,
+    pub dac: DAC,
 }
 
 const NOISE_DIVISOR_MAP: [u8; 8] = [8, 16, 32, 48, 64, 80, 96, 112];
@@ -565,41 +630,59 @@ const NOISE_DIVISOR_MAP: [u8; 8] = [8, 16, 32, 48, 64, 80, 96, 112];
 impl NoiseSoundGenerator {
     pub fn new() -> Self {
         NoiseSoundGenerator {
-            nr41: 0,
-            nr42: 0,
             nr43: 0,
             nr44: 0,
             frequency_timer: 0,
             lfsr: 0,
             polynomial_counter: 0,
             enabled: false,
-            length_counter: 0,
             envelope: 0,
             envelope_period: 0,
+            envelope_increasing: false,
+            envelope_periods_initial: 0,
+            initial_volume: 0,
+            length_counter: LengthCounter::new(),
+            dac: DAC::new(),
         }
     }
 
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
             0 => 0xFF,
-            1 => self.nr42,
+            1 => {
+                let nr42 = (self.initial_volume << 4) | self.envelope_periods_initial;
+                if self.envelope_increasing {
+                    nr42 | 0b0000_1000
+                } else {
+                    nr42
+                }
+            }
             2 => self.nr43,
-            3 => self.nr44 | 0b1011_1111,
+            3 => {
+                if self.length_counter.enabled {
+                    0b1111_1111
+                } else {
+                    0b1011_1111
+                }
+            }
             _ => panic!("invalid register {}", address),
         }
     }
 
     pub fn write_reg(&mut self, address: u16, value: u8) {
         match address {
-            0 => self.nr41 = value,
+            0 => self.length_counter.value = (64 - (value & 63)) as u16,
             1 => {
-                self.nr42 = value;
-                self.length_counter = 64 - (value & 63);
+                self.initial_volume = (value >> 4) & 0xF;
+                self.dac.powered_on = value & 0b1111_1000 != 0;
+                self.enabled = self.enabled && self.dac.powered_on;
+                self.envelope_increasing = (value & 0b1000) != 0;
+                self.envelope_periods_initial = value & 0b111;
             }
             2 => self.nr43 = value,
             3 => {
-                self.nr44 = value;
-                if value & 0x80 != 0 {
+                self.length_counter.enabled = value & 0b0100_0000 != 0;
+                if value & 0b1000_0000 != 0 {
                     self.trigger();
                 }
             }
@@ -609,22 +692,24 @@ impl NoiseSoundGenerator {
 
     pub fn trigger(&mut self) {
         self.enabled = true;
+        self.length_counter.trigger(64);
         self.lfsr = 0b0111_1111_1111_1111;
-
-        if self.length_counter == 0 {
-            self.length_counter = 64;
-        }
 
         let divisor_code = self.nr43 & 7;
         let divisor = NOISE_DIVISOR_MAP[divisor_code as usize];
         let shift_amount = (self.nr43 & 0xF0) >> 4;
         self.frequency_timer = (divisor as u16) << (shift_amount as u16);
 
-        self.envelope = ((self.nr42 >> 4) & 0xF) as i16;
-        self.envelope_period = self.nr42 & 7;
+        self.envelope = self.initial_volume;
+        self.envelope_period = self.envelope_periods_initial;
+
+        // If DAC is not powered, immediately disable the channel again
+        if !self.dac.powered_on {
+            self.enabled = false
+        }
     }
 
-    pub fn update(&mut self, hz64: bool, hz256: bool) -> i16 {
+    pub fn update(&mut self, hz64: bool, hz256: bool) -> f32 {
         // Decrement frequency timer
         if self.frequency_timer >= 4 {
             self.frequency_timer -= 4;
@@ -645,35 +730,29 @@ impl NoiseSoundGenerator {
             }
         }
 
-        // Length counter. When length counter is enabled (bit 6 of NRx4)
-        // and there is a 256 Hz clock, the length counter decrements.
-        // If it reaches zero the channel gets disabled.
-        if hz256 && (self.nr44 & 0x40) != 0 && self.length_counter > 0 {
-            self.length_counter -= 1;
-            if self.length_counter == 0 {
-                self.enabled = false;
-            }
+        // Update length counter at 256 Hz
+        if hz256 && self.length_counter.count_down() {
+            self.enabled = false;
         }
 
         // When envelope steps is non-zero, the envelope (the amplitude)
         // will increase or decrease every (envelope_steps/64) second.
-        let envelope_period = self.nr42 & 7;
 
         // Envelope
-        if hz64 && envelope_period > 0 {
+        if hz64 && self.envelope_periods_initial > 0 {
             if self.envelope_period > 0 {
                 self.envelope_period -= 1;
 
                 if self.envelope_period == 0 {
-                    self.envelope_period = envelope_period;
+                    self.envelope_period = self.envelope_periods_initial;
 
                     // Not max volume and volume should increase
-                    if self.envelope < 0xF && (self.nr42 & 8) != 0 {
+                    if self.envelope < 0xF && self.envelope_increasing {
                         self.envelope += 1;
                     }
 
                     // Not min volume and volume should decrease
-                    if self.envelope > 0 && (self.nr42 & 8) == 0 {
+                    if self.envelope > 0 && !self.envelope_increasing {
                         self.envelope -= 1;
                     }
                 }
@@ -681,21 +760,19 @@ impl NoiseSoundGenerator {
         }
 
         if self.enabled {
-            if self.enabled {
-                let out = if self.lfsr & 1 == 0 { 0 } else { 1 };
-                let dac_input = out * self.envelope;
-                return dac_input * 200 - 100;
-            }
+            let out = if self.lfsr & 1 == 0 { 0 } else { 1 };
+            let dac_input = out * self.envelope;
+            return self.dac.convert(dac_input);
         }
 
-        0
+        0.0
     }
 }
 
 pub trait AudioRecorder {
-    fn mono(&mut self, sample: i16);
-    fn gen1(&mut self, sample: i16);
-    fn gen2(&mut self, sample: i16);
+    fn mono(&mut self, sample: f32);
+    fn gen1(&mut self, sample: f32);
+    fn gen2(&mut self, sample: f32);
     fn flush(&mut self);
 }
 
@@ -712,7 +789,7 @@ pub struct AudioProcessingUnit {
 
     // Producer for the output ring buffer.
     // Every cycle one sample is appended to this buffer.
-    pub buf: Option<Producer<i16>>,
+    pub buf: Option<Producer<f32>>,
 
     pub recorder: Option<Box<dyn AudioRecorder>>,
 }
@@ -750,7 +827,8 @@ impl AudioProcessingUnit {
         // NR52 bit 7 is used to disable the sound system completely
         if !self.powered_on {
             if let Some(ref mut prod) = self.buf {
-                prod.push(0).expect("Failed to push sample to audio buffer");
+                prod.push(0.0)
+                    .expect("Failed to push sample to audio buffer");
             }
             return;
         }
@@ -792,10 +870,10 @@ impl AudioProcessingUnit {
             hz256 = step & 1 == 0;
         }
 
-        let mut ch1_output: i16 = 0;
-        let mut ch2_output: i16 = 0;
-        let mut ch3_output: i16 = 0;
-        let mut ch4_output: i16 = 0;
+        let mut ch1_output: f32 = 0.0;
+        let mut ch2_output: f32 = 0.0;
+        let mut ch3_output: f32 = 0.0;
+        let mut ch4_output: f32 = 0.0;
 
         if self.nr51 & (1 | 16) != 0 {
             ch1_output = self.s1.update(hz64, hz256);
@@ -813,11 +891,11 @@ impl AudioProcessingUnit {
             ch4_output = self.ch4.update(hz64, hz256);
         }
 
-        let sample = ch1_output + ch2_output + ch3_output + ch4_output;
+        let sample = (ch1_output + ch2_output + ch3_output + ch4_output) as f32;
 
         if let Some(ref mut rec) = self.recorder {
-            rec.gen1(ch1_output);
-            rec.gen2(ch2_output);
+            rec.gen1(ch1_output as f32);
+            rec.gen2(ch2_output as f32);
             rec.mono(sample);
         }
 
@@ -828,7 +906,7 @@ impl AudioProcessingUnit {
             }
 
             producer
-                .push(sample)
+                .push(sample as f32)
                 .expect("Failed to push sample to audio buffer");
         }
     }
@@ -915,5 +993,15 @@ impl AudioProcessingUnit {
                 _ => {}
             }
         }
+    }
+}
+
+fn reg_name(address: u16) -> String {
+    match address {
+        0xFF10..=0xFF14 => format!("NR{:02X}", address - 0xFF10 + 0x10),
+        0xFF15..=0xFF19 => format!("NR{:02X}", address - 0xFF15 + 0x20),
+        0xFF1A..=0xFF1E => format!("NR{:02X}", address - 0xFF1A + 0x30),
+        0xFF1F..=0xFF23 => format!("NR{:02X}", address - 0xFF1F + 0x40),
+        _ => format!("{:04X}", address),
     }
 }
