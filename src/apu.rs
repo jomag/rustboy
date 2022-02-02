@@ -27,23 +27,60 @@ use crate::mmu::{NR50_REG, NR51_REG, NR52_REG};
 // the channel when it reaches zero. The length counter can be
 // disabled.
 pub struct LengthCounter {
-    pub enabled: bool,
+    _enabled: bool,
     pub value: u16,
 }
 
 impl LengthCounter {
     fn new() -> Self {
         LengthCounter {
-            enabled: false,
+            _enabled: false,
             value: 0,
         }
     }
 
+    pub fn next_seq_step_will_not_count_down(seq_step: u8) -> bool {
+        return seq_step % 2 == 0;
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self._enabled
+    }
+
+    // Enable the counter. If the next sequencer step will not clock
+    // the length counter, the counter value is immediately decremented
+    // which may cause the channel to become disabled.
+    //
+    // If this function returns true, the channel should be disabled.
+    pub fn enable(&mut self, en: bool, seq_step: u8) -> bool {
+        if en {
+            if !self._enabled {
+                self._enabled = true;
+                if LengthCounter::next_seq_step_will_not_count_down(seq_step) && self.value > 0 {
+                    return self.count_down();
+                }
+            }
+        } else {
+            self._enabled = false;
+        }
+
+        false
+    }
+
     // When triggered, if length counter is 0 it should
     // be reset to 64 (256 for wave channel).
-    fn trigger(&mut self, reset_value: u16) {
+    //
+    // Obscure behavior:
+    // If channel is triggered when next sequencer step will not
+    // clock the length counter, the length counter is immediately
+    // decremented.
+    fn trigger(&mut self, reset_value: u16, seq_step: u8) {
         if self.value == 0 {
             self.value = reset_value;
+
+            if self._enabled && LengthCounter::next_seq_step_will_not_count_down(seq_step) {
+                self.value -= 1;
+            }
         }
     }
 
@@ -51,7 +88,7 @@ impl LengthCounter {
     // tick. If it returns true, it has reached zero and the channel
     // should be disabled.
     fn count_down(&mut self) -> bool {
-        if self.enabled {
+        if self._enabled {
             match self.value {
                 0 => return false,
                 1 => {
@@ -241,7 +278,7 @@ impl SquareWaveSoundGenerator {
             }
             3 => 0xFF,
             4 => {
-                if self.length_counter.enabled {
+                if self.length_counter.is_enabled() {
                     0xFF
                 } else {
                     0b1011_1111
@@ -251,7 +288,7 @@ impl SquareWaveSoundGenerator {
         }
     }
 
-    pub fn write_reg(&mut self, address: u16, value: u8) {
+    pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8) {
         match address {
             0 => {
                 self.sweep_time = (value >> 4) & 0b111;
@@ -273,18 +310,25 @@ impl SquareWaveSoundGenerator {
             4 => {
                 self.frequency =
                     (self.frequency & 0b00_1111_1111) | (((value & 0b111) as u16) << 8);
-                self.length_counter.enabled = value & 0b0100_0000 != 0;
+
+                if self
+                    .length_counter
+                    .enable(value & 0b0100_0000 != 0, seq_step)
+                {
+                    self.enabled = false;
+                }
+
                 if value & 0b1000_0000 != 0 {
-                    self.trigger();
+                    self.trigger(seq_step);
                 }
             }
             _ => panic!("invalid register {}", address),
         }
     }
 
-    fn trigger(&mut self) {
+    fn trigger(&mut self, seq_step: u8) {
         self.enabled = true;
-        self.length_counter.trigger(64);
+        self.length_counter.trigger(64, seq_step);
         self.frequency_timer = (2048 - self.frequency) * 4;
         self.envelope_period = self.envelope_periods_initial;
         self.envelope = self.initial_volume;
@@ -299,6 +343,9 @@ impl SquareWaveSoundGenerator {
 
     pub fn update(&mut self, hz64: bool, hz256: bool) -> f32 {
         // Decrement frequency timer
+        // FIXME: Handle frequency timer being less than 4.
+        //        When so, add to the frequency timer instead:
+        //        `if (tmr <= 4) { tmr += freq } else { tmr -= 4 }`
         if self.frequency_timer >= 4 {
             self.frequency_timer -= 4;
 
@@ -465,7 +512,7 @@ impl WaveSoundGenerator {
             2 => self.volume_code << 5 | 0b1001_1111,
             3 => 0xFF,
             4 => {
-                if self.length_counter.enabled {
+                if self.length_counter.is_enabled() {
                     0xFF
                 } else {
                     0b1011_1111
@@ -482,7 +529,7 @@ impl WaveSoundGenerator {
         }
     }
 
-    pub fn write_reg(&mut self, address: u16, value: u8) {
+    pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8) {
         match address {
             0 => {
                 self.dac.powered_on = value & 0x80 != 0;
@@ -497,9 +544,16 @@ impl WaveSoundGenerator {
             4 => {
                 self.frequency =
                     (self.frequency & 0b00_1111_1111) | (((value & 0b111) as u16) << 8);
-                self.length_counter.enabled = value & 0b0100_0000 != 0;
+
+                if self
+                    .length_counter
+                    .enable(value & 0b0100_0000 != 0, seq_step)
+                {
+                    self.enabled = false;
+                }
+
                 if value & 0x80 != 0 {
-                    self.trigger();
+                    self.trigger(seq_step);
                 }
             }
             _ => panic!("invalid register in channel 3: {}", address),
@@ -511,9 +565,9 @@ impl WaveSoundGenerator {
         self.wave[address * 2 + 1] = value & 0x0F
     }
 
-    fn trigger(&mut self) {
+    fn trigger(&mut self, seq_step: u8) {
         self.enabled = true;
-        self.length_counter.trigger(256);
+        self.length_counter.trigger(256, seq_step);
         self.frequency_timer = (2048 - self.frequency) * 2;
         self.wave_position = 0;
 
@@ -589,7 +643,6 @@ pub struct NoiseSoundGenerator {
     // NR44 (0xFF23): counter/consecutive, initial
     // bit 7: initial, 1=restart sound
     // bit 6: counter/consecutive selection (1=stop when length expires)
-    nr44: u8,
 
     // Internal register. When this counter reaches zero,
     // it is reset to the frequency value.
@@ -632,7 +685,6 @@ impl NoiseSoundGenerator {
     pub fn new() -> Self {
         NoiseSoundGenerator {
             nr43: 0,
-            nr44: 0,
             frequency_timer: 0,
             lfsr: 0,
             polynomial_counter: 0,
@@ -660,7 +712,7 @@ impl NoiseSoundGenerator {
             }
             2 => self.nr43,
             3 => {
-                if self.length_counter.enabled {
+                if self.length_counter.is_enabled() {
                     0b1111_1111
                 } else {
                     0b1011_1111
@@ -670,7 +722,7 @@ impl NoiseSoundGenerator {
         }
     }
 
-    pub fn write_reg(&mut self, address: u16, value: u8) {
+    pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8) {
         match address {
             0 => self.length_counter.value = (64 - (value & 63)) as u16,
             1 => {
@@ -682,18 +734,24 @@ impl NoiseSoundGenerator {
             }
             2 => self.nr43 = value,
             3 => {
-                self.length_counter.enabled = value & 0b0100_0000 != 0;
+                if self
+                    .length_counter
+                    .enable(value & 0b0100_0000 != 0, seq_step)
+                {
+                    self.enabled = false;
+                }
+
                 if value & 0b1000_0000 != 0 {
-                    self.trigger();
+                    self.trigger(seq_step);
                 }
             }
             _ => panic!("invalid register {}", address),
         }
     }
 
-    pub fn trigger(&mut self) {
+    pub fn trigger(&mut self, seq_step: u8) {
         self.enabled = true;
-        self.length_counter.trigger(64);
+        self.length_counter.trigger(64, seq_step);
         self.lfsr = 0b0111_1111_1111_1111;
 
         let divisor_code = self.nr43 & 7;
@@ -824,6 +882,10 @@ impl AudioProcessingUnit {
         self.powered_on = false;
     }
 
+    pub fn seq_step(&self, div_counter: u16) -> u8 {
+        return (div_counter >> 13) as u8;
+    }
+
     pub fn update(&mut self, div_counter: u16) {
         // NR52 bit 7 is used to disable the sound system completely
         if !self.powered_on {
@@ -865,7 +927,7 @@ impl AudioProcessingUnit {
         let mut hz128 = false;
         let mut hz256 = false;
         if div_counter % 8192 == 0 {
-            let step = div_counter >> 13;
+            let step = self.seq_step(div_counter);
             hz64 = step == 7;
             hz128 = step == 2 || step == 6;
             hz256 = step & 1 == 0;
@@ -966,7 +1028,7 @@ impl AudioProcessingUnit {
         }
     }
 
-    pub fn write_reg(&mut self, address: u16, value: u8) {
+    pub fn write_reg(&mut self, address: u16, value: u8, div_counter: u16) {
         // Writes to NR52 and the wave memory allways work, even
         // when the sound hardware is powered off.
         match address {
@@ -983,11 +1045,23 @@ impl AudioProcessingUnit {
 
         if self.powered_on {
             match address {
-                0xFF10..=0xFF14 => self.s1.write_reg(address - 0xFF10, value),
-                0xFF15..=0xFF19 => self.s2.write_reg(address - 0xFF15, value),
-                0xFF1A..=0xFF1E => self.ch3.write_reg(address - 0xFF1A, value),
+                0xFF10..=0xFF14 => {
+                    self.s1
+                        .write_reg(address - 0xFF10, value, self.seq_step(div_counter))
+                }
+                0xFF15..=0xFF19 => {
+                    self.s2
+                        .write_reg(address - 0xFF15, value, self.seq_step(div_counter))
+                }
+                0xFF1A..=0xFF1E => {
+                    self.ch3
+                        .write_reg(address - 0xFF1A, value, self.seq_step(div_counter))
+                }
                 0xFF1F => {}
-                0xFF20..=0xFF23 => self.ch4.write_reg(address - 0xFF20, value),
+                0xFF20..=0xFF23 => {
+                    self.ch4
+                        .write_reg(address - 0xFF20, value, self.seq_step(div_counter))
+                }
                 NR50_REG => self.nr50 = value,
                 NR51_REG => self.nr51 = value,
                 0xFF27..=0xFF2F => {}
