@@ -1,7 +1,11 @@
 use crate::mmu::MMU;
 
+#[derive(Copy, Clone)]
 pub enum Machine {
     GameBoyDMG,
+
+    // FIXME: is this the correct abbreviation?
+    GameBoyCGB,
 }
 
 pub struct Emu {
@@ -10,10 +14,10 @@ pub struct Emu {
 }
 
 impl Emu {
-    pub fn new() -> Self {
+    pub fn new(machine: Machine) -> Self {
         Emu {
-            mmu: MMU::new(),
-            machine: Machine::GameBoyDMG,
+            mmu: MMU::new(machine),
+            machine,
         }
     }
 
