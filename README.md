@@ -24,14 +24,14 @@ A personal project to learn Rust and basic emulator development.
 | | [:red_circle:](x "boot_regs-sgb2: FAIL") | [:green_heart:](x "call_cc_timing: PASS") | [:green_heart:](x "call_cc_timing2: PASS") | [:green_heart:](x "call_timing: PASS") | [:green_heart:](x "call_timing2: PASS") | [:red_circle:](x "di_timing-GS: FAIL") | [:green_heart:](x "div_timing: PASS") | [:red_circle:](x "ei_sequence: FAIL") | [:red_circle:](x "ei_timing: FAIL") | [:green_heart:](x "halt_ime0_ei: PASS") | [:red_circle:](x "halt_ime0_nointr_timing: FAIL") | [:green_heart:](x "halt_ime1_timing: PASS") |
 | | [:red_circle:](x "halt_ime1_timing2-GS: FAIL") | [:red_circle:](x "if_ie_registers: FAIL") | [:red_circle:](x "intr_timing: FAIL") | [:green_heart:](x "jp_cc_timing: PASS") | [:green_heart:](x "jp_timing: PASS") | [:green_heart:](x "ld_hl_sp_e_timing: PASS") | [:green_heart:](x "oam_dma_restart: PASS") | [:green_heart:](x "oam_dma_start: PASS") | [:green_heart:](x "oam_dma_timing: PASS") | [:green_heart:](x "pop_timing: PASS") | [:green_heart:](x "push_timing: PASS") | [:red_circle:](x "rapid_di_ei: FAIL") |
 | | [:green_heart:](x "ret_cc_timing: PASS") | [:green_heart:](x "ret_timing: PASS") | [:red_circle:](x "reti_intr_timing: FAIL") | [:green_heart:](x "reti_timing: PASS") | [:green_heart:](x "rst_timing: PASS") |
+| acceptance/bits | [:green_heart:](x "mem_oam: PASS") | [:green_heart:](x "reg_f: PASS") | [:red_circle:](x "unused_hwio-GS: FAIL") |
+| acceptance/instr | [:green_heart:](x "daa: PASS") |
+| acceptance/interrupts | [:red_circle:](x "ie_push: FAIL") |
+| acceptance/oam_dma | [:green_heart:](x "basic: PASS") | [:green_heart:](x "reg_read: PASS") | [:red_circle:](x "sources-GS: FAIL") |
+| acceptance/ppu | [:red_circle:](x "hblank_ly_scx_timing-GS: FAIL") | [🙅](x "intr_1_2_timing-GS: SKIPPED") | [:red_circle:](x "intr_2_0_timing: FAIL") | [:red_circle:](x "intr_2_mode0_timing: FAIL") | [:red_circle:](x "intr_2_mode0_timing_sprites: FAIL") | [:red_circle:](x "intr_2_mode3_timing: FAIL") | [:red_circle:](x "intr_2_oam_ok_timing: FAIL") | [:red_circle:](x "lcdon_timing-GS: FAIL") | [:red_circle:](x "lcdon_write_timing-GS: FAIL") | [:red_circle:](x "stat_irq_blocking: FAIL") | [:red_circle:](x "stat_lyc_onoff: FAIL") | [:red_circle:](x "vblank_stat_intr-GS: FAIL") |
+| acceptance/serial | [:red_circle:](x "boot_sclk_align-dmgABCmgb: FAIL") |
 | acceptance/timer | [:green_heart:](x "div_write: PASS") | [:red_circle:](x "rapid_toggle: FAIL") | [:green_heart:](x "tim00: PASS") | [:green_heart:](x "tim00_div_trigger: PASS") | [:green_heart:](x "tim01: PASS") | [:green_heart:](x "tim01_div_trigger: PASS") | [:green_heart:](x "tim10: PASS") | [:green_heart:](x "tim10_div_trigger: PASS") | [:green_heart:](x "tim11: PASS") | [:green_heart:](x "tim11_div_trigger: PASS") | [:red_circle:](x "tima_reload: FAIL") | [:red_circle:](x "tima_write_reloading: FAIL") |
 | | [:red_circle:](x "tma_write_reloading: FAIL") |
-| acceptance/oam_dma | [:green_heart:](x "basic: PASS") | [:green_heart:](x "reg_read: PASS") | [:red_circle:](x "sources-GS: FAIL") |
-| acceptance/interrupts | [:red_circle:](x "ie_push: FAIL") |
-| acceptance/bits | [:green_heart:](x "mem_oam: PASS") | [:green_heart:](x "reg_f: PASS") | [:red_circle:](x "unused_hwio-GS: FAIL") |
-| acceptance/ppu | [:red_circle:](x "hblank_ly_scx_timing-GS: FAIL") | [🙅](x "intr_1_2_timing-GS: SKIPPED") | [:red_circle:](x "intr_2_0_timing: FAIL") | [:red_circle:](x "intr_2_mode0_timing: FAIL") | [:red_circle:](x "intr_2_mode0_timing_sprites: FAIL") | [:red_circle:](x "intr_2_mode3_timing: FAIL") | [:red_circle:](x "intr_2_oam_ok_timing: FAIL") | [:red_circle:](x "lcdon_timing-GS: FAIL") | [:red_circle:](x "lcdon_write_timing-GS: FAIL") | [:red_circle:](x "stat_irq_blocking: FAIL") | [:red_circle:](x "stat_lyc_onoff: FAIL") | [:red_circle:](x "vblank_stat_intr-GS: FAIL") |
-| acceptance/instr | [:green_heart:](x "daa: PASS") |
-| acceptance/serial | [:red_circle:](x "boot_sclk_align-dmgABCmgb: FAIL") |
 
 
 ## Graphics
