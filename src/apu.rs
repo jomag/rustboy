@@ -48,6 +48,7 @@ impl LengthCounter {
         self._enabled = false;
         self.value = match self.machine {
             Machine::GameBoyDMG => self.value,
+            Machine::GameBoyCGB => 0,
             _ => panic!("unsupported machine type"),
         }
     }
@@ -235,6 +236,7 @@ pub struct SquareWaveSoundGenerator {
 
     pub length_counter: LengthCounter,
     pub dac: DAC,
+    machine: Machine,
 }
 
 const WAVE_DUTY: [[u8; 8]; 4] = [
@@ -247,6 +249,7 @@ const WAVE_DUTY: [[u8; 8]; 4] = [
 impl SquareWaveSoundGenerator {
     pub fn new(with_sweep: bool, machine: Machine) -> Self {
         SquareWaveSoundGenerator {
+            machine,
             enabled: false,
             envelope: 0,
             envelope_period: 0,
@@ -322,7 +325,7 @@ impl SquareWaveSoundGenerator {
     pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8, powered_on: bool) {
         // If unpowered, all writes should be ignored except
         // length value if the machine is original Gameboy DMG
-        if address == 1 {
+        if address == 1 && (powered_on || matches!(self.machine, Machine::GameBoyDMG)) {
             self.length_counter.value = (64 - (value & 63)) as u16;
         }
 
@@ -510,6 +513,7 @@ pub struct WaveSoundGenerator {
 
     pub length_counter: LengthCounter,
     pub dac: DAC,
+    machine: Machine,
 }
 
 impl WaveSoundGenerator {
@@ -522,11 +526,11 @@ impl WaveSoundGenerator {
             // For the DMG, the values below is one possible set.
             // For the CGB, the wave is consistently initialized with the values below.
             wave: match machine {
-                Machine::GameBoyDMG => [
+                Machine::GameBoyDMG | Machine::GameBoyMGB => [
                     0x8, 0x4, 0x4, 0x0, 0x4, 0x3, 0xA, 0xA, 0x2, 0xD, 0x7, 0x8, 0x9, 0x2, 0x3, 0xC,
                     0x6, 0x0, 0x5, 0x9, 0x5, 0x9, 0xB, 0x0, 0x3, 0x4, 0xB, 0x8, 0x2, 0xE, 0xD, 0xA,
                 ],
-                Machine::GameBoyCGB => [
+                Machine::GameBoyCGB | Machine::GameBoySGB => [
                     0x0, 0x0, 0xF, 0xF, 0x0, 0x0, 0xF, 0xF, 0x0, 0x0, 0xF, 0xF, 0x0, 0x0, 0xF, 0xF,
                     0x0, 0x0, 0xF, 0xF, 0x0, 0x0, 0xF, 0xF, 0x0, 0x0, 0xF, 0xF, 0x0, 0x0, 0xF, 0xF,
                 ],
@@ -538,6 +542,7 @@ impl WaveSoundGenerator {
             enabled: false,
             volume_code: 0,
             dac: DAC::new(),
+            machine,
         }
     }
 
@@ -588,7 +593,7 @@ impl WaveSoundGenerator {
     pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8, powered_on: bool) {
         // If unpowered, all writes should be ignored except
         // length value if the machine is original Gameboy DMG
-        if address == 1 {
+        if address == 1 && (powered_on || matches!(self.machine, Machine::GameBoyDMG)) {
             self.length_counter.value = 256 - value as u16;
         }
 
@@ -743,6 +748,7 @@ pub struct NoiseSoundGenerator {
 
     pub length_counter: LengthCounter,
     pub dac: DAC,
+    machine: Machine,
 }
 
 const NOISE_DIVISOR_MAP: [u8; 8] = [8, 16, 32, 48, 64, 80, 96, 112];
@@ -762,6 +768,7 @@ impl NoiseSoundGenerator {
             initial_volume: 0,
             length_counter: LengthCounter::new(machine),
             dac: DAC::new(),
+            machine,
         }
     }
 
@@ -806,7 +813,7 @@ impl NoiseSoundGenerator {
     pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8, powered_on: bool) {
         // If unpowered, all writes should be ignored except
         // length value if the machine is original Gameboy DMG
-        if address == 0 {
+        if address == 0 && (powered_on || matches!(self.machine, Machine::GameBoyDMG)) {
             self.length_counter.value = (64 - (value & 63)) as u16;
         }
 

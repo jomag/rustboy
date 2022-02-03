@@ -91,27 +91,41 @@ fn capture_frame(filename: &str, frame: u32, lcd: &LCD) -> Result<(), std::io::E
     return Ok(());
 }
 
-fn main() -> Result<(), String> {
+fn handle_machine_option(opt: Option<&str>) -> Result<Machine, ()> {
+    match opt {
+        None => Ok(Machine::GameBoyDMG),
+        Some("dmg") => Ok(Machine::GameBoyDMG),
+        Some("cgb") => Ok(Machine::GameBoyCGB),
+        Some(other) => {
+            println!("Unsupported machine type: {}", other);
+            println!("Supported types: dmg, cgb");
+            Err(())
+        }
+    }
+}
+
+fn main() -> Result<(), ()> {
     let matches = clap::App::new(APPNAME)
         .version(VERSION)
         .author(AUTHOR)
         .about("Your less than average GameBoy emulator")
         .args_from_usage(
-            "<ROM>               'The ROM to run'
-            -B, --boot=[FILE]    'Path to bootstrap ROM'
-            -b, --break=[ADDR]   'Break at address ADDR'
-            --break-cycle=[N]    'Break at cycle N'
-            --break-frame=[N]    'Break at frame N'
-            --exit-cycle=[N]     'Exit at cycle N'
-            --exit-frame=[N]     'Exit at frame N'
-            --ff-bootstrap       'Fast forward bootstrap'
-            -R, --record=[PATH]  'Record into directory'
-            -s, --skip=[N]       'Frames to skip while recording'
-            -C, --capture=[N]    'Capture screen at frame N'
-            --capture-to=[FILE]  'Capture filename'
-            -t, --test=[VARIANT] 'Run test mode'
-            --test-expect=[STR]  'Run test and validate serial output'
-            --debug-log=[FILE]   'Write extensive debug info before each op'
+            "<ROM>                  'The ROM to run'
+            -B, --boot=[FILE]       'Path to bootstrap ROM'
+            -b, --break=[ADDR]      'Break at address ADDR'
+            --break-cycle=[N]       'Break at cycle N'
+            --break-frame=[N]       'Break at frame N'
+            --exit-cycle=[N]        'Exit at cycle N'
+            --exit-frame=[N]        'Exit at frame N'
+            --ff-bootstrap          'Fast forward bootstrap'
+            -R, --record=[PATH]     'Record into directory'
+            -s, --skip=[N]          'Frames to skip while recording'
+            -C, --capture=[N]       'Capture screen at frame N'
+            --capture-to=[FILE]     'Capture filename'
+            -t, --test=[VARIANT]    'Run test mode'
+            --test-expect=[STR]     'Run test and validate serial output'
+            --debug-log=[FILE]      'Write extensive debug info before each op'
+            -m, --machine=[MACHINE] 'The machine to emulate'
             ",
         )
         .get_matches();
@@ -131,11 +145,11 @@ fn main() -> Result<(), String> {
     let debug_log: Option<&str> = matches.value_of("debug-log");
     let ff_bootstrap = matches.is_present("ff-bootstrap");
 
+    let machine = handle_machine_option(matches.value_of("machine"))?;
+
     let capture_filename: &str = matches
         .value_of("capture-to")
         .unwrap_or("capture-frame-#.png");
-
-    let machine = Machine::GameBoyDMG;
 
     let mut emu = Emu::new(machine);
     emu.init();

@@ -2,9 +2,16 @@ use crate::mmu::MMU;
 
 #[derive(Copy, Clone)]
 pub enum Machine {
+    // The original Game Boy
     GameBoyDMG,
 
-    // FIXME: is this the correct abbreviation?
+    // Game Boy Pocket
+    GameBoyMGB,
+
+    // Super Game Boy
+    GameBoySGB,
+
+    // Color Game Boy
     GameBoyCGB,
 }
 

@@ -52,25 +52,30 @@ class Test:
         rom_path,
         variant: Optional[str] = None,
         expect: Optional[str] = None,
+        machine: str = "dmg",
     ):
         self.name = name
         self.rom_path = rom_path
         self.result = None
         self.variant = variant
         self.expect = expect
+        self.machine = machine
 
     def run(self):
         print(f"{BRIGHT}{YELLOW}{self.name}{RESET_ALL}")
+        machine = f"-m {self.machine}" if self.machine else ""
         if self.expect:
             print(f"[{self.expect}]")
             sys.stdout.flush()
             result = os.system(
-                f'{RUSTBOY} --test-expect="{self.expect}" "{self.rom_path}"'
+                f'{RUSTBOY} --test-expect="{self.expect}" {machine} "{self.rom_path}"'
             )
             self.result = result == 0
         elif self.variant:
             sys.stdout.flush()
-            result = os.system(f'{RUSTBOY} --test="{self.variant}" "{self.rom_path}"')
+            result = os.system(
+                f'{RUSTBOY} --test="{self.variant}" {machine} "{self.rom_path}"'
+            )
             self.result = result == 0
         else:
             raise Exception("Not sure how to run test")
@@ -213,14 +218,19 @@ class BlarggTestGroup(TestGroup):
         self.subdir = subdir
 
     def add_test(self, rom_name, test_name, path):
+        if "cgb" in path:
+            machine = "cgb"
+        else:
+            machine = "dmg"
+
         if test_name == "instr_timing":
             expect = f"{test_name}\n\n\nPassed\n"
-            test = Test(test_name, path, expect=expect)
+            test = Test(test_name, path, expect=expect, machine=machine)
         elif self.romdir.endswith("individual"):
             expect = f"{test_name}\n\n\nPassed"
-            test = Test(test_name, path, expect=expect)
+            test = Test(test_name, path, expect=expect, machine=machine)
         else:
-            test = Test(test_name, path, variant="blargg")
+            test = Test(test_name, path, variant="blargg", machine=machine)
         self.tests.append(test)
 
 
