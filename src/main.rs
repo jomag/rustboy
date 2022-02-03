@@ -29,6 +29,8 @@ use emu::Emu;
 use lcd::{LCD, SCREEN_HEIGHT, SCREEN_WIDTH};
 use ui::full::*;
 
+use crate::emu::Machine;
+
 const APPNAME: &str = "Rustboy?";
 const VERSION: &str = "0.0.0";
 const AUTHOR: &str = "Jonatan Magnusson <jonatan.magnusson@gmail.com>";
@@ -133,7 +135,9 @@ fn main() -> Result<(), String> {
         .value_of("capture-to")
         .unwrap_or("capture-frame-#.png");
 
-    let mut emu = Emu::new();
+    let machine = Machine::GameBoyDMG;
+
+    let mut emu = Emu::new(machine);
     emu.init();
 
     println!("Loading bootstrap ROM: {}", bootstrap_rom);

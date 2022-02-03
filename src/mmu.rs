@@ -3,6 +3,7 @@ extern crate ansi_term;
 use std::fs::File;
 use std::io::Read;
 
+use crate::emu::Machine;
 use crate::interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
 
 use crate::apu::AudioProcessingUnit;
@@ -110,7 +111,7 @@ pub struct MMU {
 }
 
 impl MMU {
-    pub fn new() -> Self {
+    pub fn new(machine: Machine) -> Self {
         MMU {
             reg: Registers::new(),
             cartridge: Box::new(NullCartridge {}),
@@ -127,7 +128,7 @@ impl MMU {
             lcd: LCD::new(),
             buttons: Buttons::new(),
             display_updated: false,
-            apu: AudioProcessingUnit::new(),
+            apu: AudioProcessingUnit::new(machine),
             sample_count: 0,
             serial: Serial::new(None),
         }
