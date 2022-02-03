@@ -94,8 +94,9 @@ class Test:
 
 
 class TestGroup:
-    """Name of the test"""
+    """A group of tests"""
 
+    """Name of the test"""
     name: str
 
     """Directory that holds the test ROM's for this group"""
@@ -173,7 +174,7 @@ class TestSuite:
         report += "|" + "|".join(["       "] * (tests_per_row + 1)) + "|\n"
         report += "|" + "|".join([" :---: "] * (tests_per_row + 1)) + "|\n"
 
-        for grp in self.groups:
+        for grp in sorted(self.groups, key=lambda x: x.name):
             chunks = [
                 grp.tests[i : i + tests_per_row]
                 for i in range(0, len(grp.tests), tests_per_row)
@@ -311,7 +312,14 @@ if all_suites or "mooneye" in args.suites:
 if all_suites or "blargg" in args.suites:
     blargg = BlarggTestSuite(BLARGG_DIR)
     blargg.setup()
-    blargg.run(skip=["04-sweep", "05-sweep details", "07-len sweep period sync", "11-regs after power"])
+    blargg.run(
+        skip=[
+            "04-sweep",
+            "05-sweep details",
+            "07-len sweep period sync",
+            "11-regs after power",
+        ]
+    )
     blargg.pretty_print()
     if args.report:
         reports.append(
