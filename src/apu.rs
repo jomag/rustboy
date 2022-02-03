@@ -320,17 +320,6 @@ impl SquareWaveSoundGenerator {
     }
 
     pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8, powered_on: bool) {
-        if self.with_sweep {
-            let a = address + 0xFF10;
-            println!(
-                "Write: 0x{:04x} {} = {} (0x{:02x})",
-                a,
-                reg_name(a),
-                value,
-                value
-            );
-        }
-
         // If unpowered, all writes should be ignored except
         // length value if the machine is original Gameboy DMG
         if address == 1 {
