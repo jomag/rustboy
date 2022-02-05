@@ -727,7 +727,7 @@ impl WaveSoundGenerator {
         // length value if the machine is original Gameboy DMG
         if !powered_on {
             if matches!(self.machine, Machine::GameBoyDMG) {
-                if address == NR41_REG {
+                if address == NR31_REG {
                     self.length_counter.write_reg_nrx1(value);
                 }
             }
