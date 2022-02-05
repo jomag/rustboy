@@ -23,22 +23,30 @@ use ringbuf::Producer;
 
 use crate::{
     emu::Machine,
-    mmu::{NR50_REG, NR51_REG, NR52_REG},
+    mmu::{
+        NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, NR20_REG, NR21_REG, NR22_REG, NR23_REG,
+        NR24_REG, NR30_REG, NR31_REG, NR32_REG, NR33_REG, NR34_REG, NR40_REG, NR41_REG, NR42_REG,
+        NR43_REG, NR44_REG, NR50_REG, NR51_REG, NR52_REG,
+    },
 };
 
 // All channels have a length counter which counts down and disables
 // the channel when it reaches zero. The length counter can be
 // disabled.
 pub struct LengthCounter {
+    // Max length value. 256 for ch 3 (wave), 64 for the others
+    max: u16,
+
     machine: Machine,
     _enabled: bool,
     pub value: u16,
 }
 
 impl LengthCounter {
-    fn new(machine: Machine) -> Self {
+    fn new(machine: Machine, max: u16) -> Self {
         LengthCounter {
             machine,
+            max,
             _enabled: false,
             value: 0,
         }
@@ -51,6 +59,11 @@ impl LengthCounter {
             Machine::GameBoyCGB => 0,
             _ => panic!("unsupported machine type"),
         }
+    }
+
+    pub fn write_reg_nrx1(&mut self, value: u8) {
+        let mask = self.max - 1;
+        self.value = self.max - (value as u16 & mask);
     }
 
     pub fn next_seq_step_will_not_count_down(seq_step: u8) -> bool {
@@ -140,6 +153,129 @@ impl DAC {
     }
 }
 
+pub struct Sweep {
+    duration: u8,
+    decrement: bool,
+    shift: u8,
+    enabled: bool,
+    counter: u8,
+    shadow_frequency: u16,
+
+    // To handle obscure behavior. See write_reg_nr10.
+    has_calculated_in_decrement_mode: bool,
+}
+
+impl Sweep {
+    fn new() -> Self {
+        Sweep {
+            // NR10, bit 6..4
+            duration: 0,
+
+            // NR10, bit 3
+            decrement: false,
+
+            // NR10, bit 3..0
+            shift: 0,
+
+            enabled: false,
+            shadow_frequency: 0,
+            counter: 0,
+
+            has_calculated_in_decrement_mode: false,
+        }
+    }
+
+    fn power_off(&mut self) {
+        self.duration = 0;
+        self.decrement = false;
+        self.shift = 0;
+        self.counter = 0;
+    }
+
+    fn read_reg_nr10(&self) -> u8 {
+        let v = (self.duration << 4) | self.shift;
+        if self.decrement {
+            v | 0b1000
+        } else {
+            v
+        }
+    }
+
+    fn write_reg_nr10(&mut self, value: u8, channel_enabled: &mut bool) {
+        self.duration = (value >> 4) & 0b111;
+        self.shift = value & 0b111;
+
+        let prev = self.decrement;
+        self.decrement = (value & 0b1000) != 0;
+        if prev && !self.decrement && self.has_calculated_in_decrement_mode {
+            // Obscure behavior: if the decrement bit is cleared after at least
+            // one frequency calculation has been made in decrement mode
+            // since the last trigger, the channel is immediately disabled.
+            *channel_enabled = false;
+        }
+    }
+
+    fn load_counter(&mut self) {
+        self.counter = match self.duration {
+            0 => 8,
+            n => n,
+        }
+    }
+
+    fn trigger(&mut self, channel_enabled: &mut bool, frequency: &mut u16) {
+        self.shadow_frequency = *frequency;
+        self.load_counter();
+        self.enabled = self.duration != 0 || self.shift != 0;
+        self.has_calculated_in_decrement_mode = false;
+
+        if self.shift != 0 {
+            // Overflow check
+            self.calc_frequency(channel_enabled);
+        }
+    }
+
+    fn calc_frequency(&mut self, channel_enabled: &mut bool) -> u16 {
+        let mut f = self.shadow_frequency >> self.shift;
+
+        if self.decrement {
+            f = self.shadow_frequency - f;
+            self.has_calculated_in_decrement_mode = true;
+        } else {
+            f = self.shadow_frequency + f;
+        }
+
+        if f > 2047 {
+            *channel_enabled = false;
+        }
+
+        return f;
+    }
+
+    fn tick_128hz(&mut self, channel_enabled: &mut bool, frequency: &mut u16) {
+        if self.counter > 0 {
+            self.counter -= 1;
+
+            if self.counter == 0 {
+                self.counter = self.duration;
+                if self.counter == 0 {
+                    self.counter = 8;
+                }
+
+                if self.enabled && self.duration > 0 {
+                    let new_frequency = self.calc_frequency(channel_enabled);
+
+                    if new_frequency < 2048 && self.shift > 0 {
+                        *frequency = new_frequency;
+                        self.shadow_frequency = new_frequency;
+
+                        self.calc_frequency(channel_enabled);
+                    }
+                }
+            }
+        }
+    }
+}
+
 // SquareWaveSoundGenerator
 // ------------------------
 //
@@ -222,17 +358,8 @@ pub struct SquareWaveSoundGenerator {
     // Internal enabled flag.
     pub enabled: bool,
 
-    // Sweep time. Bit 6..4 of NR10. DOCUMENT ME!
-    sweep_time: u8,
-
-    // Sweep direction. Bit 3 of NR10. DOCUMENT ME!
-    sweep_direction: bool,
-
-    // Number of sweep shifts. Bit 2..0 of NR10. DOCUMENT ME!
-    sweep_shift_count: u8,
-
     // Sweep is only enabled for the first square wave channel
-    pub with_sweep: bool,
+    sweep: Option<Sweep>,
 
     pub length_counter: LengthCounter,
     pub dac: DAC,
@@ -256,15 +383,12 @@ impl SquareWaveSoundGenerator {
             envelope_periods_initial: 0,
             envelope_increasing: false,
             initial_volume: 0,
-            length_counter: LengthCounter::new(machine),
+            length_counter: LengthCounter::new(machine, 64),
             frequency: 0,
             frequency_timer: 0,
             duty: 0,
             wave_duty_position: 0,
-            sweep_time: 0,
-            sweep_shift_count: 0,
-            sweep_direction: false,
-            with_sweep,
+            sweep: if with_sweep { Some(Sweep::new()) } else { None },
             dac: DAC::new(),
         }
     }
@@ -281,28 +405,21 @@ impl SquareWaveSoundGenerator {
         self.frequency_timer = 0;
         self.duty = 0;
         self.wave_duty_position = 0;
-        self.sweep_time = 0;
-        self.sweep_shift_count = 0;
-        self.sweep_direction = false;
         self.dac = DAC::new();
+
+        if let Some(ref mut sweep) = self.sweep {
+            sweep.power_off();
+        }
     }
 
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
-            0 => match self.with_sweep {
-                true => {
-                    let v =
-                        ((self.sweep_time & 0b111) << 4) | (self.sweep_shift_count & 0b111) | 0x80;
-                    if self.sweep_direction {
-                        v | 0b1000
-                    } else {
-                        v
-                    }
-                }
-                false => 0xFF,
+            NR10_REG | NR20_REG => match self.sweep {
+                Some(ref sweep) => sweep.read_reg_nr10() | 0x80,
+                None => 0xFF,
             },
-            1 => ((self.duty as u8) << 6) | 0b0011_1111,
-            2 => {
+            NR11_REG | NR21_REG => ((self.duty as u8) << 6) | 0b0011_1111,
+            NR12_REG | NR22_REG => {
                 let v = (self.initial_volume << 4) | (self.envelope_periods_initial & 0b111);
                 if self.envelope_increasing {
                     v | 0b1000
@@ -310,48 +427,54 @@ impl SquareWaveSoundGenerator {
                     v
                 }
             }
-            3 => 0xFF,
-            4 => {
+            NR13_REG | NR23_REG => 0xFF,
+            NR14_REG | NR24_REG => {
                 if self.length_counter.is_enabled() {
                     0xFF
                 } else {
                     0b1011_1111
                 }
             }
-            _ => panic!("invalid register {}", address),
+            _ => panic!(
+                "Invalid register in square wave sound generator: 0x{:04x}",
+                address
+            ),
         }
     }
 
     pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8, powered_on: bool) {
         // If unpowered, all writes should be ignored except
         // length value if the machine is original Gameboy DMG
-        if address == 1 && (powered_on || matches!(self.machine, Machine::GameBoyDMG)) {
-            self.length_counter.value = (64 - (value & 63)) as u16;
-        }
-
         if !powered_on {
+            if matches!(self.machine, Machine::GameBoyDMG) {
+                if address == NR11_REG || address == NR21_REG {
+                    self.length_counter.write_reg_nrx1(value);
+                }
+            }
             return;
         }
 
         match address {
-            0 => {
-                self.sweep_time = (value >> 4) & 0b111;
-                self.sweep_direction = (value & 0b1000) != 0;
-                self.sweep_shift_count = value & 0b111;
+            NR10_REG | NR20_REG => {
+                if let Some(ref mut sweep) = self.sweep {
+                    sweep.write_reg_nr10(value, &mut self.enabled);
+                }
             }
-            1 => {
-                // Note: length counter is set above.
+            NR11_REG | NR21_REG => {
                 self.duty = ((value >> 6) & 3) as usize;
+                self.length_counter.write_reg_nrx1(value);
             }
-            2 => {
+            NR12_REG | NR22_REG => {
                 self.initial_volume = (value >> 4) & 0xF;
                 self.dac.powered_on = value & 0b1111_1000 != 0;
                 self.enabled = self.enabled && self.dac.powered_on;
                 self.envelope_increasing = (value & 0b1000) != 0;
                 self.envelope_periods_initial = value & 0b111;
             }
-            3 => self.frequency = (self.frequency & 0b11_0000_0000) | value as u16,
-            4 => {
+            NR13_REG | NR23_REG => {
+                self.frequency = (self.frequency & 0b11_0000_0000) | value as u16
+            }
+            NR14_REG | NR24_REG => {
                 self.frequency =
                     (self.frequency & 0b00_1111_1111) | (((value & 0b111) as u16) << 8);
 
@@ -366,7 +489,7 @@ impl SquareWaveSoundGenerator {
                     self.trigger(seq_step);
                 }
             }
-            _ => panic!("invalid register {}", address),
+            _ => panic!("Invalid APU register: 0x{:04x}", address),
         }
     }
 
@@ -377,6 +500,10 @@ impl SquareWaveSoundGenerator {
         self.envelope_period = self.envelope_periods_initial;
         self.envelope = self.initial_volume;
 
+        if let Some(ref mut sweep) = self.sweep {
+            sweep.trigger(&mut self.enabled, &mut self.frequency);
+        }
+
         // FIXME: add sweep trigger handling
 
         // If DAC is not powered, immediately disable the channel again
@@ -385,7 +512,7 @@ impl SquareWaveSoundGenerator {
         }
     }
 
-    pub fn update(&mut self, hz64: bool, hz256: bool) -> f32 {
+    pub fn update(&mut self, hz64: bool, hz128: bool, hz256: bool) -> f32 {
         // Decrement frequency timer
         // FIXME: Handle frequency timer being less than 4.
         //        When so, add to the frequency timer instead:
@@ -412,10 +539,12 @@ impl SquareWaveSoundGenerator {
         // The duty pattern is stored in bit 6-7 of NR11 (NR21)
         let out = WAVE_DUTY[self.duty][self.wave_duty_position as usize];
 
-        // if self.nr10 != 0 {
-        // FIXME:
-        // println!("NOT IMPLEMENTED: sweep");
-        // }
+        // Update sweep at 128 Hz
+        if hz128 {
+            if let Some(ref mut sweep) = self.sweep {
+                sweep.tick_128hz(&mut self.enabled, &mut self.frequency);
+            }
+        }
 
         // Update length counter at 256 Hz
         if hz256 && self.length_counter.count_down() {
@@ -536,7 +665,7 @@ impl WaveSoundGenerator {
                 ],
             },
 
-            length_counter: LengthCounter::new(machine),
+            length_counter: LengthCounter::new(machine, 256),
             wave_position: 0,
             frequency_timer: 0,
             enabled: false,
@@ -561,7 +690,7 @@ impl WaveSoundGenerator {
 
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
-            0 => {
+            NR30_REG => {
                 if self.dac.powered_on {
                     0b1111_1111
                 } else {
@@ -569,10 +698,10 @@ impl WaveSoundGenerator {
                 }
             }
 
-            1 => 0xFF,
-            2 => self.volume_code << 5 | 0b1001_1111,
-            3 => 0xFF,
-            4 => {
+            NR31_REG => 0xFF,
+            NR32_REG => self.volume_code << 5 | 0b1001_1111,
+            NR33_REG => 0xFF,
+            NR34_REG => {
                 if self.length_counter.is_enabled() {
                     0xFF
                 } else {
@@ -585,7 +714,10 @@ impl WaveSoundGenerator {
 
     pub fn read_wave_reg(&self, address: usize) -> u8 {
         match address {
-            0..=0xF => (self.wave[address * 2] << 4) | self.wave[address * 2 + 1],
+            0xFF30..=0xFF3F => {
+                let adr = address - 0xFF30;
+                (self.wave[adr * 2] << 4) | self.wave[adr * 2 + 1]
+            }
             _ => panic!("attempt to read wave pattern register {}", address),
         }
     }
@@ -593,26 +725,27 @@ impl WaveSoundGenerator {
     pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8, powered_on: bool) {
         // If unpowered, all writes should be ignored except
         // length value if the machine is original Gameboy DMG
-        if address == 1 && (powered_on || matches!(self.machine, Machine::GameBoyDMG)) {
-            self.length_counter.value = 256 - value as u16;
-        }
-
         if !powered_on {
+            if matches!(self.machine, Machine::GameBoyDMG) {
+                if address == NR31_REG {
+                    self.length_counter.write_reg_nrx1(value);
+                }
+            }
             return;
         }
 
         match address {
-            0 => {
+            NR30_REG => {
                 self.dac.powered_on = value & 0x80 != 0;
                 self.enabled = self.enabled && self.dac.powered_on;
             }
-            1 => {
-                // Note: length value is set above
+            NR31_REG => {
+                self.length_counter.write_reg_nrx1(value);
                 self.nr31 = value;
             }
-            2 => self.volume_code = (value & 0b0110_0000) >> 5,
-            3 => self.frequency = (self.frequency & 0b11_0000_0000) | value as u16,
-            4 => {
+            NR32_REG => self.volume_code = (value & 0b0110_0000) >> 5,
+            NR33_REG => self.frequency = (self.frequency & 0b11_0000_0000) | value as u16,
+            NR34_REG => {
                 self.frequency =
                     (self.frequency & 0b00_1111_1111) | (((value & 0b111) as u16) << 8);
 
@@ -632,8 +765,9 @@ impl WaveSoundGenerator {
     }
 
     pub fn write_wave_reg(&mut self, address: usize, value: u8) {
-        self.wave[address * 2] = (value & 0xF0) >> 4;
-        self.wave[address * 2 + 1] = value & 0x0F
+        let adr = address - 0xFF30;
+        self.wave[adr * 2] = (value & 0xF0) >> 4;
+        self.wave[adr * 2 + 1] = value & 0x0F
     }
 
     fn trigger(&mut self, seq_step: u8) {
@@ -766,7 +900,7 @@ impl NoiseSoundGenerator {
             envelope_increasing: false,
             envelope_periods_initial: 0,
             initial_volume: 0,
-            length_counter: LengthCounter::new(machine),
+            length_counter: LengthCounter::new(machine, 64),
             dac: DAC::new(),
             machine,
         }
@@ -789,8 +923,9 @@ impl NoiseSoundGenerator {
 
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
-            0 => 0xFF,
-            1 => {
+            NR40_REG => 0xFF,
+            NR41_REG => 0xFF,
+            NR42_REG => {
                 let nr42 = (self.initial_volume << 4) | self.envelope_periods_initial;
                 if self.envelope_increasing {
                     nr42 | 0b0000_1000
@@ -798,40 +933,45 @@ impl NoiseSoundGenerator {
                     nr42
                 }
             }
-            2 => self.nr43,
-            3 => {
+            NR43_REG => self.nr43,
+            NR44_REG => {
                 if self.length_counter.is_enabled() {
                     0b1111_1111
                 } else {
                     0b1011_1111
                 }
             }
-            _ => panic!("invalid register {}", address),
+            _ => panic!(
+                "Invalid register in noise sound generator: 0x{:04x}",
+                address
+            ),
         }
     }
 
     pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8, powered_on: bool) {
         // If unpowered, all writes should be ignored except
         // length value if the machine is original Gameboy DMG
-        if address == 0 && (powered_on || matches!(self.machine, Machine::GameBoyDMG)) {
-            self.length_counter.value = (64 - (value & 63)) as u16;
-        }
-
         if !powered_on {
+            if matches!(self.machine, Machine::GameBoyDMG) {
+                if address == NR41_REG {
+                    self.length_counter.write_reg_nrx1(value);
+                }
+            }
             return;
         }
 
         match address {
-            0 => {} // Note: length value is set above
-            1 => {
+            NR40_REG => {}
+            NR41_REG => self.length_counter.write_reg_nrx1(value),
+            NR42_REG => {
                 self.initial_volume = (value >> 4) & 0xF;
                 self.dac.powered_on = value & 0b1111_1000 != 0;
                 self.enabled = self.enabled && self.dac.powered_on;
                 self.envelope_increasing = (value & 0b1000) != 0;
                 self.envelope_periods_initial = value & 0b111;
             }
-            2 => self.nr43 = value,
-            3 => {
+            NR43_REG => self.nr43 = value,
+            NR44_REG => {
                 if self
                     .length_counter
                     .enable(value & 0b0100_0000 != 0, seq_step)
@@ -1027,8 +1167,8 @@ impl AudioProcessingUnit {
             hz256 = step & 1 == 0;
         }
 
-        let ch1_output = self.s1.update(hz64, hz256);
-        let ch2_output = self.s2.update(hz64, hz256);
+        let ch1_output = self.s1.update(hz64, hz128, hz256);
+        let ch2_output = self.s2.update(hz64, hz128, hz256);
         let ch3_output = self.ch3.update(hz256);
         let ch4_output = self.ch4.update(hz64, hz256);
 
@@ -1074,16 +1214,15 @@ impl AudioProcessingUnit {
 
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
-            0xFF10..=0xFF14 => self.s1.read_reg(address - 0xFF10),
-            0xFF15..=0xFF19 => self.s2.read_reg(address - 0xFF15),
-            0xFF1A..=0xFF1E => self.ch3.read_reg(address - 0xFF1A),
-            0xFF1F => 0xFF,
-            0xFF20..=0xFF23 => self.ch4.read_reg(address - 0xFF20),
+            0xFF10..=0xFF14 => self.s1.read_reg(address),
+            0xFF15..=0xFF19 => self.s2.read_reg(address),
+            0xFF1A..=0xFF1E => self.ch3.read_reg(address),
+            0xFF1F..=0xFF23 => self.ch4.read_reg(address),
             NR50_REG => self.nr50,
             NR51_REG => self.nr51,
             NR52_REG => self.read_nr52() | 0b0111_0000,
             0xFF27..=0xFF2F => 0xFF,
-            0xFF30..=0xFF3F => self.ch3.read_wave_reg(address as usize - 0xFF30),
+            0xFF30..=0xFF3F => self.ch3.read_wave_reg(address as usize),
             _ => 0,
         }
     }
@@ -1117,36 +1256,28 @@ impl AudioProcessingUnit {
                     self.power_off();
                 }
             }
-            0xFF30..=0xFF3F => self.ch3.write_wave_reg(address as usize - 0xFF30, value),
+            0xFF30..=0xFF3F => self.ch3.write_wave_reg(address as usize, value),
             _ => {}
         }
 
         match address {
-            0xFF10..=0xFF14 => self.s1.write_reg(
-                address - 0xFF10,
-                value,
-                self.seq_step(div_counter),
-                self.powered_on,
-            ),
-            0xFF15..=0xFF19 => self.s2.write_reg(
-                address - 0xFF15,
-                value,
-                self.seq_step(div_counter),
-                self.powered_on,
-            ),
-            0xFF1A..=0xFF1E => self.ch3.write_reg(
-                address - 0xFF1A,
-                value,
-                self.seq_step(div_counter),
-                self.powered_on,
-            ),
+            0xFF10..=0xFF14 => {
+                self.s1
+                    .write_reg(address, value, self.seq_step(div_counter), self.powered_on)
+            }
+            0xFF15..=0xFF19 => {
+                self.s2
+                    .write_reg(address, value, self.seq_step(div_counter), self.powered_on)
+            }
+            0xFF1A..=0xFF1E => {
+                self.ch3
+                    .write_reg(address, value, self.seq_step(div_counter), self.powered_on)
+            }
             0xFF1F => {}
-            0xFF20..=0xFF23 => self.ch4.write_reg(
-                address - 0xFF20,
-                value,
-                self.seq_step(div_counter),
-                self.powered_on,
-            ),
+            0xFF20..=0xFF23 => {
+                self.ch4
+                    .write_reg(address, value, self.seq_step(div_counter), self.powered_on)
+            }
             NR50_REG => {
                 if self.powered_on {
                     self.nr50 = value

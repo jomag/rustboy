@@ -324,8 +324,6 @@ if all_suites or "blargg" in args.suites:
     blargg.setup()
     blargg.run(
         skip=[
-            "04-sweep",
-            "05-sweep details",
             "07-len sweep period sync",
             "11-regs after power",
         ]
