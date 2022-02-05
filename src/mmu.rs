@@ -53,6 +53,7 @@ pub const NR12_REG: u16 = 0xFF12;
 pub const NR13_REG: u16 = 0xFF13;
 pub const NR14_REG: u16 = 0xFF14;
 // - Sound Generator 2
+pub const NR20_REG: u16 = 0xFF15;
 pub const NR21_REG: u16 = 0xFF16;
 pub const NR22_REG: u16 = 0xFF17;
 pub const NR23_REG: u16 = 0xFF18;
@@ -64,6 +65,7 @@ pub const NR32_REG: u16 = 0xFF1C;
 pub const NR33_REG: u16 = 0xFF1D;
 pub const NR34_REG: u16 = 0xFF1E;
 // - Sound Generator 4
+pub const NR40_REG: u16 = 0xFF1F;
 pub const NR41_REG: u16 = 0xFF20;
 pub const NR42_REG: u16 = 0xFF21;
 pub const NR43_REG: u16 = 0xFF22;

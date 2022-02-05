@@ -24,9 +24,9 @@ use ringbuf::Producer;
 use crate::{
     emu::Machine,
     mmu::{
-        NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, NR21_REG, NR22_REG, NR23_REG, NR24_REG,
-        NR30_REG, NR31_REG, NR32_REG, NR33_REG, NR34_REG, NR41_REG, NR42_REG, NR43_REG, NR44_REG,
-        NR50_REG, NR51_REG, NR52_REG,
+        NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, NR20_REG, NR21_REG, NR22_REG, NR23_REG,
+        NR24_REG, NR30_REG, NR31_REG, NR32_REG, NR33_REG, NR34_REG, NR40_REG, NR41_REG, NR42_REG,
+        NR43_REG, NR44_REG, NR50_REG, NR51_REG, NR52_REG,
     },
 };
 
@@ -234,9 +234,6 @@ impl Sweep {
         }
     }
 
-    // Returns two optional values:
-    // - The first says if the channel should be disabled (true = disable)
-    // - The second is the new frequency of the channel
     fn calc_frequency(&mut self, channel_enabled: &mut bool) -> u16 {
         let mut f = self.shadow_frequency >> self.shift;
 
@@ -417,8 +414,8 @@ impl SquareWaveSoundGenerator {
 
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
-            NR10_REG => match self.sweep {
-                Some(ref sweep) => sweep.read_reg_nr10(),
+            NR10_REG | NR20_REG => match self.sweep {
+                Some(ref sweep) => sweep.read_reg_nr10() | 0x80,
                 None => 0xFF,
             },
             NR11_REG | NR21_REG => ((self.duty as u8) << 6) | 0b0011_1111,
@@ -438,7 +435,10 @@ impl SquareWaveSoundGenerator {
                     0b1011_1111
                 }
             }
-            _ => panic!("invalid register {}", address),
+            _ => panic!(
+                "Invalid register in square wave sound generator: 0x{:04x}",
+                address
+            ),
         }
     }
 
@@ -455,7 +455,7 @@ impl SquareWaveSoundGenerator {
         }
 
         match address {
-            NR10_REG => {
+            NR10_REG | NR20_REG => {
                 if let Some(ref mut sweep) = self.sweep {
                     sweep.write_reg_nr10(value, &mut self.enabled);
                 }
@@ -489,7 +489,7 @@ impl SquareWaveSoundGenerator {
                     self.trigger(seq_step);
                 }
             }
-            _ => panic!("invalid register {}", address),
+            _ => panic!("Invalid APU register: 0x{:04x}", address),
         }
     }
 
@@ -923,8 +923,9 @@ impl NoiseSoundGenerator {
 
     pub fn read_reg(&self, address: u16) -> u8 {
         match address {
-            0 => 0xFF,
-            1 => {
+            NR40_REG => 0xFF,
+            NR41_REG => 0xFF,
+            NR42_REG => {
                 let nr42 = (self.initial_volume << 4) | self.envelope_periods_initial;
                 if self.envelope_increasing {
                     nr42 | 0b0000_1000
@@ -932,15 +933,18 @@ impl NoiseSoundGenerator {
                     nr42
                 }
             }
-            2 => self.nr43,
-            3 => {
+            NR43_REG => self.nr43,
+            NR44_REG => {
                 if self.length_counter.is_enabled() {
                     0b1111_1111
                 } else {
                     0b1011_1111
                 }
             }
-            _ => panic!("invalid register {}", address),
+            _ => panic!(
+                "Invalid register in noise sound generator: 0x{:04x}",
+                address
+            ),
         }
     }
 
@@ -957,6 +961,7 @@ impl NoiseSoundGenerator {
         }
 
         match address {
+            NR40_REG => {}
             NR41_REG => self.length_counter.write_reg_nrx1(value),
             NR42_REG => {
                 self.initial_volume = (value >> 4) & 0xF;
@@ -1212,8 +1217,7 @@ impl AudioProcessingUnit {
             0xFF10..=0xFF14 => self.s1.read_reg(address),
             0xFF15..=0xFF19 => self.s2.read_reg(address),
             0xFF1A..=0xFF1E => self.ch3.read_reg(address),
-            0xFF1F => 0xFF,
-            0xFF20..=0xFF23 => self.ch4.read_reg(address),
+            0xFF1F..=0xFF23 => self.ch4.read_reg(address),
             NR50_REG => self.nr50,
             NR51_REG => self.nr51,
             NR52_REG => self.read_nr52() | 0b0111_0000,
