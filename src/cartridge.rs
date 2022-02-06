@@ -1,10 +1,108 @@
 use std::fs::File;
 use std::io::Read;
+use std::time::SystemTime;
+
+use chrono::{Datelike, Timelike};
 
 pub trait Cartridge {
     fn read(&self, address: u16) -> u8;
     fn write(&mut self, address: u16, value: u8);
     fn reset(&mut self);
+}
+
+struct RTC {
+    second: u8,
+    minute: u8,
+    hour: u8,
+    day_counter: u16,
+    halted: bool,
+    prep_latch: bool,
+}
+
+// Real-time clock as used in MBC3 cartridges.
+//
+// The RTC implementation is not perfect:
+// - Time can not really be halted. When halted, the time will not
+//   change until unhalted, but then it will assume the *current*
+//   timestamp, rather than continuing from where it was
+// - Setting time is not implemented at all
+// - Resetting the day counter is also not implemented at al
+// - As the day counter only returns number of days since epoch % 512,
+//   the carry bit will never be set
+impl RTC {
+    fn new() -> Self {
+        RTC {
+            second: 0,
+            minute: 0,
+            hour: 0,
+            day_counter: 0,
+            halted: false,
+            prep_latch: false,
+        }
+    }
+
+    fn latch(&mut self) {
+        let now = chrono::Local::now();
+        self.second = now.second() as u8;
+        self.minute = now.minute() as u8;
+        self.hour = now.hour() as u8;
+        self.day_counter = (now.date().num_days_from_ce() & 0x1FF) as u16;
+    }
+
+    fn read(&self, adr: u16, reg: u8) -> u8 {
+        match adr {
+            0xA000..=0xBFFF => match reg {
+                0x08 => self.second,
+                0x09 => self.minute,
+                0x0A => self.hour,
+                0x0B => (self.day_counter & 0xff) as u8,
+                0x0C => {
+                    let mut v = ((self.day_counter >> 8) & 1) as u8;
+                    if self.halted {
+                        v |= 0b0100_0000;
+                    }
+                    // Note: carry will never be set with the current
+                    // naive implementation
+                    v
+                }
+                _ => panic!("Invalid RTC register: 0x{:02x}", reg),
+            },
+            _ => panic!("Invalid RTC address: 0x{:04x}", adr),
+        }
+    }
+
+    fn write(&mut self, adr: u16, reg: u8, value: u8) {
+        match adr {
+            0x6000..=0x7FFF => match value {
+                0 => self.prep_latch = true,
+                1 => {
+                    if self.prep_latch {
+                        self.prep_latch = false;
+                        if !self.halted {
+                            self.latch();
+                        }
+                    }
+                }
+                _ => panic!("Invalid RTC latch value: 0x{:02x}", value),
+            },
+            0xA000..=0xBFFF => match reg {
+                0x08 => self.second = value,
+                0x09 => self.minute = value,
+                0x0A => self.hour = value,
+                0x0B => self.day_counter = (self.day_counter & 0x100) | value as u16,
+                0x0C => {
+                    if value & 1 == 0 {
+                        self.day_counter = value as u16;
+                    } else {
+                        self.day_counter = value as u16 | 0x100
+                    }
+                    self.halted = value & 0b0100_0000 != 0;
+                }
+                _ => panic!("Invalid RTC register: 0x{:02x}", reg),
+            },
+            _ => panic!("Invalid RTC address"),
+        }
+    }
 }
 
 pub fn cartridge_type_name(cartridge_type: u8) -> String {
@@ -23,7 +121,8 @@ pub fn cartridge_type_name(cartridge_type: u8) -> String {
         0x0f => "MBC3 with timer and battery",
         0x10 => "MBC3 with timer, RAM and battery",
         0x11 => "MBC3",
-        0x12 => "MBC3 with RAM and battery",
+        0x12 => "MBC3 with RAM",
+        0x13 => "MBC3 with RAM and battery",
         0x19 => "MBC5",
         0x1a => "MBC5 with RAM",
         0x1b => "MBC5 with RAM and battery",
@@ -183,6 +282,104 @@ impl Cartridge for CartridgeMBC1 {
     }
 }
 
+struct CartridgeMBC3 {
+    pub size: usize,
+
+    // Cartridges of type MBC3 can hold up to 128 banks of 16k ROM.
+    // Banks 0x20, 0x40 an 0x60 can be accessed in contrast with MBC1.
+    pub rom: Box<[u8]>,
+
+    // 32k RAM
+    pub ram: Box<[u8]>,
+
+    pub ram_and_rtc_enabled: bool,
+    pub ram_bank_or_rtc_reg_selection: u8,
+
+    pub rom_bank_offset: usize,
+
+    pub rtc: RTC,
+
+    // True if cartridge has ram and/or battery
+    #[allow(dead_code)]
+    pub with_ram: bool,
+    #[allow(dead_code)]
+    pub with_battery: bool,
+}
+
+impl CartridgeMBC3 {
+    pub fn new(data: Vec<u8>, with_ram: bool, with_battery: bool) -> Self {
+        let mut rom = vec![0x00; 0x4000 * 128].into_boxed_slice();
+        let mut ram = vec![0x00; 0x8000].into_boxed_slice();
+
+        for (src, dst) in rom.iter_mut().zip(data.iter()) {
+            *src = *dst;
+        }
+
+        CartridgeMBC3 {
+            size: data.len(),
+            rom,
+            ram,
+            ram_and_rtc_enabled: false,
+            with_ram,
+            with_battery,
+            rom_bank_offset: 0,
+            ram_bank_or_rtc_reg_selection: 0,
+            rtc: RTC::new(),
+        }
+    }
+}
+
+impl Cartridge for CartridgeMBC3 {
+    fn reset(&mut self) {
+        self.ram.fill(0);
+    }
+
+    fn read(&self, address: u16) -> u8 {
+        match address {
+            0x0000..=0x3FFF => self.rom[address as usize],
+            0x4000..=0x7FFF => self.rom[self.rom_bank_offset + address as usize - 0x4000],
+            0xA000..=0xBFFF => match self.ram_bank_or_rtc_reg_selection {
+                0x00..=0x03 => {
+                    self.ram[0x2000 * self.ram_bank_or_rtc_reg_selection as usize
+                        + address as usize
+                        - 0xA000]
+                }
+                0x08..=0x0c => self.rtc.read(address, self.ram_bank_or_rtc_reg_selection),
+                _ => panic!(
+                    "Invalid RAM/RTC register in MBC3 cartridge: 0x{:04x}",
+                    self.ram_bank_or_rtc_reg_selection,
+                ),
+            },
+            _ => panic!("Invalid address in MBC3 cartridge: 0x{:04x}", address),
+        }
+    }
+
+    fn write(&mut self, address: u16, value: u8) {
+        match address {
+            0x0000..=0x1FFF => match value {
+                0x00 => self.ram_and_rtc_enabled = false,
+                0x0A => self.ram_and_rtc_enabled = true,
+                _ => {}
+            },
+            0x2000..=0x3FFF => match value {
+                0x00 => self.rom_bank_offset = 0x4000,
+                0x01..=0x7F => self.rom_bank_offset = value as usize * 0x4000,
+                _ => {}
+            },
+            0x4000..=0x5FFF => match value {
+                0x00..=0x03 => self.ram_bank_or_rtc_reg_selection = value,
+                0x08..=0x0C => self.ram_bank_or_rtc_reg_selection = value,
+                _ => {}
+            },
+            0x6000..=0x7FFF => self.rtc.write(address, 0, value),
+            0xA000..=0xBFFF => {
+                panic!("ram/rtc write not implemented")
+            }
+            _ => panic!("Invalid address in MBC3 cartridge: 0x{:04x}", address),
+        }
+    }
+}
+
 struct Cartridge32k {
     pub rom: Box<[u8]>,
 }
@@ -227,7 +424,7 @@ pub fn load_cartridge(filename: String) -> Box<dyn Cartridge> {
 
     let cartridge_type = rom[0x147];
     println!(
-        "Cartridge type {:02x}: {}",
+        "Cartridge type 0x{:02x}: {}",
         cartridge_type,
         cartridge_type_name(cartridge_type)
     );
@@ -241,6 +438,11 @@ pub fn load_cartridge(filename: String) -> Box<dyn Cartridge> {
         }
         2 => return Box::new(CartridgeMBC1::new(rom, true, false)) as Box<dyn Cartridge>,
         3 => return Box::new(CartridgeMBC1::new(rom, false, false)) as Box<dyn Cartridge>,
-        _ => panic!("Unsupported cartridge type: {:02X}", cartridge_type),
+        0x13 => return Box::new(CartridgeMBC3::new(rom, true, true)) as Box<dyn Cartridge>,
+        _ => panic!(
+            "Unsupported cartridge type: 0x{:02X} - {}",
+            cartridge_type,
+            cartridge_type_name(cartridge_type),
+        ),
     };
 }
