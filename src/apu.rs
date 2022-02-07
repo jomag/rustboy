@@ -713,13 +713,19 @@ impl WaveSoundGenerator {
     }
 
     pub fn read_wave_reg(&self, address: usize) -> u8 {
-        match address {
-            0xFF30..=0xFF3F => {
-                let adr = address - 0xFF30;
-                (self.wave[adr * 2] << 4) | self.wave[adr * 2 + 1]
-            }
-            _ => panic!("attempt to read wave pattern register {}", address),
+        assert!(address >= 0xFF30 && address <= 0xFF3F);
+
+        // When the wave channel is enabled, accessing any byte in the
+        // wave table returns the byte currently being played. On DMG
+        // it's even worse, as it only does so for a few clocks after
+        // the byte was "played". After that 0xFF is returned instead.
+        if self.enabled {
+            let adr = self.wave_position as usize / 2;
+            return (self.wave[adr * 2] << 4) | self.wave[adr * 2 + 1];
         }
+
+        let adr = address - 0xFF30;
+        (self.wave[adr * 2] << 4) | self.wave[adr * 2 + 1]
     }
 
     pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8, powered_on: bool) {
@@ -744,10 +750,10 @@ impl WaveSoundGenerator {
                 self.nr31 = value;
             }
             NR32_REG => self.volume_code = (value & 0b0110_0000) >> 5,
-            NR33_REG => self.frequency = (self.frequency & 0b11_0000_0000) | value as u16,
+            NR33_REG => self.frequency = (self.frequency & 0b111_0000_0000) | value as u16,
             NR34_REG => {
                 self.frequency =
-                    (self.frequency & 0b00_1111_1111) | (((value & 0b111) as u16) << 8);
+                    (self.frequency & 0b000_1111_1111) | (((value & 0b111) as u16) << 8);
 
                 if self
                     .length_counter
@@ -773,7 +779,7 @@ impl WaveSoundGenerator {
     fn trigger(&mut self, seq_step: u8) {
         self.enabled = true;
         self.length_counter.trigger(256, seq_step);
-        self.frequency_timer = (2048 - self.frequency) * 2;
+        self.frequency_timer = (2048 - self.frequency) * 2 + 2;
         self.wave_position = 0;
 
         // If DAC is not powered on, immediately disable the channel again
@@ -783,22 +789,11 @@ impl WaveSoundGenerator {
     }
 
     pub fn update(&mut self, hz256: bool) -> f32 {
-        // Decrement frequency timer
-        // FIXME: this timer can end up at value 2, as the frequency is multiplied by 2.
-        // This is problematic as the APU is updated on every 4'th cycle.
-        // For the other channels this is not a problem, as it's always divisible by
-        // 4. We must consider what side effects this can have. We should probably
-        // compensate when the new frequency timer and wave position is selected below
-        // depending on if it reached zero from 4 or 2.
         if self.frequency_timer < 4 {
-            self.frequency_timer = 0;
-
             // If frequency timer reaches 0, reset it to the selected frequency
             // (NR13, NR14) and increment the wave position
-            if self.frequency_timer == 0 {
-                self.frequency_timer = (2048 - self.frequency) * 2;
-                self.wave_position = (self.wave_position + 1) & 31;
-            }
+            self.frequency_timer += (2048 - self.frequency) * 2 + (self.frequency_timer & 3) - 4;
+            self.wave_position = (self.wave_position + 1) & 31;
         } else {
             self.frequency_timer -= 4;
         }
