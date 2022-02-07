@@ -735,7 +735,7 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
 
         0xC2 => format!("JP   NZ, 0x{:04X}", mmu.direct_read_u16(addr + 1)),
         0xC3 => format!("JP   0x{:04X}", mmu.direct_read_u16(addr + 1)),
-        0xC4 => format!("CALL  NZ, ${:04X}", mmu.direct_read_u16(addr + 1)),
+        0xC4 => format!("CALL NZ, ${:04X}", mmu.direct_read_u16(addr + 1)),
         0xC6 => format!("ADD  A, 0x{:02X}", mmu.direct_read(addr + 1)),
 
         0xCA => format!("JP   Z, 0x{:04X}", mmu.direct_read_u16(addr + 1)),
@@ -759,6 +759,7 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
         0xCE => format!("ADC  A, 0x{:02X}", mmu.direct_read(addr + 1)),
 
         0xD2 => format!("JP   NC, 0x{:04X}", mmu.direct_read_u16(addr + 1)),
+        0xD4 => format!("CALL NC, ${:04X}", mmu.direct_read_u16(addr + 1)),
         0xD6 => format!("SUB  0x{:02X}", mmu.direct_read(addr + 1)),
         0xDC => format!("CALL C, 0x{:02X}", mmu.direct_read_u16(addr + 1)),
         0xDD => format!("! Illegal op code: 0x{:02X}", op),
@@ -767,6 +768,7 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
         0xE0 => format!("LD   ($FF00+${:02X}), A", mmu.direct_read(addr + 1)),
         0xEA => format!("LD   (${:04X}), A", mmu.direct_read_u16(addr + 1)),
         0xE6 => format!("AND  ${:02X}", mmu.direct_read(addr + 1)),
+        0xEC => format!("! Illegal op code: 0x{:02X}", op),
         0xED => format!("! Illegal op code: 0x{:02X}", op),
         0xEE => format!("XOR  0x{:02X}", mmu.direct_read(addr + 1)),
 
