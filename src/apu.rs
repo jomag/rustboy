@@ -640,6 +640,15 @@ pub struct WaveSoundGenerator {
     // Bits 6..5 of NR32
     pub volume_code: u8,
 
+    // Obscure behavior in DMG:
+    // When channel is enabled and a sample has just been
+    // read, the value of that sample will be returned on any
+    // access to the wave memory. Shortly thereafter (2 cycles?)
+    // the DMG will return 0xFF for every read.
+    // The CGB works the same, except it always returns the
+    // last sample read. Test: "09-wave read while on"
+    dmg_wave_read_return_0xff: bool,
+
     pub length_counter: LengthCounter,
     pub dac: DAC,
     machine: Machine,
@@ -671,6 +680,7 @@ impl WaveSoundGenerator {
             enabled: false,
             volume_code: 0,
             dac: DAC::new(),
+            dmg_wave_read_return_0xff: true,
             machine,
         }
     }
@@ -720,6 +730,11 @@ impl WaveSoundGenerator {
         // it's even worse, as it only does so for a few clocks after
         // the byte was "played". After that 0xFF is returned instead.
         if self.enabled {
+            if matches!(self.machine, Machine::GameBoyDMG) {
+                if self.dmg_wave_read_return_0xff {
+                    return 0xFF;
+                }
+            }
             let adr = self.wave_position as usize / 2;
             return (self.wave[adr * 2] << 4) | self.wave[adr * 2 + 1];
         }
@@ -779,8 +794,13 @@ impl WaveSoundGenerator {
     fn trigger(&mut self, seq_step: u8) {
         self.enabled = true;
         self.length_counter.trigger(256, seq_step);
-        self.frequency_timer = (2048 - self.frequency) * 2 + 2;
+        self.frequency_timer = (2048 - self.frequency) * 2 + 4;
         self.wave_position = 0;
+
+        // Obscure behavior, DMG only: as the sample buffer has
+        // just been read, reads from the wave memory should
+        // return that value for the next 2 (?) cycles.
+        self.dmg_wave_read_return_0xff = false;
 
         // If DAC is not powered on, immediately disable the channel again
         if !self.dac.powered_on {
@@ -790,12 +810,27 @@ impl WaveSoundGenerator {
 
     pub fn update(&mut self, hz256: bool) -> f32 {
         if self.frequency_timer < 4 {
+            if self.frequency_timer == 2 {
+                // Since the APU is emulated at 1 MHz, while the real
+                // APU runs at 2 MHz, some special handling is required
+                // here: one obscure behavior of DMG is that it returns
+                // the last sample read for 2 cycles, and then 0xFF after
+                // that. So if there's 2 cycles remaining at this point,
+                // it means that the next operation will be 2 cycles later,
+                // and if that is a read of the wave memory, it should
+                // return the last read sample value.
+                self.dmg_wave_read_return_0xff = false;
+            }
+
             // If frequency timer reaches 0, reset it to the selected frequency
             // (NR13, NR14) and increment the wave position
-            self.frequency_timer += (2048 - self.frequency) * 2 + (self.frequency_timer & 3) - 4;
+            self.frequency_timer += (2048 - self.frequency) * 2 - 4; // + (self.frequency_timer & 3) - 4;
             self.wave_position = (self.wave_position + 1) & 31;
         } else {
             self.frequency_timer -= 4;
+
+            // See comment above.
+            self.dmg_wave_read_return_0xff = true;
         }
 
         let mut out = self.wave[self.wave_position as usize];

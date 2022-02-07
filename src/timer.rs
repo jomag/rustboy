@@ -9,7 +9,7 @@ const CLOCK_SELECTION: [u16; 4] = [512, 8, 32, 128];
 const TAC_ENABLE_BIT: u8 = 4;
 
 pub struct Timer {
-    // Absolut cycle count since start of emulator.
+    // Absolute cycle count since start of emulator.
     // This is only used for statistics and debugging.
     // It is not used by the emulator.
     pub abs_cycle: u64,
