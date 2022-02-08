@@ -1121,6 +1121,10 @@ pub struct AudioProcessingUnit {
     pub buf: Option<Producer<f32>>,
 
     pub recorder: Option<Box<dyn AudioRecorder>>,
+
+    // Current frame sequencer step. Updated at 512 Hz,
+    // or every 8192'th cycle.
+    pub frame_seq_step: u8,
 }
 
 impl AudioProcessingUnit {
@@ -1136,6 +1140,7 @@ impl AudioProcessingUnit {
             buf: None,
             recorder: None,
             powered_on: false,
+            frame_seq_step: 0,
         }
     }
 
@@ -1151,10 +1156,6 @@ impl AudioProcessingUnit {
         self.nr50 = 0;
         self.nr51 = 0;
         self.powered_on = false;
-    }
-
-    pub fn seq_step(&self, div_counter: u16) -> u8 {
-        return (div_counter >> 13) as u8;
     }
 
     pub fn update(&mut self, div_counter: u16) {
@@ -1191,10 +1192,10 @@ impl AudioProcessingUnit {
         let mut hz128 = false;
         let mut hz256 = false;
         if div_counter % 8192 == 0 {
-            let step = self.seq_step(div_counter);
-            hz64 = step == 7;
-            hz128 = step == 2 || step == 6;
-            hz256 = step & 1 == 0;
+            self.frame_seq_step = (self.frame_seq_step + 1) & 7;
+            hz64 = self.frame_seq_step == 7;
+            hz128 = self.frame_seq_step == 2 || self.frame_seq_step == 6;
+            hz256 = self.frame_seq_step & 1 == 0;
         }
 
         let ch1_output = self.s1.update(hz64, hz128, hz256);
@@ -1260,6 +1261,10 @@ impl AudioProcessingUnit {
     fn power_on(&mut self) {
         if !self.powered_on {
             self.powered_on = true;
+
+            // When powered on, the frame sequencer is reset so that
+            // the next step will be 0.
+            self.frame_seq_step = 7;
         }
     }
 
@@ -1275,7 +1280,7 @@ impl AudioProcessingUnit {
         }
     }
 
-    pub fn write_reg(&mut self, address: u16, value: u8, div_counter: u16) {
+    pub fn write_reg(&mut self, address: u16, value: u8) {
         // Writes to NR52 and the wave memory allways work, even
         // when the sound hardware is powered off.
         match address {
@@ -1293,20 +1298,20 @@ impl AudioProcessingUnit {
         match address {
             0xFF10..=0xFF14 => {
                 self.s1
-                    .write_reg(address, value, self.seq_step(div_counter), self.powered_on)
+                    .write_reg(address, value, self.frame_seq_step, self.powered_on)
             }
             0xFF15..=0xFF19 => {
                 self.s2
-                    .write_reg(address, value, self.seq_step(div_counter), self.powered_on)
+                    .write_reg(address, value, self.frame_seq_step, self.powered_on)
             }
             0xFF1A..=0xFF1E => {
                 self.ch3
-                    .write_reg(address, value, self.seq_step(div_counter), self.powered_on)
+                    .write_reg(address, value, self.frame_seq_step, self.powered_on)
             }
             0xFF1F => {}
             0xFF20..=0xFF23 => {
                 self.ch4
-                    .write_reg(address, value, self.seq_step(div_counter), self.powered_on)
+                    .write_reg(address, value, self.frame_seq_step, self.powered_on)
             }
             NR50_REG => {
                 if self.powered_on {
