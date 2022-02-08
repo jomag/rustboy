@@ -373,7 +373,7 @@ impl MMU {
             0xFEA0..=0xFEFF => {}
 
             // Sound registers
-            0xFF10..=0xFF3F => self.apu.write_reg(addr, value, self.timer.cycle),
+            0xFF10..=0xFF3F => self.apu.write_reg(addr, value),
 
             P1_REG => self.buttons.write_p1(value),
             SB_REG => self.serial.write_reg(SB_REG, value),
