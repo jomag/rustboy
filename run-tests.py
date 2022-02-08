@@ -286,6 +286,7 @@ class MooneyeTestSuite(TestSuite):
         # of subtests, so we add the "acceptance" roms as one group, and the
         # subtests as separate groups.
         acceptance_dir = os.path.join(self.basedir, "acceptance")
+        emulator_only_dir = os.path.join(self.basedir, "emulator-only")
 
         grp = MooneyeTestGroup(name="acceptance", romdir=acceptance_dir)
         self.groups.append(grp)
@@ -294,6 +295,12 @@ class MooneyeTestSuite(TestSuite):
             path = os.path.join(acceptance_dir, name)
             if os.path.isdir(path):
                 grp = MooneyeTestGroup(name=f"acceptance/{name}", romdir=path)
+                self.groups.append(grp)
+
+        for name in os.listdir(emulator_only_dir):
+            path = os.path.join(emulator_only_dir, name)
+            if os.path.isdir(path):
+                grp = MooneyeTestGroup(name=f"emulator-only/{name}", romdir=path)
                 self.groups.append(grp)
 
         for grp in self.groups:

@@ -32,6 +32,10 @@ A personal project to learn Rust and basic emulator development.
 | acceptance/serial | [:red_circle:](x "boot_sclk_align-dmgABCmgb: FAIL") |
 | acceptance/timer | [:green_heart:](x "div_write: PASS") | [:red_circle:](x "rapid_toggle: FAIL") | [:green_heart:](x "tim00: PASS") | [:green_heart:](x "tim00_div_trigger: PASS") | [:green_heart:](x "tim01: PASS") | [:green_heart:](x "tim01_div_trigger: PASS") | [:green_heart:](x "tim10: PASS") | [:green_heart:](x "tim10_div_trigger: PASS") | [:green_heart:](x "tim11: PASS") | [:green_heart:](x "tim11_div_trigger: PASS") | [:red_circle:](x "tima_reload: FAIL") | [:red_circle:](x "tima_write_reloading: FAIL") |
 | | [:red_circle:](x "tma_write_reloading: FAIL") |
+| emulator-only/mbc1 | [:green_heart:](x "bits_bank1: PASS") | [:red_circle:](x "bits_bank2: FAIL") | [:red_circle:](x "bits_mode: FAIL") | [:red_circle:](x "bits_ramg: FAIL") | [:red_circle:](x "multicart_rom_8Mb: FAIL") | [:red_circle:](x "ram_256kb: FAIL") | [:red_circle:](x "ram_64kb: FAIL") | [:red_circle:](x "rom_16Mb: FAIL") | [:red_circle:](x "rom_1Mb: FAIL") | [:red_circle:](x "rom_2Mb: FAIL") | [:red_circle:](x "rom_4Mb: FAIL") | [:red_circle:](x "rom_512kb: FAIL") |
+| | [:red_circle:](x "rom_8Mb: FAIL") |
+| emulator-only/mbc2 | [:red_circle:](x "bits_ramg: FAIL") | [:red_circle:](x "bits_romb: FAIL") | [:red_circle:](x "bits_unused: FAIL") | [:red_circle:](x "ram: FAIL") | [:red_circle:](x "rom_1Mb: FAIL") | [:red_circle:](x "rom_2Mb: FAIL") | [:red_circle:](x "rom_512kb: FAIL") |
+| emulator-only/mbc5 | [:red_circle:](x "rom_16Mb: FAIL") | [:red_circle:](x "rom_1Mb: FAIL") | [:red_circle:](x "rom_2Mb: FAIL") | [:red_circle:](x "rom_32Mb: FAIL") | [:red_circle:](x "rom_4Mb: FAIL") | [:red_circle:](x "rom_512kb: FAIL") | [:red_circle:](x "rom_64Mb: FAIL") | [:red_circle:](x "rom_8Mb: FAIL") |
 
 
 ## Graphics
