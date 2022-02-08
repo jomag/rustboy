@@ -323,7 +323,7 @@ if all_suites or "mooneye" in args.suites:
     mooneye.pretty_print()
     if args.report:
         reports.append(
-            mooneye.build_report(with_title=not single_test, tests_per_row=14)
+            mooneye.build_report(with_title=not single_test, tests_per_row=12)
         )
 
 if all_suites or "blargg" in args.suites:
