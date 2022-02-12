@@ -584,7 +584,7 @@ impl SquareWaveSoundGenerator {
     }
 }
 
-pub const CH3_WAVE_LENGTH: usize = 32;
+pub const CH3_WAVE_MEMORY_SIZE: usize = 16;
 
 pub struct WaveSoundGenerator {
     // ---------
@@ -624,7 +624,7 @@ pub struct WaveSoundGenerator {
     // These are accessed through 16 registers: 0xFF30 - 0xFF3F.
     // Each register holds two 4-bit samples. The upper bits are
     // played first.
-    pub wave: [u8; CH3_WAVE_LENGTH],
+    pub wave: [u8; CH3_WAVE_MEMORY_SIZE],
 
     // Internal enabled flag.
     pub enabled: bool,
@@ -649,6 +649,9 @@ pub struct WaveSoundGenerator {
     // last sample read. Test: "09-wave read while on"
     dmg_wave_read_return_0xff: bool,
 
+    // The sample currently being played
+    sample_buffer: u8,
+
     pub length_counter: LengthCounter,
     pub dac: DAC,
     machine: Machine,
@@ -665,12 +668,12 @@ impl WaveSoundGenerator {
             // For the CGB, the wave is consistently initialized with the values below.
             wave: match machine {
                 Machine::GameBoyDMG | Machine::GameBoyMGB => [
-                    0x8, 0x4, 0x4, 0x0, 0x4, 0x3, 0xA, 0xA, 0x2, 0xD, 0x7, 0x8, 0x9, 0x2, 0x3, 0xC,
-                    0x6, 0x0, 0x5, 0x9, 0x5, 0x9, 0xB, 0x0, 0x3, 0x4, 0xB, 0x8, 0x2, 0xE, 0xD, 0xA,
+                    0x84, 0x40, 0x43, 0xAA, 0x2D, 0x78, 0x92, 0x3C, 0x60, 0x59, 0x59, 0xB0, 0x34,
+                    0xB8, 0x2E, 0xDA,
                 ],
                 Machine::GameBoyCGB | Machine::GameBoySGB => [
-                    0x0, 0x0, 0xF, 0xF, 0x0, 0x0, 0xF, 0xF, 0x0, 0x0, 0xF, 0xF, 0x0, 0x0, 0xF, 0xF,
-                    0x0, 0x0, 0xF, 0xF, 0x0, 0x0, 0xF, 0xF, 0x0, 0x0, 0xF, 0xF, 0x0, 0x0, 0xF, 0xF,
+                    0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00,
+                    0xFF, 0x00, 0xFF,
                 ],
             },
 
@@ -681,6 +684,7 @@ impl WaveSoundGenerator {
             volume_code: 0,
             dac: DAC::new(),
             dmg_wave_read_return_0xff: true,
+            sample_buffer: 0,
             machine,
         }
     }
@@ -695,6 +699,7 @@ impl WaveSoundGenerator {
         self.frequency_timer = 0;
         self.enabled = false;
         self.volume_code = 0;
+        self.sample_buffer = 0;
         self.dac = DAC::new();
     }
 
@@ -735,12 +740,13 @@ impl WaveSoundGenerator {
                     return 0xFF;
                 }
             }
-            let adr = self.wave_position as usize / 2;
-            return (self.wave[adr * 2] << 4) | self.wave[adr * 2 + 1];
+
+            // let adr = self.wave_position as usize / 2;
+            // return (self.wave[adr * 2] << 4) | self.wave[adr * 2 + 1];
+            return self.sample_buffer;
         }
 
-        let adr = address - 0xFF30;
-        (self.wave[adr * 2] << 4) | self.wave[adr * 2 + 1]
+        self.wave[address - 0xFF30]
     }
 
     pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8, powered_on: bool) {
@@ -785,17 +791,46 @@ impl WaveSoundGenerator {
         }
     }
 
+    // Get the 4-bit sample at position n without any side effects
+    pub fn get_sample(&self, n: usize) -> u8 {
+        if n & 1 == 0 {
+            (self.wave[n / 2] >> 4) & 0xF
+        } else {
+            self.wave[n / 2] & 0xF
+        }
+    }
+
     pub fn write_wave_reg(&mut self, address: usize, value: u8) {
         let adr = address - 0xFF30;
-        self.wave[adr * 2] = (value & 0xF0) >> 4;
-        self.wave[adr * 2 + 1] = value & 0x0F
+        self.wave[adr] = value;
     }
 
     fn trigger(&mut self, seq_step: u8) {
+        match self.machine {
+            Machine::GameBoyDMG => {
+                if self.enabled && !self.dmg_wave_read_return_0xff && self.dac.powered_on {
+                    println!("TRIGGER WHILE READING! NOT COMPLETE");
+                    let byte_pos = self.wave_position as usize / 2;
+                    if byte_pos < 4 {
+                        self.wave[0] = self.sample_buffer;
+                    } else {
+                        let src = byte_pos & 0xFC;
+                        self.wave[0] = self.wave[src];
+                        self.wave[1] = self.wave[src + 1];
+                        self.wave[2] = self.wave[src + 2];
+                        self.wave[3] = self.wave[src + 3];
+                    }
+                }
+            }
+            _ => {}
+        }
+
         self.enabled = true;
         self.length_counter.trigger(256, seq_step);
         self.frequency_timer = (2048 - self.frequency) * 2 + 4;
+
         self.wave_position = 0;
+        self.sample_buffer = self.wave[self.wave_position as usize / 2];
 
         // Obscure behavior, DMG only: as the sample buffer has
         // just been read, reads from the wave memory should
@@ -826,6 +861,7 @@ impl WaveSoundGenerator {
             // (NR13, NR14) and increment the wave position
             self.frequency_timer += (2048 - self.frequency) * 2 - 4; // + (self.frequency_timer & 3) - 4;
             self.wave_position = (self.wave_position + 1) & 31;
+            self.sample_buffer = self.wave[self.wave_position as usize / 2]
         } else {
             self.frequency_timer -= 4;
 
@@ -833,7 +869,11 @@ impl WaveSoundGenerator {
             self.dmg_wave_read_return_0xff = true;
         }
 
-        let mut out = self.wave[self.wave_position as usize];
+        let mut out = if self.wave_position & 1 == 0 {
+            self.sample_buffer >> 4 & 0xF
+        } else {
+            self.sample_buffer & 0xF
+        };
 
         // Update length counter at 256 Hz
         if hz256 && self.length_counter.count_down() {
