@@ -517,8 +517,8 @@ impl SquareWaveSoundGenerator {
         // FIXME: Handle frequency timer being less than 4.
         //        When so, add to the frequency timer instead:
         //        `if (tmr <= 4) { tmr += freq } else { tmr -= 4 }`
-        if self.frequency_timer >= 4 {
-            self.frequency_timer -= 4;
+        if self.frequency_timer >= 2 {
+            self.frequency_timer -= 2;
 
             // If frequency timer reaches 0, reset it to the selected frequency
             // (NR13, NR14) and increment the wave duty position
@@ -647,7 +647,8 @@ pub struct WaveSoundGenerator {
     // the DMG will return 0xFF for every read.
     // The CGB works the same, except it always returns the
     // last sample read. Test: "09-wave read while on"
-    dmg_wave_read_return_0xff: bool,
+    dmg_wave_read_return_0xff: u8,
+    dmg_corrupt_on_trigger: u8,
 
     // The sample currently being played
     sample_buffer: u8,
@@ -683,7 +684,8 @@ impl WaveSoundGenerator {
             enabled: false,
             volume_code: 0,
             dac: DAC::new(),
-            dmg_wave_read_return_0xff: true,
+            dmg_wave_read_return_0xff: 0,
+            dmg_corrupt_on_trigger: 0,
             sample_buffer: 0,
             machine,
         }
@@ -736,13 +738,11 @@ impl WaveSoundGenerator {
         // the byte was "played". After that 0xFF is returned instead.
         if self.enabled {
             if matches!(self.machine, Machine::GameBoyDMG) {
-                if self.dmg_wave_read_return_0xff {
+                if self.dmg_wave_read_return_0xff == 0 {
                     return 0xFF;
                 }
             }
 
-            // let adr = self.wave_position as usize / 2;
-            // return (self.wave[adr * 2] << 4) | self.wave[adr * 2 + 1];
             return self.sample_buffer;
         }
 
@@ -808,13 +808,15 @@ impl WaveSoundGenerator {
     fn trigger(&mut self, seq_step: u8) {
         match self.machine {
             Machine::GameBoyDMG => {
-                if self.enabled && !self.dmg_wave_read_return_0xff && self.dac.powered_on {
-                    println!("TRIGGER WHILE READING! NOT COMPLETE");
-                    let byte_pos = self.wave_position as usize / 2;
+                if self.enabled
+                    && self.frequency_timer <= 2 // >= (2048 - self.frequency) * 2 + 2
+                    && self.dac.powered_on
+                {
+                    let byte_pos = (self.wave_position + 1) as usize / 2;
                     if byte_pos < 4 {
-                        self.wave[0] = self.sample_buffer;
+                        self.wave[0] = self.wave[byte_pos];
                     } else {
-                        let src = byte_pos & 0xFC;
+                        let src = byte_pos & 0xC;
                         self.wave[0] = self.wave[src];
                         self.wave[1] = self.wave[src + 1];
                         self.wave[2] = self.wave[src + 2];
@@ -827,7 +829,7 @@ impl WaveSoundGenerator {
 
         self.enabled = true;
         self.length_counter.trigger(256, seq_step);
-        self.frequency_timer = (2048 - self.frequency) * 2 + 4;
+        self.frequency_timer = (2048 - self.frequency) * 2 + 6;
 
         self.wave_position = 0;
         self.sample_buffer = self.wave[self.wave_position as usize / 2];
@@ -835,7 +837,8 @@ impl WaveSoundGenerator {
         // Obscure behavior, DMG only: as the sample buffer has
         // just been read, reads from the wave memory should
         // return that value for the next 2 (?) cycles.
-        self.dmg_wave_read_return_0xff = false;
+        // self.dmg_wave_read_return_0xff = 2;
+        self.dmg_corrupt_on_trigger = 4;
 
         // If DAC is not powered on, immediately disable the channel again
         if !self.dac.powered_on {
@@ -844,29 +847,43 @@ impl WaveSoundGenerator {
     }
 
     pub fn update(&mut self, hz256: bool) -> f32 {
-        if self.frequency_timer < 4 {
-            if self.frequency_timer == 2 {
-                // Since the APU is emulated at 1 MHz, while the real
-                // APU runs at 2 MHz, some special handling is required
-                // here: one obscure behavior of DMG is that it returns
-                // the last sample read for 2 cycles, and then 0xFF after
-                // that. So if there's 2 cycles remaining at this point,
-                // it means that the next operation will be 2 cycles later,
-                // and if that is a read of the wave memory, it should
-                // return the last read sample value.
-                self.dmg_wave_read_return_0xff = false;
-            }
+        // assert!(self.frequency_timer % 2 == 0);
+
+        // if self.frequency_timer < 2 {
+        // self.dmg_wave_read_return_0xff = 3;
+        // }
+
+        if self.frequency_timer == 8 {
+            self.dmg_corrupt_on_trigger = 4;
+        }
+
+        if self.frequency_timer <= 1 {
+            // Since the APU is emulated at 1 MHz, while the real
+            // APU runs at 2 MHz, some special handling is required
+            // here: one obscure behavior of DMG is that it returns
+            // the last sample read for 2 cycles, and then 0xFF after
+            // that. So if there's 2 cycles remaining at this point,
+            // it means that the next operation will be 2 cycles later,
+            // and if that is a read of the wave memory, it should
+            // return the last read sample value.
+            self.dmg_wave_read_return_0xff = 2;
 
             // If frequency timer reaches 0, reset it to the selected frequency
             // (NR13, NR14) and increment the wave position
-            self.frequency_timer += (2048 - self.frequency) * 2 - 4; // + (self.frequency_timer & 3) - 4;
+            self.frequency_timer = (2048 - self.frequency) * 2;
             self.wave_position = (self.wave_position + 1) & 31;
             self.sample_buffer = self.wave[self.wave_position as usize / 2]
         } else {
-            self.frequency_timer -= 4;
+            self.frequency_timer -= 1;
 
             // See comment above.
-            self.dmg_wave_read_return_0xff = true;
+            if self.dmg_wave_read_return_0xff > 0 {
+                self.dmg_wave_read_return_0xff -= 1;
+            }
+        }
+
+        if self.dmg_corrupt_on_trigger > 0 {
+            self.dmg_corrupt_on_trigger -= 1;
         }
 
         let mut out = if self.wave_position & 1 == 0 {

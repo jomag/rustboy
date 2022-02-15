@@ -202,17 +202,19 @@ impl MMU {
     pub fn tick(&mut self, cycles: u32) {
         assert!(cycles % 4 == 0);
 
-        self.timer.update(cycles);
+        for _ in 0..cycles {
+            self.timer.one_cycle();
+            // self.timer.one_cycle();
+
+            // Update APU. The APU needs the full 16-bit
+            // DIV counter for the frame sequencer.
+            self.apu.update(self.timer.cycle);
+        }
+
         self.buttons.update();
 
         if self.lcd.update(cycles) {
             self.display_updated = true;
-        }
-
-        for _ in 0..(cycles / 4) {
-            // Update APU. The APU needs the full 16-bit
-            // DIV counter for the frame sequencer.
-            self.apu.update(self.timer.cycle);
         }
 
         if !self.reg.halted {
