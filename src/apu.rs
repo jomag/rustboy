@@ -801,6 +801,18 @@ impl WaveSoundGenerator {
     }
 
     pub fn write_wave_reg(&mut self, address: usize, value: u8) {
+        if self.enabled {
+            if matches!(self.machine, Machine::GameBoyDMG) {
+                if self.dmg_wave_read_return_0xff == 0 {
+                    return;
+                }
+            }
+
+            let adr = self.wave_position / 2;
+            self.wave[adr as usize] = value;
+            return;
+        }
+
         let adr = address - 0xFF30;
         self.wave[adr] = value;
     }
