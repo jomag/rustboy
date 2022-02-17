@@ -869,7 +869,9 @@ impl WaveSoundGenerator {
             self.dmg_corrupt_on_trigger = 4;
         }
 
-        if self.frequency_timer <= 1 {
+        if self.frequency_timer <= 2 {
+            assert!(self.frequency_timer != 1);
+
             // Since the APU is emulated at 1 MHz, while the real
             // APU runs at 2 MHz, some special handling is required
             // here: one obscure behavior of DMG is that it returns
@@ -886,16 +888,16 @@ impl WaveSoundGenerator {
             self.wave_position = (self.wave_position + 1) & 31;
             self.sample_buffer = self.wave[self.wave_position as usize / 2]
         } else {
-            self.frequency_timer -= 1;
+            self.frequency_timer -= 2;
 
             // See comment above.
             if self.dmg_wave_read_return_0xff > 0 {
-                self.dmg_wave_read_return_0xff -= 1;
+                self.dmg_wave_read_return_0xff -= 2;
             }
         }
 
         if self.dmg_corrupt_on_trigger > 0 {
-            self.dmg_corrupt_on_trigger -= 1;
+            self.dmg_corrupt_on_trigger -= 2;
         }
 
         let mut out = if self.wave_position & 1 == 0 {
@@ -1260,6 +1262,9 @@ impl AudioProcessingUnit {
         let mut hz64 = false;
         let mut hz128 = false;
         let mut hz256 = false;
+
+        assert!(div_counter % 2 == 0);
+
         if div_counter % 8192 == 0 {
             self.frame_seq_step = (self.frame_seq_step + 1) & 7;
             hz64 = self.frame_seq_step == 7;
