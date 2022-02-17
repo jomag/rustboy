@@ -205,8 +205,9 @@ impl MMU {
         for _ in 0..cycles / 2 {
             self.timer.one_cycle();
             self.timer.one_cycle();
-            self.apu.update(self.timer.cycle);
         }
+
+        self.apu.update(self.timer.cycle);
 
         self.buttons.update();
 

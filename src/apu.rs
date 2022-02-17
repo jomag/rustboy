@@ -15,8 +15,6 @@
 //   when NR52 is powered off. See the Blargg doc above.
 // - After the sound hardware is powered on, frame sequencer should be
 //   reset so next step is step 0.
-// - Need to differentiate between a channel being "enabled" and the
-//   DAC being enabled?
 // - Remove duplicated envelope code
 
 use ringbuf::Producer;
@@ -513,19 +511,19 @@ impl SquareWaveSoundGenerator {
     }
 
     pub fn update(&mut self, hz64: bool, hz128: bool, hz256: bool) -> f32 {
+        assert!(self.frequency_timer % 4 == 0);
+
         // Decrement frequency timer
         // FIXME: Handle frequency timer being less than 4.
         //        When so, add to the frequency timer instead:
         //        `if (tmr <= 4) { tmr += freq } else { tmr -= 4 }`
-        if self.frequency_timer >= 2 {
-            self.frequency_timer -= 2;
-
+        if self.frequency_timer <= 4 {
             // If frequency timer reaches 0, reset it to the selected frequency
             // (NR13, NR14) and increment the wave duty position
-            if self.frequency_timer == 0 {
-                self.frequency_timer = (2048 - self.frequency) * 4;
-                self.wave_duty_position = (self.wave_duty_position + 1) & 7;
-            }
+            self.frequency_timer = (2048 - self.frequency) * 4;
+            self.wave_duty_position = (self.wave_duty_position + 1) & 7;
+        } else {
+            self.frequency_timer -= 4;
         }
 
         // There are four available duty patterns that sets for
@@ -647,8 +645,7 @@ pub struct WaveSoundGenerator {
     // the DMG will return 0xFF for every read.
     // The CGB works the same, except it always returns the
     // last sample read. Test: "09-wave read while on"
-    dmg_wave_read_return_0xff: u8,
-    dmg_corrupt_on_trigger: u8,
+    wave_recently_read: bool,
 
     // The sample currently being played
     sample_buffer: u8,
@@ -684,8 +681,7 @@ impl WaveSoundGenerator {
             enabled: false,
             volume_code: 0,
             dac: DAC::new(),
-            dmg_wave_read_return_0xff: 0,
-            dmg_corrupt_on_trigger: 0,
+            wave_recently_read: false,
             sample_buffer: 0,
             machine,
         }
@@ -738,7 +734,7 @@ impl WaveSoundGenerator {
         // the byte was "played". After that 0xFF is returned instead.
         if self.enabled {
             if matches!(self.machine, Machine::GameBoyDMG) {
-                if self.dmg_wave_read_return_0xff == 0 {
+                if !self.wave_recently_read {
                     return 0xFF;
                 }
             }
@@ -803,7 +799,7 @@ impl WaveSoundGenerator {
     pub fn write_wave_reg(&mut self, address: usize, value: u8) {
         if self.enabled {
             if matches!(self.machine, Machine::GameBoyDMG) {
-                if self.dmg_wave_read_return_0xff == 0 {
+                if !self.wave_recently_read {
                     return;
                 }
             }
@@ -846,12 +842,6 @@ impl WaveSoundGenerator {
         self.wave_position = 0;
         self.sample_buffer = self.wave[self.wave_position as usize / 2];
 
-        // Obscure behavior, DMG only: as the sample buffer has
-        // just been read, reads from the wave memory should
-        // return that value for the next 2 (?) cycles.
-        // self.dmg_wave_read_return_0xff = 2;
-        self.dmg_corrupt_on_trigger = 4;
-
         // If DAC is not powered on, immediately disable the channel again
         if !self.dac.powered_on {
             self.enabled = false
@@ -859,45 +849,20 @@ impl WaveSoundGenerator {
     }
 
     pub fn update(&mut self, hz256: bool) -> f32 {
-        // assert!(self.frequency_timer % 2 == 0);
-
-        // if self.frequency_timer < 2 {
-        // self.dmg_wave_read_return_0xff = 3;
-        // }
-
-        if self.frequency_timer == 8 {
-            self.dmg_corrupt_on_trigger = 4;
-        }
-
-        if self.frequency_timer <= 2 {
-            assert!(self.frequency_timer != 1);
-
-            // Since the APU is emulated at 1 MHz, while the real
-            // APU runs at 2 MHz, some special handling is required
-            // here: one obscure behavior of DMG is that it returns
-            // the last sample read for 2 cycles, and then 0xFF after
-            // that. So if there's 2 cycles remaining at this point,
-            // it means that the next operation will be 2 cycles later,
-            // and if that is a read of the wave memory, it should
-            // return the last read sample value.
-            self.dmg_wave_read_return_0xff = 2;
+        if self.frequency_timer <= 4 {
+            // Handle obscure behavior in DMG
+            if self.frequency_timer == 4 {
+                self.wave_recently_read = true;
+            }
 
             // If frequency timer reaches 0, reset it to the selected frequency
             // (NR13, NR14) and increment the wave position
-            self.frequency_timer = (2048 - self.frequency) * 2;
+            self.frequency_timer += (2048 - self.frequency) * 2 - 4;
             self.wave_position = (self.wave_position + 1) & 31;
             self.sample_buffer = self.wave[self.wave_position as usize / 2]
         } else {
-            self.frequency_timer -= 2;
-
-            // See comment above.
-            if self.dmg_wave_read_return_0xff > 0 {
-                self.dmg_wave_read_return_0xff -= 2;
-            }
-        }
-
-        if self.dmg_corrupt_on_trigger > 0 {
-            self.dmg_corrupt_on_trigger -= 2;
+            self.frequency_timer -= 4;
+            self.wave_recently_read = false;
         }
 
         let mut out = if self.wave_position & 1 == 0 {
@@ -1108,24 +1073,24 @@ impl NoiseSoundGenerator {
     }
 
     pub fn update(&mut self, hz64: bool, hz256: bool) -> f32 {
+        assert!(self.frequency_timer % 4 == 0);
+
         // Decrement frequency timer
-        if self.frequency_timer >= 4 {
-            self.frequency_timer -= 4;
+        if self.frequency_timer <= 4 {
+            let divisor_code = self.nr43 & 7;
+            let divisor = NOISE_DIVISOR_MAP[divisor_code as usize];
+            let shift_amount = (self.nr43 & 0xF0) >> 4;
+            self.frequency_timer = (divisor as u16) << (shift_amount as u16);
 
-            if self.frequency_timer == 0 {
-                let divisor_code = self.nr43 & 7;
-                let divisor = NOISE_DIVISOR_MAP[divisor_code as usize];
-                let shift_amount = (self.nr43 & 0xF0) >> 4;
-                self.frequency_timer = (divisor as u16) << (shift_amount as u16);
+            let xor_result = (self.lfsr & 1) ^ ((self.lfsr & 2) >> 1);
+            self.lfsr = (self.lfsr >> 1) | (xor_result << 14);
 
-                let xor_result = (self.lfsr & 1) ^ ((self.lfsr & 2) >> 1);
-                self.lfsr = (self.lfsr >> 1) | (xor_result << 14);
-
-                if self.nr43 & 0b1000 != 0 {
-                    self.lfsr &= !(1 << 6);
-                    self.lfsr |= xor_result << 6;
-                }
+            if self.nr43 & 0b1000 != 0 {
+                self.lfsr &= !(1 << 6);
+                self.lfsr |= xor_result << 6;
             }
+        } else {
+            self.frequency_timer -= 4;
         }
 
         // Update length counter at 256 Hz
