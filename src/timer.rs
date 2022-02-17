@@ -85,7 +85,7 @@ impl Timer {
         }
     }
 
-    fn one_cycle(&mut self) {
+    pub fn one_cycle(&mut self) {
         self.abs_cycle = self.abs_cycle.wrapping_add(1);
 
         if self.abs_cycle == self.abs_cycle_breakpoint {
