@@ -816,10 +816,7 @@ impl WaveSoundGenerator {
     fn trigger(&mut self, seq_step: u8) {
         match self.machine {
             Machine::GameBoyDMG => {
-                if self.enabled
-                    && self.frequency_timer <= 2 // >= (2048 - self.frequency) * 2 + 2
-                    && self.dac.powered_on
-                {
+                if self.enabled && self.frequency_timer <= 2 && self.dac.powered_on {
                     let byte_pos = (self.wave_position + 1) as usize / 2;
                     if byte_pos < 4 {
                         self.wave[0] = self.wave[byte_pos];
