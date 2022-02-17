@@ -31,26 +31,6 @@ fn find_sdl_gl_driver() -> Option<u32> {
     None
 }
 
-fn should_enter_stepping(emu: &mut Emu, breakpoints: &Vec<u16>) -> bool {
-    if emu.mmu.timer.trigger_debug {
-        emu.mmu.timer.trigger_debug = false;
-        return true;
-    }
-
-    if breakpoints.contains(&emu.mmu.reg.pc) {
-        println!("- at breakpoint (PC: 0x{:04X})", emu.mmu.reg.pc);
-        return true;
-    }
-
-    if emu.mmu.watch_triggered {
-        println!("Break: watched memory change (PC 0x{:04X})", emu.mmu.reg.pc);
-        emu.mmu.watch_triggered = false;
-        return true;
-    }
-
-    return false;
-}
-
 pub fn run_with_minimal_ui(
     title: &str,
     width: Option<u32>,
@@ -157,10 +137,6 @@ pub fn run_with_minimal_ui(
             }*/
         }
 
-        if should_enter_stepping(emu, &breakpoints) {
-            stepping = true;
-        }
-
         if ctrlc_event.load(Ordering::SeqCst) {
             ctrlc_event.store(false, Ordering::SeqCst);
             stepping = true;
@@ -247,11 +223,7 @@ pub fn run_with_minimal_ui(
         emu.mmu.exec_op();
 
         while !stepping && !emu.mmu.display_updated {
-            if should_enter_stepping(emu, &breakpoints) {
-                stepping = true;
-            } else {
-                emu.mmu.exec_op();
-            }
+            emu.mmu.exec_op();
         }
 
         if emu.mmu.display_updated {

@@ -47,8 +47,6 @@ pub struct Timer {
 
     pub irq: u8,
 
-    pub trigger_debug: bool,
-
     // Break at absolute cycle. Cycle 0 is ignored.
     pub abs_cycle_breakpoint: u64,
 }
@@ -64,7 +62,6 @@ impl Timer {
             tima: 0,
             tma: 0,
             irq: 0,
-            trigger_debug: false,
             abs_cycle_breakpoint: 0,
         }
     }
@@ -79,20 +76,9 @@ impl Timer {
         (self.cycle >> 8) as u8
     }
 
-    pub fn update(&mut self, cycles: u32) {
-        for _ in 0..cycles {
-            self.one_cycle();
-        }
-    }
-
-    pub fn one_cycle(&mut self) {
-        self.abs_cycle = self.abs_cycle.wrapping_add(1);
-
-        if self.abs_cycle == self.abs_cycle_breakpoint {
-            self.trigger_debug = true;
-        }
-
-        self.cycle = self.cycle.wrapping_add(1);
+    pub fn update_4t(&mut self) {
+        self.abs_cycle = self.abs_cycle.wrapping_add(4);
+        self.cycle = self.cycle.wrapping_add(4);
 
         let bit = if self.tac & TAC_ENABLE_BIT != 0 {
             CLOCK_SELECTION[(self.tac & 3) as usize]
@@ -100,6 +86,9 @@ impl Timer {
             0
         };
 
+        // Note that since this function is called every
+        // 4'th T-cycle, the cycle count is always divisible
+        // by 4 and so are all the possible clock selections.
         let bit_state = self.cycle & bit != 0;
 
         if self.prev_bit_state && !bit_state {
