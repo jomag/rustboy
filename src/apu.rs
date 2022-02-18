@@ -510,7 +510,7 @@ impl SquareWaveSoundGenerator {
         }
     }
 
-    pub fn update(&mut self, hz64: bool, hz128: bool, hz256: bool) -> f32 {
+    pub fn update_4t(&mut self, hz64: bool, hz128: bool, hz256: bool) -> f32 {
         assert!(self.frequency_timer % 4 == 0);
 
         // Decrement frequency timer
@@ -845,7 +845,7 @@ impl WaveSoundGenerator {
         }
     }
 
-    pub fn update(&mut self, hz256: bool) -> f32 {
+    pub fn update_4t(&mut self, hz256: bool) -> f32 {
         if self.frequency_timer <= 4 {
             // Handle obscure behavior in DMG
             if self.frequency_timer == 4 {
@@ -1069,7 +1069,7 @@ impl NoiseSoundGenerator {
         }
     }
 
-    pub fn update(&mut self, hz64: bool, hz256: bool) -> f32 {
+    pub fn update_4t(&mut self, hz64: bool, hz256: bool) -> f32 {
         assert!(self.frequency_timer % 4 == 0);
 
         // Decrement frequency timer
@@ -1191,7 +1191,7 @@ impl AudioProcessingUnit {
         self.powered_on = false;
     }
 
-    pub fn update(&mut self, div_counter: u16) {
+    pub fn update_4t(&mut self, div_counter: u16) {
         // NR52 bit 7 is used to disable the sound system completely
 
         // The Frame Sequencer is used to generate clocks as 256 Hz,
@@ -1234,10 +1234,10 @@ impl AudioProcessingUnit {
             hz256 = self.frame_seq_step & 1 == 0;
         }
 
-        let ch1_output = self.s1.update(hz64, hz128, hz256);
-        let ch2_output = self.s2.update(hz64, hz128, hz256);
-        let ch3_output = self.ch3.update(hz256);
-        let ch4_output = self.ch4.update(hz64, hz256);
+        let ch1_output = self.s1.update_4t(hz64, hz128, hz256);
+        let ch2_output = self.s2.update_4t(hz64, hz128, hz256);
+        let ch3_output = self.ch3.update_4t(hz256);
+        let ch4_output = self.ch4.update_4t(hz64, hz256);
 
         let sample = (ch1_output + ch2_output + ch3_output + ch4_output) as f32;
 

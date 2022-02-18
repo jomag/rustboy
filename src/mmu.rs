@@ -202,8 +202,10 @@ impl MMU {
     pub fn tick(&mut self, cycles: u32) {
         assert!(cycles % 4 == 0);
 
-        self.timer.update_4t();
-        self.apu.update(self.timer.cycle);
+        for _ in 0..cycles / 4 {
+            self.timer.update_4t();
+            self.apu.update_4t(self.timer.cycle);
+        }
 
         self.buttons.update();
 
