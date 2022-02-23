@@ -759,8 +759,9 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
         0xCE => format!("ADC  A, 0x{:02X}", mmu.direct_read(addr + 1)),
 
         0xD2 => format!("JP   NC, 0x{:04X}", mmu.direct_read_u16(addr + 1)),
-        0xD4 => format!("CALL NC, ${:04X}", mmu.direct_read_u16(addr + 1)),
+        0xD4 => format!("CALL NC, 0x{:04X}", mmu.direct_read_u16(addr + 1)),
         0xD6 => format!("SUB  0x{:02X}", mmu.direct_read(addr + 1)),
+        0xDA => format!("JP   C, 0x{:04X}", mmu.direct_read_u16(addr + 1)),
         0xDC => format!("CALL C, 0x{:02X}", mmu.direct_read_u16(addr + 1)),
         0xDD => format!("! Illegal op code: 0x{:02X}", op),
         0xDE => format!("SBC  A, 0x{:02X}", mmu.direct_read(addr + 1)),

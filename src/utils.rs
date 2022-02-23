@@ -14,3 +14,15 @@ pub fn read_zero_terminated_string(mmu: &MMU, mut adr: u16) -> Result<String, st
         Err(e) => Err(e),
     }
 }
+
+pub trait VecExt<T> {
+    fn push_if(&mut self, cond: bool, val: T);
+}
+
+impl<T> VecExt<T> for Vec<T> {
+    fn push_if(&mut self, cond: bool, val: T) {
+        if cond {
+            self.push(val);
+        }
+    }
+}

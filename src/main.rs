@@ -11,6 +11,7 @@ mod macros;
 mod apu;
 mod buttons;
 mod cartridge;
+mod conv;
 mod debug;
 mod dma;
 mod emu;

@@ -25,7 +25,8 @@ use winit::{
 
 use super::{
     audio_window::render_audio_window, breakpoints_window::BreakpointsWindow,
-    debug_window::DebugWindow, render_stats::RenderStats, serial_window::SerialWindow,
+    cartridge_window::CartridgeWindow, debug_window::DebugWindow, memory_window::MemoryWindow,
+    render_stats::RenderStats, serial_window::SerialWindow,
 };
 
 const TARGET_FPS: u64 = 60;
@@ -62,6 +63,8 @@ struct MoeApp {
     debug_window: DebugWindow,
     breakpoints_window: BreakpointsWindow,
     serial_window: SerialWindow,
+    cartridge_window: CartridgeWindow,
+    memory_window: MemoryWindow,
 }
 
 pub struct WaveAudioRecorder {
@@ -243,6 +246,8 @@ impl MoeApp {
             debug_window: DebugWindow::new(),
             breakpoints_window: BreakpointsWindow::new(),
             serial_window: SerialWindow::new(),
+            cartridge_window: CartridgeWindow::new(),
+            memory_window: MemoryWindow::new(),
             serial_buffer_consumer: None,
         }
     }
@@ -351,6 +356,8 @@ impl MoeApp {
         self.debug_window.render(ctx, &mut self.emu, debug);
         self.breakpoints_window.render(ctx, &mut self.emu, debug);
         self.serial_window.render(ctx);
+        self.cartridge_window.render(ctx, &mut self.emu);
+        self.memory_window.render(ctx, &mut self.emu);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading(APPNAME);

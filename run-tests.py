@@ -327,9 +327,10 @@ if all_suites or "mooneye" in args.suites:
         )
 
 if all_suites or "blargg" in args.suites:
+    skip = ["interrupt_time"]  # CGB only
     blargg = BlarggTestSuite(BLARGG_DIR)
     blargg.setup()
-    blargg.run(skip=[])
+    blargg.run(skip=skip)
     blargg.pretty_print()
     if args.report:
         reports.append(
