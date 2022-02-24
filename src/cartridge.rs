@@ -262,7 +262,8 @@ pub struct Cartridge {
     mbc1_bank_reg2: u8,
     pub mbc1_bank_mode: u8,
 
-    rom_offset: usize,
+    pub rom_offset_0x0000_0x3fff: usize,
+    pub rom_offset_0x4000_0x7fff: usize,
     ram_offset: usize,
 }
 
@@ -282,7 +283,9 @@ impl Cartridge {
             mbc1_bank_mode: 0,
 
             ram_offset: 0,
-            rom_offset: 0,
+
+            rom_offset_0x0000_0x3fff: 0,
+            rom_offset_0x4000_0x7fff: 0,
         }
     }
 
@@ -323,7 +326,8 @@ impl Cartridge {
                     mbc1_bank_mode: 0,
                     mbc1_ram_enabled: false,
                     ram_offset: 0,
-                    rom_offset: 0,
+                    rom_offset_0x0000_0x3fff: 0,
+                    rom_offset_0x4000_0x7fff: 0,
                 };
 
                 cartridge.update_offsets();
@@ -380,21 +384,7 @@ impl Cartridge {
         self.mbc1_bank_reg2 = 0;
         self.mbc1_bank_mode = 0;
         self.mbc1_ram_enabled = false;
-    }
-
-    pub fn selected_rom_bank(&self) -> usize {
-        let bank_mask = (self.rom_bank_count() - 1) as u8;
-
-        let reg1 = self.mbc1_bank_reg1 & 0b1111;
-        let lower = if reg1 == 0 { 1 } else { reg1 };
-
-        let upper = if self.mbc1_bank_mode == 0 && self.rom_size() >= conv::MIB {
-            self.mbc1_bank_reg2 & 0b11
-        } else {
-            0
-        };
-
-        return ((lower | (upper << 5)) & bank_mask) as usize;
+        self.update_offsets()
     }
 
     pub fn selected_ram_bank(&self) -> usize {
@@ -410,7 +400,7 @@ impl Cartridge {
             return 0;
         }
 
-        if self.rom_size() >= conv::MIB {
+        if self.rom_size() >= conv::MIB / 8 {
             return 0;
         } else {
             return (self.mbc1_bank_reg2 & 0b11 & bank_mask) as usize;
@@ -419,17 +409,16 @@ impl Cartridge {
 
     fn update_offsets(&mut self) {
         let bank_size = conv::kib(16);
-        let bank = self.selected_rom_bank();
+        let mask = (self.rom_bank_count() * bank_size) - 1;
 
-        if self.rom_size() >= conv::MIB {
-            if bank & 0b11111 != 0 || self.mbc1_bank_mode == 1 {
-                self.rom_offset = bank * bank_size;
-            } else {
-                self.rom_offset = (bank | 1) * bank_size;
-            }
+        self.rom_offset_0x0000_0x3fff = if self.mbc1_bank_mode == 0 {
+            0
         } else {
-            self.rom_offset = (bank | 1) * bank_size;
-        }
+            ((self.mbc1_bank_reg2 as usize) << 5) * bank_size
+        } & mask;
+
+        self.rom_offset_0x4000_0x7fff =
+            ((((self.mbc1_bank_reg2 << 5) | self.mbc1_bank_reg1) as usize) * bank_size) & mask;
 
         self.ram_offset = self.selected_ram_bank() * conv::kib(8);
     }
@@ -478,15 +467,15 @@ impl Cartridge {
             },
 
             MBC1 { .. } => match adr {
-                0x0000..=0x3FFF => self.rom[adr],
-                0x4000..=0x7FFF => self.rom[self.rom_offset + adr - 0x4000],
+                0x0000..=0x3FFF => self.rom[self.rom_offset_0x0000_0x3fff + adr],
+                0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + adr - 0x4000],
                 0xA000..=0xBFFF => self.read_ram(adr - 0xA000),
                 _ => 0,
             },
 
             MBC3 { .. } => match adr {
                 0x0000..=0x3FFF => self.rom[adr],
-                0x4000..=0x7FFF => self.rom[self.rom_offset + adr - 0x4000],
+                0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + adr - 0x4000],
                 0xA000..=0xBFFF => match self.aux_selection {
                     RAM => self.read_ram(adr - 0xA000),
                     RTC => self.read_rtc(adr - 0xA000),
@@ -518,11 +507,11 @@ impl Cartridge {
                     self.update_offsets();
                 }
                 0x2000..=0x3FFF => {
-                    self.mbc1_bank_reg1 = value;
+                    self.mbc1_bank_reg1 = if value == 0 { 1 } else { value & 0b11111 };
                     self.update_offsets();
                 }
                 0x4000..=0x5FFF => {
-                    self.mbc1_bank_reg2 = value;
+                    self.mbc1_bank_reg2 = value & 0b11;
                     self.update_offsets();
                 }
                 0x6000..=0x7FFF => {
