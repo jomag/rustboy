@@ -450,20 +450,24 @@ impl Cartridge {
     }
 
     fn update_offsets(&mut self) {
-        let bank_mask = if self.mbc1_is_multicart {
-            self.rom_bank_count() - 1
-        } else {
-            (self.rom_bank_count() - 1) & 0b11_01111
-        };
+        let bank_mask = self.rom_bank_count() - 1;
 
         self.rom_offset_0x0000_0x3fff = if self.mbc1_bank_mode == 0 {
             0
         } else {
-            (((self.mbc1_bank_reg2 as usize) << 5) & bank_mask) << 14
+            if self.mbc1_is_multicart {
+                (((self.mbc1_bank_reg2 as usize) << 4) & bank_mask) << 14
+            } else {
+                (((self.mbc1_bank_reg2 as usize) << 5) & bank_mask) << 14
+            }
         };
 
-        self.rom_offset_0x4000_0x7fff =
-            ((((self.mbc1_bank_reg2 << 5) | self.mbc1_bank_reg1) as usize) & bank_mask) << 14;
+        self.rom_offset_0x4000_0x7fff = if self.mbc1_is_multicart {
+            ((((self.mbc1_bank_reg2 << 4) | (self.mbc1_bank_reg1 & 0b1111)) as usize) & bank_mask)
+                << 14
+        } else {
+            ((((self.mbc1_bank_reg2 << 5) | self.mbc1_bank_reg1) as usize) & bank_mask) << 14
+        };
 
         self.ram_offset = self.selected_ram_bank() * conv::kib(8);
 
