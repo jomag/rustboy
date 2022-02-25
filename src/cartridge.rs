@@ -13,6 +13,40 @@ struct RTC {
     prep_latch: bool,
 }
 
+pub fn is_mbc1_multicart(rom: &Box<[u8]>) -> bool {
+    // There's nothing in the header that tells if the cartridge is
+    // an multicart. All known multicarts are 8 Mbit. Bit 4 in the
+    // first bank register is not connected, which reduces the number
+    // of bank bits to 6. Check all banks if they contain the Nintendo
+    // logo. If two or more banks do so, it's likely a multicart.
+    // Given the above, the possible logo offsets are: 0x00104,
+    // 0x40104, 0x80104 and 0xC0104
+    const logo: [u8; 48] = [
+        0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00,
+        0x0D, 0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E, 0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD,
+        0xD9, 0x99, 0xBB, 0xBB, 0x67, 0x63, 0x6E, 0x0E, 0xEC, 0xCC, 0xDD, 0xDC, 0x99, 0x9F, 0xBB,
+        0xB9, 0x33, 0x3E,
+    ];
+
+    let validate_logo = |offset: usize| {
+        for i in 0..48 {
+            if rom[offset + i] != logo[i] {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    let mut count = 0;
+    for offset in [0x00104, 0x40104, 0x80104, 0xC0104] {
+        if validate_logo(offset) {
+            count += 1;
+        }
+    }
+
+    return count > 1;
+}
+
 // Real-time clock as used in MBC3 cartridges.
 //
 // The RTC implementation is not perfect:
@@ -261,6 +295,7 @@ pub struct Cartridge {
     mbc1_bank_reg1: u8,
     mbc1_bank_reg2: u8,
     pub mbc1_bank_mode: u8,
+    mbc1_is_multicart: bool,
 
     pub rom_offset_0x0000_0x3fff: usize,
     pub rom_offset_0x4000_0x7fff: usize,
@@ -281,6 +316,7 @@ impl Cartridge {
             mbc1_bank_reg1: 1,
             mbc1_bank_reg2: 0,
             mbc1_bank_mode: 0,
+            mbc1_is_multicart: false,
 
             ram_offset: 0,
 
@@ -314,6 +350,11 @@ impl Cartridge {
                     false => None,
                 };
 
+                let mbc1_is_multicart = match cartridge_type {
+                    CartridgeType::MBC1 { .. } => is_mbc1_multicart(&rom),
+                    _ => false,
+                };
+
                 let mut cartridge = Cartridge {
                     cartridge_type,
                     aux_selection: Aux::RAM,
@@ -325,6 +366,7 @@ impl Cartridge {
                     mbc1_bank_reg2: 0,
                     mbc1_bank_mode: 0,
                     mbc1_ram_enabled: false,
+                    mbc1_is_multicart,
                     ram_offset: 0,
                     rom_offset_0x0000_0x3fff: 0,
                     rom_offset_0x4000_0x7fff: 0,
@@ -408,19 +450,32 @@ impl Cartridge {
     }
 
     fn update_offsets(&mut self) {
-        let bank_size = conv::kib(16);
-        let mask = (self.rom_bank_count() * bank_size) - 1;
+        let bank_mask = if self.mbc1_is_multicart {
+            self.rom_bank_count() - 1
+        } else {
+            (self.rom_bank_count() - 1) & 0b11_01111
+        };
 
         self.rom_offset_0x0000_0x3fff = if self.mbc1_bank_mode == 0 {
             0
         } else {
-            ((self.mbc1_bank_reg2 as usize) << 5) * bank_size
-        } & mask;
+            (((self.mbc1_bank_reg2 as usize) << 5) & bank_mask) << 14
+        };
 
         self.rom_offset_0x4000_0x7fff =
-            ((((self.mbc1_bank_reg2 << 5) | self.mbc1_bank_reg1) as usize) * bank_size) & mask;
+            ((((self.mbc1_bank_reg2 << 5) | self.mbc1_bank_reg1) as usize) & bank_mask) << 14;
 
         self.ram_offset = self.selected_ram_bank() * conv::kib(8);
+
+        // println!(
+        //     "REG1: 0x{:x} 0b{:b} | REG2: 0x{:x} 0b{:b} | MODE: {} | ROM offset A: 0x{:x} 0b{:b} | ROM offset B: 0x{:x} 0b{:b} | RAM: 0x{:x} 0b{:x}",
+        //     self.mbc1_bank_reg1, self.mbc1_bank_reg1,
+        //     self.mbc1_bank_reg2, self.mbc1_bank_reg2,
+        //     self.mbc1_bank_mode,
+        //     self.rom_offset_0x0000_0x3fff, self.rom_offset_0x0000_0x3fff,
+        //     self.rom_offset_0x4000_0x7fff, self.rom_offset_0x4000_0x7fff,
+        //     self.ram_offset, self.ram_offset
+        // );
     }
 
     fn read_ram(&self, offset: usize) -> u8 {
@@ -468,7 +523,7 @@ impl Cartridge {
 
             MBC1 { .. } => match adr {
                 0x0000..=0x3FFF => self.rom[self.rom_offset_0x0000_0x3fff + adr],
-                0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + adr - 0x4000],
+                0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + (adr & 0x3fff)],
                 0xA000..=0xBFFF => self.read_ram(adr - 0xA000),
                 _ => 0,
             },
@@ -507,7 +562,8 @@ impl Cartridge {
                     self.update_offsets();
                 }
                 0x2000..=0x3FFF => {
-                    self.mbc1_bank_reg1 = if value == 0 { 1 } else { value & 0b11111 };
+                    let masked = value & 0b11111;
+                    self.mbc1_bank_reg1 = if masked == 0 { 1 } else { masked };
                     self.update_offsets();
                 }
                 0x4000..=0x5FFF => {
