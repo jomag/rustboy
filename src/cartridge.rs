@@ -382,10 +382,7 @@ impl Cartridge {
         match self.rom[0x148] {
             0..=8 => 2 << self.rom[0x148],
             n => {
-                println!(
-                    "Warning: Unknown ROM size code in cartridge header: 0x{:02X}",
-                    n,
-                );
+                println!("Unknown ROM size code in cartridge header: 0x{:02X}", n);
                 0
             }
         }
@@ -403,10 +400,7 @@ impl Cartridge {
             4 => 16,
             5 => 8,
             n => {
-                println!(
-                    "Warning: Unknown RAM size code in cartridge header: 0x{:02X}",
-                    n,
-                );
+                println!("Unknown RAM size code in cartridge header: 0x{:02X}", n);
                 0
             }
         }
@@ -470,16 +464,6 @@ impl Cartridge {
         };
 
         self.ram_offset = self.selected_ram_bank() * conv::kib(8);
-
-        // println!(
-        //     "REG1: 0x{:x} 0b{:b} | REG2: 0x{:x} 0b{:b} | MODE: {} | ROM offset A: 0x{:x} 0b{:b} | ROM offset B: 0x{:x} 0b{:b} | RAM: 0x{:x} 0b{:x}",
-        //     self.mbc1_bank_reg1, self.mbc1_bank_reg1,
-        //     self.mbc1_bank_reg2, self.mbc1_bank_reg2,
-        //     self.mbc1_bank_mode,
-        //     self.rom_offset_0x0000_0x3fff, self.rom_offset_0x0000_0x3fff,
-        //     self.rom_offset_0x4000_0x7fff, self.rom_offset_0x4000_0x7fff,
-        //     self.ram_offset, self.ram_offset
-        // );
     }
 
     fn read_ram(&self, offset: usize) -> u8 {
