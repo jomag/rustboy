@@ -282,7 +282,6 @@ impl CartridgeType {
 }
 
 pub struct MBC1 {
-    pub ram_enabled: bool,
     pub bank1: u8,
     pub bank2: u8,
     pub mode: u8,
@@ -292,7 +291,6 @@ pub struct MBC1 {
 impl MBC1 {
     fn new(multicart: bool) -> Self {
         MBC1 {
-            ram_enabled: false,
             bank1: 1,
             bank2: 0,
             mode: 0,
@@ -301,10 +299,28 @@ impl MBC1 {
     }
 
     fn reset(&mut self) {
-        self.ram_enabled = false;
         self.bank1 = 0;
         self.bank2 = 0;
         self.mode = 0;
+    }
+}
+
+pub struct MBC2 {
+    pub ram_enabled: bool,
+    pub bank: u8,
+}
+
+impl MBC2 {
+    fn new() -> Self {
+        MBC2 {
+            ram_enabled: false,
+            bank: 0,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.ram_enabled = false;
+        self.bank = 0;
     }
 }
 
@@ -318,7 +334,9 @@ pub struct Cartridge {
 
     pub rtc_register: u8,
 
+    pub ram_enabled: bool,
     pub mbc1: MBC1,
+    pub mbc2: MBC2,
 
     pub rom_offset_0x0000_0x3fff: usize,
     pub rom_offset_0x4000_0x7fff: usize,
@@ -335,7 +353,9 @@ impl Cartridge {
             ram: None,
             rtc: None,
             mbc1: MBC1::new(false),
+            mbc2: MBC2::new(),
 
+            ram_enabled: false,
             ram_offset: 0,
             rom_offset_0x0000_0x3fff: 0,
             rom_offset_0x4000_0x7fff: 0,
@@ -380,6 +400,8 @@ impl Cartridge {
                     ram,
                     rtc_register: 0,
                     mbc1: MBC1::new(multicart),
+                    mbc2: MBC2::new(),
+                    ram_enabled: false,
                     ram_offset: 0,
                     rom_offset_0x0000_0x3fff: 0,
                     rom_offset_0x4000_0x7fff: 0,
@@ -429,6 +451,7 @@ impl Cartridge {
         }
 
         self.rtc_register = 0;
+        self.ram_enabled = false;
         self.mbc1.reset();
         self.update_offsets()
     }
@@ -477,7 +500,7 @@ impl Cartridge {
 
     fn read_ram(&self, offset: usize) -> u8 {
         match &self.ram {
-            Some(ram) => match self.mbc1.ram_enabled {
+            Some(ram) => match self.ram_enabled {
                 true => ram[self.ram_offset + offset],
                 false => 0xFF,
             },
@@ -487,7 +510,7 @@ impl Cartridge {
 
     fn write_ram(&mut self, offset: usize, value: u8) {
         match &mut self.ram {
-            Some(ram) => match self.mbc1.ram_enabled {
+            Some(ram) => match self.ram_enabled {
                 true => ram[self.ram_offset + offset] = value,
                 false => {}
             },
@@ -520,8 +543,15 @@ impl Cartridge {
 
             MBC1 { .. } => match adr {
                 0x0000..=0x3FFF => self.rom[self.rom_offset_0x0000_0x3fff + adr],
-                0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + (adr & 0x3fff)],
+                0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + adr - 0x4000],
                 0xA000..=0xBFFF => self.read_ram(adr - 0xA000),
+                _ => 0,
+            },
+
+            MBC2 { .. } => match adr {
+                0x0000..=0x3FFF => self.rom[self.rom_offset_0x0000_0x3fff + adr],
+                0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + adr - 0x4000],
+                0xA000..=0xBFFF => self.read_ram(adr - 0xA000), // TODO
                 _ => 0,
             },
 
@@ -555,7 +585,7 @@ impl Cartridge {
 
             MBC1 { .. } => match adr {
                 0x0000..=0x1FFF => {
-                    self.mbc1.ram_enabled = value & 0x0F == 0x0A;
+                    self.ram_enabled = value & 0xF == 0xA;
                     self.update_offsets();
                 }
                 0x2000..=0x3FFF => {
@@ -574,7 +604,22 @@ impl Cartridge {
                 0xA000..=0xBFFF => {
                     self.write_ram(adr - 0xA000, value);
                 }
+                _ => {}
+            },
 
+            MBC2 { .. } => match adr {
+                0x0000..=0x3FFF => {
+                    if adr & 0x100 == 0 {
+                        self.mbc2.ram_enabled = value & 0xF == 0xA;
+                        self.update_offsets();
+                    } else {
+                        self.mbc2.bank = value & 0xF;
+                        self.update_offsets();
+                    }
+                }
+                0xA000..=0xBFFF => {
+                    self.write_ram(adr - 0xA000, value);
+                }
                 _ => {}
             },
 

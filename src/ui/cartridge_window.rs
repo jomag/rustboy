@@ -24,7 +24,7 @@ impl CartridgeWindow {
             ui.label(format!("ROM offset 2: {}", c.rom_offset_0x4000_0x7fff));
 
             ui.label(format!("RAM size: {}", c.ram_size()));
-            ui.label(format!("RAM enabled: {}", c.mbc1.ram_enabled));
+            ui.label(format!("RAM enabled: {}", c.ram_enabled));
             ui.label(format!("RAM bank: {}", c.selected_ram_bank()));
         });
     }
