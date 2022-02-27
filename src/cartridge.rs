@@ -151,7 +151,6 @@ pub enum CartridgeType {
         multicart: bool,
     },
     MBC2 {
-        ram: bool,
         bat: bool,
     },
     MBC3 {
@@ -213,10 +212,7 @@ impl CartridgeType {
                 bat: code == 0x03,
                 multicart: is_mbc1_multicart(rom),
             }),
-            0x05 | 0x06 => Some(MBC2 {
-                ram: true,
-                bat: code == 0x06,
-            }),
+            0x05 | 0x06 => Some(MBC2 { bat: code == 0x06 }),
             0x0b..=0x0d => Some(MMM01 {
                 ram: code > 0x0b,
                 bat: code == 0x0d,
@@ -271,7 +267,7 @@ impl CartridgeType {
                 bat,
                 multicart: false,
             } => aux_string("MBC1", *ram, *bat, false, false),
-            MBC2 { ram, bat } => aux_string("MBC2", *ram, *bat, false, false),
+            MBC2 { bat } => aux_string("MBC2", true, *bat, false, false),
             MBC3 { ram, bat, rtc } => aux_string("MBC3", *ram, *bat, *rtc, false),
             MBC5 { ram, bat, rumble } => aux_string("MBC5", *ram, *bat, false, *rumble),
             MBC6 => "MBC6".to_string(),
@@ -303,8 +299,7 @@ impl CartridgeType {
             NoMBC { ram: true, .. } => 0x2000,
             MBC1 { ram: false, .. } => 0,
             MBC1 { ram: true, .. } => 32 * 1024,
-            MBC2 { ram: false, .. } => 0,
-            MBC2 { ram: true, .. } => 512,
+            MBC2 { .. } => 512,
             MBC3 { ram: false, .. } => 0,
             MBC3 { ram: true, .. } => 32 * 1024,
             MBC5 { ram: false, .. } => 0,
@@ -635,12 +630,10 @@ impl MemoryMapped for MBC1 {
 pub struct MBC2 {
     // Memory buffers
     pub rom: Box<[u8]>,
-    pub ram: Option<Box<[u8]>>,
+    pub ram: Box<[u8]>,
 
     // Current ROM and RAM offsets
-    rom_offset_0x0000_0x3fff: usize,
     rom_offset_0x4000_0x7fff: usize,
-    ram_offset: usize,
 
     // MBC registers
     pub ram_enabled: bool,
@@ -659,42 +652,36 @@ impl MBC2 {
         }
 
         let max_ram_size = cartridge_type.max_ram_size();
-        let ram = match max_ram_size {
-            0 => None,
-            _ => Some(vec![0; max_ram_size].into_boxed_slice()),
-        };
+        let ram = vec![0; max_ram_size].into_boxed_slice();
 
-        MBC2 {
+        let mut cartridge = MBC2 {
             rom,
             ram,
             ram_enabled: false,
-            bank: 0,
-            rom_offset_0x0000_0x3fff: 0,
+            bank: 1,
             rom_offset_0x4000_0x7fff: 0,
-            ram_offset: 0,
             cartridge_type,
-        }
+        };
+
+        cartridge.reset();
+        cartridge
     }
 
     fn update_offsets(&mut self) {
-        todo!();
-    }
-
-    fn read_ram(&self, offset: usize) -> u8 {
-        todo!();
-    }
-
-    fn write_ram(&mut self, offset: usize, value: u8) {
-        todo!();
+        let bank_mask = self.rom_bank_count() - 1;
+        self.rom_offset_0x4000_0x7fff = ((self.bank as usize) & bank_mask) << 14;
     }
 }
 
 impl MemoryMapped for MBC2 {
     fn read(&self, address: u16) -> u8 {
         match address {
-            0x0000..=0x3FFF => self.rom[self.rom_offset_0x0000_0x3fff + address as usize],
+            0x0000..=0x3FFF => self.rom[address as usize],
             0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + address as usize - 0x4000],
-            0xA000..=0xBFFF => self.read_ram(address as usize - 0xA000), // TODO
+            0xA000..=0xBFFF => match self.ram_enabled {
+                true => self.ram[(address as usize - 0xA000) & 0x1ff] | 0xF0,
+                false => 0xFF,
+            },
             _ => 0,
         }
     }
@@ -706,12 +693,14 @@ impl MemoryMapped for MBC2 {
                     self.ram_enabled = value & 0xF == 0xA;
                     self.update_offsets();
                 } else {
-                    self.bank = value & 0xF;
+                    self.bank = if value & 0xF == 0 { 1 } else { value & 0xF };
                     self.update_offsets();
                 }
             }
             0xA000..=0xBFFF => {
-                self.write_ram(address as usize - 0xA000, value);
+                if self.ram_enabled {
+                    self.ram[(address as usize - 0xA000) & 0x1ff] = value;
+                }
             }
             _ => {}
         }
@@ -719,7 +708,8 @@ impl MemoryMapped for MBC2 {
 
     fn reset(&mut self) {
         self.ram_enabled = false;
-        self.bank = 0;
+        self.bank = 1;
+        self.update_offsets();
     }
 }
 
