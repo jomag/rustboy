@@ -8,7 +8,7 @@ use crate::interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
 
 use crate::apu::AudioProcessingUnit;
 use crate::buttons::Buttons;
-use crate::cartridge::{load_cartridge, Cartridge};
+use crate::cartridge::{load_cartridge, Cartridge, NoCartridge};
 use crate::debug::Debug;
 use crate::dma::DMA;
 use crate::instructions;
@@ -113,7 +113,7 @@ impl MMU {
     pub fn new(machine: Machine) -> Self {
         MMU {
             reg: Registers::new(),
-            cartridge: Box::new(Cartridge::none()),
+            cartridge: Box::new(NoCartridge {}),
             ram: [0; 0x2000],
             io_reg: [0; 0x80],
             ie_reg: 0,

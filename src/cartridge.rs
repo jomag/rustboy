@@ -4,6 +4,14 @@ use std::io::Read;
 use crate::{conv, utils::VecExt};
 use chrono::{Datelike, Timelike};
 
+pub trait MemoryMapped {
+    fn read(&self, address: u16) -> u8;
+    fn write(&mut self, address: u16, value: u8);
+
+    // Perform reset as after power cycle
+    fn reset(&mut self);
+}
+
 struct RTC {
     second: u8,
     minute: u8,
@@ -13,7 +21,7 @@ struct RTC {
     prep_latch: bool,
 }
 
-pub fn is_mbc1_multicart(rom: &Box<[u8]>) -> bool {
+pub fn is_mbc1_multicart(rom: &Vec<u8>) -> bool {
     // There's nothing in the header that tells if the cartridge is
     // an multicart. All known multicarts are 8 Mbit. Bit 4 in the
     // first bank register is not connected, which reduces the number
@@ -30,7 +38,7 @@ pub fn is_mbc1_multicart(rom: &Box<[u8]>) -> bool {
 
     let validate_logo = |offset: usize| {
         for i in 0..48 {
-            if rom[offset + i] != LOGO[i] {
+            if rom.len() < offset + i || rom[offset + i] != LOGO[i] {
                 return false;
             }
         }
@@ -130,16 +138,38 @@ impl RTC {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum CartridgeType {
     NoCartridge,
-    NoMBC { ram: bool, bat: bool },
-    MBC1 { ram: bool, bat: bool },
-    MBC2 { ram: bool, bat: bool },
-    MBC3 { ram: bool, bat: bool, rtc: bool },
-    MBC5 { ram: bool, bat: bool, rumble: bool },
+    NoMBC {
+        ram: bool,
+        bat: bool,
+    },
+    MBC1 {
+        ram: bool,
+        bat: bool,
+        multicart: bool,
+    },
+    MBC2 {
+        ram: bool,
+        bat: bool,
+    },
+    MBC3 {
+        ram: bool,
+        bat: bool,
+        rtc: bool,
+    },
+    MBC5 {
+        ram: bool,
+        bat: bool,
+        rumble: bool,
+    },
     MBC6,
     MBC7,
-    MMM01 { ram: bool, bat: bool },
+    MMM01 {
+        ram: bool,
+        bat: bool,
+    },
     PocketCamera,
     BandaiTAMA5,
     HuC1,
@@ -170,8 +200,9 @@ fn aux_string(name: &str, ram: bool, bat: bool, rtc: bool, rumble: bool) -> Stri
 }
 
 impl CartridgeType {
-    fn from_code(code: u8) -> Option<CartridgeType> {
+    fn from_rom(rom: &Vec<u8>) -> Option<CartridgeType> {
         use self::CartridgeType::*;
+        let code = rom[0x147];
         match code {
             0x00 | 0x08 | 0x09 => Some(NoMBC {
                 ram: code != 0x00,
@@ -180,6 +211,7 @@ impl CartridgeType {
             0x01..=0x03 => Some(MBC1 {
                 ram: code > 0x01,
                 bat: code == 0x03,
+                multicart: is_mbc1_multicart(rom),
             }),
             0x05 | 0x06 => Some(MBC2 {
                 ram: true,
@@ -229,7 +261,16 @@ impl CartridgeType {
                 ram: true,
                 bat: true,
             } => "ROM, RAM and battery".to_string(),
-            MBC1 { ram, bat } => aux_string("MBC1", *ram, *bat, false, false),
+            MBC1 {
+                ram,
+                bat,
+                multicart: true,
+            } => aux_string("MBC1M", *ram, *bat, false, false),
+            MBC1 {
+                ram,
+                bat,
+                multicart: false,
+            } => aux_string("MBC1", *ram, *bat, false, false),
             MBC2 { ram, bat } => aux_string("MBC2", *ram, *bat, false, false),
             MBC3 { ram, bat, rtc } => aux_string("MBC3", *ram, *bat, *rtc, false),
             MBC5 { ram, bat, rumble } => aux_string("MBC5", *ram, *bat, false, *rumble),
@@ -281,168 +322,26 @@ impl CartridgeType {
     }
 }
 
-pub struct MBC1 {
-    pub bank1: u8,
-    pub bank2: u8,
-    pub mode: u8,
-    pub multicart: bool,
-}
-
-impl MBC1 {
-    fn new(multicart: bool) -> Self {
-        MBC1 {
-            bank1: 1,
-            bank2: 0,
-            mode: 0,
-            multicart,
-        }
-    }
-
-    fn reset(&mut self) {
-        self.bank1 = 0;
-        self.bank2 = 0;
-        self.mode = 0;
-    }
-}
-
-pub struct MBC2 {
-    pub ram_enabled: bool,
-    pub bank: u8,
-}
-
-impl MBC2 {
-    fn new() -> Self {
-        MBC2 {
-            ram_enabled: false,
-            bank: 0,
-        }
-    }
-
-    fn reset(&mut self) {
-        self.ram_enabled = false;
-        self.bank = 0;
-    }
-}
-
-pub struct Cartridge {
-    pub cartridge_type: CartridgeType,
-    aux_selection: Aux,
-
+pub struct MBC3 {
+    // Memory buffers
     pub rom: Box<[u8]>,
     pub ram: Option<Box<[u8]>>,
+
+    // Current ROM and RAM offsets
+    rom_offset_0x4000_0x7fff: usize,
+
+    aux_selection: Aux,
     rtc: Option<RTC>,
-
     pub rtc_register: u8,
-
-    pub ram_enabled: bool,
-    pub mbc1: MBC1,
-    pub mbc2: MBC2,
-
-    pub rom_offset_0x0000_0x3fff: usize,
-    pub rom_offset_0x4000_0x7fff: usize,
-    ram_offset: usize,
+    ram_enabled: bool,
 }
 
-impl Cartridge {
-    pub fn none() -> Self {
-        Cartridge {
-            cartridge_type: CartridgeType::NoCartridge,
-            aux_selection: Aux::RAM,
-            rtc_register: 0,
-            rom: vec![0; 0].into_boxed_slice(),
-            ram: None,
-            rtc: None,
-            mbc1: MBC1::new(false),
-            mbc2: MBC2::new(),
-
-            ram_enabled: false,
-            ram_offset: 0,
-            rom_offset_0x0000_0x3fff: 0,
-            rom_offset_0x4000_0x7fff: 0,
+impl MBC3 {
+    fn read_rtc(&self, offset: usize) -> u8 {
+        match &self.rtc {
+            Some(rtc) => rtc.read(offset, self.rtc_register),
+            None => 0,
         }
-    }
-
-    pub fn new(data: Vec<u8>) -> Self {
-        match CartridgeType::from_code(data[0x147]) {
-            None => panic!("Unsupported cartridge type"),
-            Some(cartridge_type) => {
-                let max_rom_size = cartridge_type.max_rom_size();
-                if data.len() > max_rom_size {
-                    panic!("ROM size too big to fit in cartridge");
-                }
-
-                let mut rom = vec![0; max_rom_size].into_boxed_slice();
-                for (src, dst) in rom.iter_mut().zip(data.iter()) {
-                    *src = *dst
-                }
-
-                let max_ram_size = cartridge_type.max_ram_size();
-                let ram = match max_ram_size {
-                    0 => None,
-                    _ => Some(vec![0; max_ram_size].into_boxed_slice()),
-                };
-
-                let rtc = match cartridge_type.has_rtc() {
-                    true => Some(RTC::new()),
-                    false => None,
-                };
-
-                let multicart = match cartridge_type {
-                    CartridgeType::MBC1 { .. } => is_mbc1_multicart(&rom),
-                    _ => false,
-                };
-
-                let mut cartridge = Cartridge {
-                    cartridge_type,
-                    aux_selection: Aux::RAM,
-                    rtc,
-                    rom,
-                    ram,
-                    rtc_register: 0,
-                    mbc1: MBC1::new(multicart),
-                    mbc2: MBC2::new(),
-                    ram_enabled: false,
-                    ram_offset: 0,
-                    rom_offset_0x0000_0x3fff: 0,
-                    rom_offset_0x4000_0x7fff: 0,
-                };
-
-                cartridge.update_offsets();
-                cartridge
-            }
-        }
-    }
-
-    pub fn rom_bank_count(&self) -> usize {
-        match self.rom[0x148] {
-            0..=8 => 2 << self.rom[0x148],
-            n => {
-                println!("Unknown ROM size code in cartridge header: 0x{:02X}", n);
-                0
-            }
-        }
-    }
-
-    pub fn rom_size(&self) -> usize {
-        self.rom_bank_count() * conv::kib(16)
-    }
-
-    pub fn ram_bank_count(&self) -> usize {
-        match self.rom[0x0149] {
-            0 => 0,
-            2 => 1,
-            3 => 4,
-            4 => 16,
-            5 => 8,
-            n => {
-                println!("Unknown RAM size code in cartridge header: 0x{:02X}", n);
-                0
-            }
-        }
-    }
-
-    pub fn ram_size(&self) -> usize {
-        self.ram_bank_count() * conv::kib(8)
     }
 
     pub fn reset(&mut self) {
@@ -452,48 +351,216 @@ impl Cartridge {
 
         self.rtc_register = 0;
         self.ram_enabled = false;
-        self.mbc1.reset();
-        self.update_offsets()
+    }
+
+    fn read_ram(&self, offset: usize) -> u8 {
+        0
+    }
+
+    fn read(&self, address: u16) -> u8 {
+        match address {
+            0x0000..=0x3FFF => self.rom[address as usize],
+            0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + address as usize - 0x4000],
+            0xA000..=0xBFFF => match &self.aux_selection {
+                RAM => self.read_ram(address as usize - 0xA000),
+                RTC => self.read_rtc(address as usize - 0xA000),
+            },
+            _ => 0,
+        }
+    }
+}
+
+pub struct NoCartridge {}
+
+impl MemoryMapped for NoCartridge {
+    fn read(&self, address: u16) -> u8 {
+        0
+    }
+
+    fn write(&mut self, address: u16, value: u8) {}
+    fn reset(&mut self) {}
+}
+
+impl Cartridge for NoCartridge {
+    fn cartridge_type(&self) -> CartridgeType {
+        CartridgeType::NoCartridge
+    }
+
+    fn read_abs(&self, address: usize) -> u8 {
+        0
+    }
+}
+
+pub struct NoMBC {
+    // Memory buffers
+    pub rom: Box<[u8]>,
+    pub ram: Option<Box<[u8]>>,
+    cartridge_type: CartridgeType,
+}
+
+impl NoMBC {
+    fn new(cartridge_type: CartridgeType, data: &Vec<u8>) -> Self {
+        let max_rom_size = cartridge_type.max_rom_size();
+        let mut rom = vec![0; max_rom_size].into_boxed_slice();
+        for (src, dst) in rom.iter_mut().zip(data.iter()) {
+            *src = *dst
+        }
+
+        let max_ram_size = cartridge_type.max_ram_size();
+        let ram = match max_ram_size {
+            0 => None,
+            _ => Some(vec![0; max_ram_size].into_boxed_slice()),
+        };
+
+        NoMBC {
+            rom,
+            ram,
+            cartridge_type,
+        }
+    }
+}
+
+impl MemoryMapped for NoMBC {
+    fn read(&self, address: u16) -> u8 {
+        match address {
+            0x0000..=0x7FFF => self.rom[address as usize],
+            0xA000..=0xBFFF => match &self.ram {
+                Some(ram) => ram[address as usize],
+                None => 0x00,
+            },
+            _ => 0,
+        }
+    }
+
+    fn write(&mut self, address: u16, value: u8) {
+        match address {
+            0xA000..=0xBFFF => {
+                if let Some(ref mut ram) = self.ram {
+                    ram[address as usize - 0xA000] = value;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn reset(&mut self) {}
+}
+
+impl Cartridge for NoMBC {
+    fn cartridge_type(&self) -> CartridgeType {
+        self.cartridge_type
+    }
+
+    fn read_abs(&self, address: usize) -> u8 {
+        self.rom[address]
+    }
+}
+
+pub struct MBC1 {
+    // Memory buffers
+    pub rom: Box<[u8]>,
+    pub ram: Option<Box<[u8]>>,
+
+    // Current ROM and RAM offsets
+    rom_offset_0x0000_0x3fff: usize,
+    rom_offset_0x4000_0x7fff: usize,
+    ram_offset: usize,
+
+    // MBC registers
+    pub ram_enabled: bool,
+    pub bank1: u8,
+    pub bank2: u8,
+    pub mode: u8,
+
+    // Meta
+    pub cartridge_type: CartridgeType,
+}
+
+impl Cartridge for MBC1 {
+    fn read_abs(&self, address: usize) -> u8 {
+        return self.rom[address];
+    }
+
+    fn cartridge_type(&self) -> CartridgeType {
+        return self.cartridge_type;
+    }
+}
+
+impl MBC1 {
+    fn new(cartridge_type: CartridgeType, data: &Vec<u8>) -> Self {
+        let mut rom = vec![0; data.len()].into_boxed_slice();
+        for (src, dst) in rom.iter_mut().zip(data.iter()) {
+            *src = *dst
+        }
+
+        let max_ram_size = cartridge_type.max_ram_size();
+        let ram = match max_ram_size {
+            0 => None,
+            _ => Some(vec![0; max_ram_size].into_boxed_slice()),
+        };
+
+        let mut cartridge = MBC1 {
+            rom,
+            ram,
+            rom_offset_0x0000_0x3fff: 0,
+            rom_offset_0x4000_0x7fff: 0,
+            ram_offset: 0,
+            ram_enabled: false,
+            bank1: 0,
+            bank2: 0,
+            mode: 0,
+            cartridge_type,
+        };
+
+        cartridge.reset();
+        cartridge
+    }
+
+    fn is_multicart(&self) -> bool {
+        matches!(
+            self.cartridge_type,
+            CartridgeType::MBC1 {
+                multicart: true,
+                ..
+            }
+        )
     }
 
     pub fn selected_ram_bank(&self) -> usize {
         let bank_count = self.ram_bank_count();
-
         let bank_mask = if bank_count > 0 {
             (bank_count - 1) as u8
         } else {
             0
         };
 
-        if self.mbc1.mode == 0 {
+        if self.mode == 0 {
             return 0;
         }
 
         if self.rom_size() >= conv::MIB / 8 {
             return 0;
         } else {
-            return (self.mbc1.bank2 & 0b11 & bank_mask) as usize;
+            return (self.bank2 & 0b11 & bank_mask) as usize;
         };
     }
 
     fn update_offsets(&mut self) {
         let bank_mask = self.rom_bank_count() - 1;
 
-        self.rom_offset_0x0000_0x3fff = if self.mbc1.mode == 0 {
-            0
+        if self.is_multicart() {
+            self.rom_offset_0x0000_0x3fff = (((self.bank2 as usize) << 4) & bank_mask) << 14;
+            self.rom_offset_0x4000_0x7fff =
+                ((((self.bank2 << 4) | (self.bank1 & 0b1111)) as usize) & bank_mask) << 14;
         } else {
-            if self.mbc1.multicart {
-                (((self.mbc1.bank2 as usize) << 4) & bank_mask) << 14
-            } else {
-                (((self.mbc1.bank2 as usize) << 5) & bank_mask) << 14
-            }
-        };
+            self.rom_offset_0x0000_0x3fff = (((self.bank2 as usize) << 5) & bank_mask) << 14;
+            self.rom_offset_0x4000_0x7fff =
+                ((((self.bank2 << 5) | self.bank1) as usize) & bank_mask) << 14;
+        }
 
-        self.rom_offset_0x4000_0x7fff = if self.mbc1.multicart {
-            ((((self.mbc1.bank2 << 4) | (self.mbc1.bank1 & 0b1111)) as usize) & bank_mask) << 14
-        } else {
-            ((((self.mbc1.bank2 << 5) | self.mbc1.bank1) as usize) & bank_mask) << 14
-        };
+        if self.mode == 0 {
+            self.rom_offset_0x0000_0x3fff = 0;
+        }
 
         self.ram_offset = self.selected_ram_bank() * conv::kib(8);
     }
@@ -517,129 +584,211 @@ impl Cartridge {
             None => {}
         }
     }
+}
 
-    fn read_rtc(&self, offset: usize) -> u8 {
-        match &self.rtc {
-            Some(rtc) => rtc.read(offset, self.rtc_register),
-            None => 0,
+impl MemoryMapped for MBC1 {
+    fn read(&self, address: u16) -> u8 {
+        let adr = address as usize;
+        match adr {
+            0x0000..=0x3FFF => self.rom[self.rom_offset_0x0000_0x3fff + adr],
+            0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + adr - 0x4000],
+            0xA000..=0xBFFF => self.read_ram(adr - 0xA000),
+            _ => 0,
         }
     }
 
-    pub fn read(&self, address: u16) -> u8 {
-        use Aux::*;
-        use CartridgeType::*;
-
-        let adr = address as usize;
-
-        match self.cartridge_type {
-            NoMBC { .. } => match adr {
-                0x0000..=0x7FFF => self.rom[adr],
-                0xA000..=0xBFFF => match &self.ram {
-                    Some(ram) => ram[adr],
-                    None => 0x00,
-                },
-                _ => 0,
-            },
-
-            MBC1 { .. } => match adr {
-                0x0000..=0x3FFF => self.rom[self.rom_offset_0x0000_0x3fff + adr],
-                0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + adr - 0x4000],
-                0xA000..=0xBFFF => self.read_ram(adr - 0xA000),
-                _ => 0,
-            },
-
-            MBC2 { .. } => match adr {
-                0x0000..=0x3FFF => self.rom[self.rom_offset_0x0000_0x3fff + adr],
-                0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + adr - 0x4000],
-                0xA000..=0xBFFF => self.read_ram(adr - 0xA000), // TODO
-                _ => 0,
-            },
-
-            MBC3 { .. } => match adr {
-                0x0000..=0x3FFF => self.rom[adr],
-                0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + adr - 0x4000],
-                0xA000..=0xBFFF => match self.aux_selection {
-                    RAM => self.read_ram(adr - 0xA000),
-                    RTC => self.read_rtc(adr - 0xA000),
-                },
-                _ => 0,
-            },
-
-            _ => panic!("Unsupported cartridge type in read()"),
+    fn write(&mut self, address: u16, value: u8) {
+        match address {
+            0x0000..=0x1FFF => {
+                self.ram_enabled = value & 0xF == 0xA;
+                self.update_offsets();
+            }
+            0x2000..=0x3FFF => {
+                let masked = value & 0b11111;
+                self.bank1 = if masked == 0 { 1 } else { masked };
+                self.update_offsets();
+            }
+            0x4000..=0x5FFF => {
+                self.bank2 = value & 0b11;
+                self.update_offsets();
+            }
+            0x6000..=0x7FFF => {
+                self.mode = value & 1;
+                self.update_offsets();
+            }
+            0xA000..=0xBFFF => {
+                self.write_ram(address as usize - 0xA000, value);
+            }
+            _ => {}
         }
     }
 
-    pub fn write(&mut self, address: u16, value: u8) {
-        use CartridgeType::*;
-        let adr = address as usize;
-
-        match self.cartridge_type {
-            NoMBC { .. } => match adr {
-                0xA000..=0xBFFF => {
-                    if let Some(ref mut ram) = self.ram {
-                        ram[adr - 0xA000] = value;
-                    }
-                }
-                _ => {}
-            },
-
-            MBC1 { .. } => match adr {
-                0x0000..=0x1FFF => {
-                    self.ram_enabled = value & 0xF == 0xA;
-                    self.update_offsets();
-                }
-                0x2000..=0x3FFF => {
-                    let masked = value & 0b11111;
-                    self.mbc1.bank1 = if masked == 0 { 1 } else { masked };
-                    self.update_offsets();
-                }
-                0x4000..=0x5FFF => {
-                    self.mbc1.bank2 = value & 0b11;
-                    self.update_offsets();
-                }
-                0x6000..=0x7FFF => {
-                    self.mbc1.mode = value & 1;
-                    self.update_offsets();
-                }
-                0xA000..=0xBFFF => {
-                    self.write_ram(adr - 0xA000, value);
-                }
-                _ => {}
-            },
-
-            MBC2 { .. } => match adr {
-                0x0000..=0x3FFF => {
-                    if adr & 0x100 == 0 {
-                        self.mbc2.ram_enabled = value & 0xF == 0xA;
-                        self.update_offsets();
-                    } else {
-                        self.mbc2.bank = value & 0xF;
-                        self.update_offsets();
-                    }
-                }
-                0xA000..=0xBFFF => {
-                    self.write_ram(adr - 0xA000, value);
-                }
-                _ => {}
-            },
-
-            _ => panic!("Unsupported cartridge type in write()"),
-        }
+    fn reset(&mut self) {
+        self.ram_enabled = false;
+        self.bank1 = 1;
+        self.bank2 = 0;
+        self.mode = 0;
+        self.update_offsets();
     }
 }
 
-pub fn load_cartridge(filename: String) -> Box<Cartridge> {
-    let mut file = File::open(filename).unwrap();
-    let mut rom: Vec<u8> = Vec::new();
+pub struct MBC2 {
+    // Memory buffers
+    pub rom: Box<[u8]>,
+    pub ram: Option<Box<[u8]>>,
 
-    // Returns amount of bytes read and append the rebsult to the buffer
-    file.read_to_end(&mut rom).unwrap();
+    // Current ROM and RAM offsets
+    rom_offset_0x0000_0x3fff: usize,
+    rom_offset_0x4000_0x7fff: usize,
+    ram_offset: usize,
 
-    let code = rom[0x147];
-    match CartridgeType::from_code(code) {
-        None => println!("Unsupported cartridge type: 0x{:02x}", code),
-        Some(t) => println!("Cartridge type 0x{:02x}: {}", code, t.to_string()),
+    // MBC registers
+    pub ram_enabled: bool,
+    pub bank: u8,
+
+    // Meta
+    pub cartridge_type: CartridgeType,
+}
+
+impl MBC2 {
+    fn new(cartridge_type: CartridgeType, data: &Vec<u8>) -> Self {
+        let max_rom_size = cartridge_type.max_rom_size();
+        let mut rom = vec![0; max_rom_size].into_boxed_slice();
+        for (src, dst) in rom.iter_mut().zip(data.iter()) {
+            *src = *dst
+        }
+
+        let max_ram_size = cartridge_type.max_ram_size();
+        let ram = match max_ram_size {
+            0 => None,
+            _ => Some(vec![0; max_ram_size].into_boxed_slice()),
+        };
+
+        MBC2 {
+            rom,
+            ram,
+            ram_enabled: false,
+            bank: 0,
+            rom_offset_0x0000_0x3fff: 0,
+            rom_offset_0x4000_0x7fff: 0,
+            ram_offset: 0,
+            cartridge_type,
+        }
     }
 
-    return Box::new(Cartridge::new(rom));
+    fn update_offsets(&mut self) {
+        todo!();
+    }
+
+    fn read_ram(&self, offset: usize) -> u8 {
+        todo!();
+    }
+
+    fn write_ram(&mut self, offset: usize, value: u8) {
+        todo!();
+    }
+}
+
+impl MemoryMapped for MBC2 {
+    fn read(&self, address: u16) -> u8 {
+        match address {
+            0x0000..=0x3FFF => self.rom[self.rom_offset_0x0000_0x3fff + address as usize],
+            0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + address as usize - 0x4000],
+            0xA000..=0xBFFF => self.read_ram(address as usize - 0xA000), // TODO
+            _ => 0,
+        }
+    }
+
+    fn write(&mut self, address: u16, value: u8) {
+        match address {
+            0x0000..=0x3FFF => {
+                if address & 0x100 == 0 {
+                    self.ram_enabled = value & 0xF == 0xA;
+                    self.update_offsets();
+                } else {
+                    self.bank = value & 0xF;
+                    self.update_offsets();
+                }
+            }
+            0xA000..=0xBFFF => {
+                self.write_ram(address as usize - 0xA000, value);
+            }
+            _ => {}
+        }
+    }
+
+    fn reset(&mut self) {
+        self.ram_enabled = false;
+        self.bank = 0;
+    }
+}
+
+impl Cartridge for MBC2 {
+    fn cartridge_type(&self) -> CartridgeType {
+        self.cartridge_type
+    }
+
+    fn read_abs(&self, address: usize) -> u8 {
+        self.rom[address]
+    }
+}
+
+pub trait Cartridge: MemoryMapped {
+    fn cartridge_type(&self) -> CartridgeType;
+    fn read_abs(&self, address: usize) -> u8;
+
+    fn rom_bank_count(&self) -> usize {
+        let c = self.read_abs(0x148);
+        match c {
+            0..=8 => 2 << c,
+            n => {
+                println!("Unknown ROM size code in cartridge header: 0x{:02X}", n);
+                0
+            }
+        }
+    }
+
+    fn rom_size(&self) -> usize {
+        self.rom_bank_count() * conv::kib(16)
+    }
+
+    fn ram_bank_count(&self) -> usize {
+        match self.read_abs(0x0149) {
+            0 => 0,
+            2 => 1,
+            3 => 4,
+            4 => 16,
+            5 => 8,
+            n => {
+                println!("Unknown RAM size code in cartridge header: 0x{:02X}", n);
+                0
+            }
+        }
+    }
+
+    fn ram_size(&self) -> usize {
+        self.ram_bank_count() * conv::kib(8)
+    }
+}
+
+pub fn load_cartridge(filename: String) -> Box<dyn Cartridge> {
+    let mut file = File::open(filename).unwrap();
+    let mut content: Vec<u8> = Vec::new();
+    file.read_to_end(&mut content).unwrap();
+
+    let code = content[0x147];
+    let cartridge_type = CartridgeType::from_rom(&content);
+
+    return match cartridge_type {
+        None => panic!("Unsupported cartridge type: 0x{:02x}", code),
+        Some(t) => {
+            println!("Cartridge type 0x{:02x}: {}", code, t.to_string());
+            match t {
+                CartridgeType::NoMBC { .. } => Box::new(NoMBC::new(t, &content)),
+                CartridgeType::MBC1 { .. } => Box::new(MBC1::new(t, &content)),
+                CartridgeType::MBC2 { .. } => Box::new(MBC2::new(t, &content)),
+                _ => panic!("Unsupported cartridge type: 0x{:02x}", code),
+            }
+        }
+    };
 }

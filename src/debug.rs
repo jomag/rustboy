@@ -124,19 +124,27 @@ impl Debug {
             Some(ref mut f) => {
                 let reg = &emu.mmu.reg;
                 let pc = reg.pc;
-                if pc >= 0x100 {
+                if !emu.mmu.bootstrap_mode {
                     let m0 = emu.mmu.direct_read(pc);
                     let m1 = emu.mmu.direct_read(pc + 1);
                     let m2 = emu.mmu.direct_read(pc + 2);
                     let m3 = emu.mmu.direct_read(pc + 3);
+                    println!(
+                         "A: {:02X} F: {:02X} B: {:02X} C: {:02X} D: {:02X} E: {:02X} H: {:02X} L: {:02X} SP: {:04X} PC: 00:{:04X} ({:02X} {:02X} {:02X} {:02X}) {}",
+                        reg.a,reg.get_f(),reg.b,reg.c,reg.d,reg.e,reg.h,reg.l,reg.sp,pc,m0,m1,m2,m3, format_mnemonic(&emu.mmu, pc),
+                    );
                     let res = writeln!(
                         f, "A: {:02X} F: {:02X} B: {:02X} C: {:02X} D: {:02X} E: {:02X} H: {:02X} L: {:02X} SP: {:04X} PC: 00:{:04X} ({:02X} {:02X} {:02X} {:02X}) {}",
                         reg.a,reg.get_f(),reg.b,reg.c,reg.d,reg.e,reg.h,reg.l,reg.sp,pc,m0,m1,m2,m3, format_mnemonic(&emu.mmu, pc),
                     );
                     match res {
                         Ok(_) => {}
-                        Err(_) => {}
+                        Err(_) => panic!("Failed to write log"),
                     };
+                    match f.flush() {
+                        Ok(_) => {}
+                        Err(_) => panic!("Failed to flush log"),
+                    }
                 }
             }
             None => {}
@@ -659,7 +667,7 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
     let op: u8 = mmu.direct_read(addr);
 
     match op {
-        0x01 => format!("LD  BC, ${:04X}", mmu.direct_read_u16(addr + 1)),
+        0x01 => format!("LD   BC, ${:04X}", mmu.direct_read_u16(addr + 1)),
 
         // LD n, d: load immediate into register n
         0x06 => format!("LD   B, ${:02X}", mmu.direct_read(addr + 1)),
