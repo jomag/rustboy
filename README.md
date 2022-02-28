@@ -27,15 +27,15 @@ A personal project to learn Rust and basic emulator development.
 | acceptance/bits | [:green_heart:](x "mem_oam: PASS") | [:green_heart:](x "reg_f: PASS") | [:red_circle:](x "unused_hwio-GS: FAIL") |
 | acceptance/instr | [:green_heart:](x "daa: PASS") |
 | acceptance/interrupts | [:red_circle:](x "ie_push: FAIL") |
-| acceptance/oam_dma | [:green_heart:](x "basic: PASS") | [:green_heart:](x "reg_read: PASS") | [:red_circle:](x "sources-GS: FAIL") |
+| acceptance/oam_dma | [:green_heart:](x "basic: PASS") | [:green_heart:](x "reg_read: PASS") | [:green_heart:](x "sources-GS: PASS") |
 | acceptance/ppu | [:red_circle:](x "hblank_ly_scx_timing-GS: FAIL") | [🙅](x "intr_1_2_timing-GS: SKIPPED") | [:red_circle:](x "intr_2_0_timing: FAIL") | [:red_circle:](x "intr_2_mode0_timing: FAIL") | [:red_circle:](x "intr_2_mode0_timing_sprites: FAIL") | [:red_circle:](x "intr_2_mode3_timing: FAIL") | [:red_circle:](x "intr_2_oam_ok_timing: FAIL") | [:red_circle:](x "lcdon_timing-GS: FAIL") | [:red_circle:](x "lcdon_write_timing-GS: FAIL") | [:red_circle:](x "stat_irq_blocking: FAIL") | [:red_circle:](x "stat_lyc_onoff: FAIL") | [:red_circle:](x "vblank_stat_intr-GS: FAIL") |
 | acceptance/serial | [:red_circle:](x "boot_sclk_align-dmgABCmgb: FAIL") |
 | acceptance/timer | [:green_heart:](x "div_write: PASS") | [:red_circle:](x "rapid_toggle: FAIL") | [:green_heart:](x "tim00: PASS") | [:green_heart:](x "tim00_div_trigger: PASS") | [:green_heart:](x "tim01: PASS") | [:green_heart:](x "tim01_div_trigger: PASS") | [:green_heart:](x "tim10: PASS") | [:green_heart:](x "tim10_div_trigger: PASS") | [:green_heart:](x "tim11: PASS") | [:green_heart:](x "tim11_div_trigger: PASS") | [:red_circle:](x "tima_reload: FAIL") | [:red_circle:](x "tima_write_reloading: FAIL") |
 | | [:red_circle:](x "tma_write_reloading: FAIL") |
 | emulator-only/mbc1 | [:green_heart:](x "bits_bank1: PASS") | [:green_heart:](x "bits_bank2: PASS") | [:green_heart:](x "bits_mode: PASS") | [:green_heart:](x "bits_ramg: PASS") | [:green_heart:](x "multicart_rom_8Mb: PASS") | [:green_heart:](x "ram_256kb: PASS") | [:green_heart:](x "ram_64kb: PASS") | [:green_heart:](x "rom_16Mb: PASS") | [:green_heart:](x "rom_1Mb: PASS") | [:green_heart:](x "rom_2Mb: PASS") | [:green_heart:](x "rom_4Mb: PASS") | [:green_heart:](x "rom_512kb: PASS") |
 | | [:green_heart:](x "rom_8Mb: PASS") |
-| emulator-only/mbc2 | [:red_circle:](x "bits_ramg: FAIL") | [:red_circle:](x "bits_romb: FAIL") | [:red_circle:](x "bits_unused: FAIL") | [:red_circle:](x "ram: FAIL") | [:red_circle:](x "rom_1Mb: FAIL") | [:red_circle:](x "rom_2Mb: FAIL") | [:red_circle:](x "rom_512kb: FAIL") |
-| emulator-only/mbc5 | [:red_circle:](x "rom_16Mb: FAIL") | [:red_circle:](x "rom_1Mb: FAIL") | [:red_circle:](x "rom_2Mb: FAIL") | [:red_circle:](x "rom_32Mb: FAIL") | [:red_circle:](x "rom_4Mb: FAIL") | [:red_circle:](x "rom_512kb: FAIL") | [:red_circle:](x "rom_64Mb: FAIL") | [:red_circle:](x "rom_8Mb: FAIL") |
+| emulator-only/mbc2 | [:green_heart:](x "bits_ramg: PASS") | [:green_heart:](x "bits_romb: PASS") | [:green_heart:](x "bits_unused: PASS") | [:green_heart:](x "ram: PASS") | [:green_heart:](x "rom_1Mb: PASS") | [:green_heart:](x "rom_2Mb: PASS") | [:green_heart:](x "rom_512kb: PASS") |
+| emulator-only/mbc5 | [:green_heart:](x "rom_16Mb: PASS") | [:green_heart:](x "rom_1Mb: PASS") | [:green_heart:](x "rom_2Mb: PASS") | [:green_heart:](x "rom_32Mb: PASS") | [:green_heart:](x "rom_4Mb: PASS") | [:green_heart:](x "rom_512kb: PASS") | [:green_heart:](x "rom_64Mb: PASS") | [:green_heart:](x "rom_8Mb: PASS") |
 
 
 ## Graphics
