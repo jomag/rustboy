@@ -1,8 +1,12 @@
 use std::fs::File;
 use std::io::Read;
+use std::str;
 
 use crate::{conv, utils::VecExt};
 use chrono::{Datelike, Timelike};
+
+const ROM_BANK_SIZE: usize = 16384;
+const RAM_BANK_SIZE: usize = 8192;
 
 pub trait MemoryMapped {
     fn read(&self, address: u16) -> u8;
@@ -10,6 +14,121 @@ pub trait MemoryMapped {
 
     // Perform reset as after power cycle
     fn reset(&mut self);
+}
+
+pub struct CartridgeHeader {
+    pub licensee_code: [u8; 2],
+    pub old_licensee_code: u8,
+    pub checksum: u8,
+    pub global_checksum: u16,
+    pub sgb_features: bool,
+    pub cartridge_type: u8,
+    pub rom_bank_count: usize,
+    pub rom_size: usize,
+    pub ram_bank_count: usize,
+    pub ram_size: usize,
+}
+
+impl CartridgeHeader {
+    fn from_header(header: &Vec<u8>) -> Self {
+        let licensee_code: [u8; 2] = [header[0x144], header[0x145]];
+
+        let rom_bank_count = match header[0x148] {
+            0..=8 => 2 << header[0x148],
+            _ => 0,
+        };
+
+        let ram_bank_count = match header[0x0149] {
+            0 => 0,
+            2 => 1,
+            3 => 4,
+            4 => 16,
+            5 => 8,
+            _ => 0,
+        };
+
+        CartridgeHeader {
+            licensee_code,
+            old_licensee_code: header[0x14B],
+            checksum: header[0x14D],
+            global_checksum: ((header[0x14E] as u16) << 8) | header[0x14F] as u16,
+            sgb_features: header[0x146] == 0x03,
+            cartridge_type: header[0x147],
+            rom_bank_count,
+            ram_bank_count,
+            rom_size: rom_bank_count * ROM_BANK_SIZE,
+            ram_size: ram_bank_count * RAM_BANK_SIZE,
+        }
+    }
+
+    pub fn licensee(&self) -> String {
+        match str::from_utf8(&self.licensee_code) {
+            Ok("00") => "None",
+            Ok("01") => "Nintendo R&D1",
+            Ok("08") => "Capcom",
+            Ok("13") => "Electronic Arts",
+            Ok("18") => "Hudson Soft",
+            Ok("19") => "b-ai",
+            Ok("20") => "kss",
+            Ok("22") => "pow",
+            Ok("24") => "PCM Complete",
+            Ok("25") => "san-x",
+            Ok("28") => "Kemco Japan",
+            Ok("29") => "seta",
+            Ok("30") => "Viacom",
+            Ok("31") => "Nintendo",
+            Ok("32") => "Bandai",
+            Ok("33") => "Ocean/Acclaim",
+            Ok("34") => "Konami",
+            Ok("35") => "Hector",
+            Ok("37") => "Taito",
+            Ok("38") => "Hudson",
+            Ok("39") => "Banpresto",
+            Ok("41") => "Ubi Soft",
+            Ok("42") => "Atlus",
+            Ok("44") => "Malibu",
+            Ok("46") => "angel",
+            Ok("47") => "Bullet-Proof",
+            Ok("49") => "irem",
+            Ok("50") => "Absolute",
+            Ok("51") => "Acclaim",
+            Ok("52") => "Activision",
+            Ok("53") => "American sammy",
+            Ok("54") => "Konami",
+            Ok("55") => "Hi tech entertainment",
+            Ok("56") => "LJN",
+            Ok("57") => "Matchbox",
+            Ok("58") => "Mattel",
+            Ok("59") => "Milton Bradley",
+            Ok("60") => "Titus",
+            Ok("61") => "Virgin",
+            Ok("64") => "LucasArts",
+            Ok("67") => "Ocean",
+            Ok("69") => "Electronic Arts",
+            Ok("70") => "Infogrames",
+            Ok("71") => "Interplay",
+            Ok("72") => "Broderbund",
+            Ok("73") => "sculptured",
+            Ok("75") => "sci",
+            Ok("78") => "THQ",
+            Ok("79") => "Accolade",
+            Ok("80") => "misawa",
+            Ok("83") => "lozc",
+            Ok("86") => "Tokuma Shoten Intermedia",
+            Ok("87") => "Tsukuda Original",
+            Ok("91") => "Chunsoft",
+            Ok("92") => "Video system",
+            Ok("93") => "Ocean/Acclaim",
+            Ok("95") => "Varie",
+            Ok("96") => "Yonezawa/s’pal",
+            Ok("97") => "Kaneko",
+            Ok("99") => "Pack in soft",
+            Ok("A4") => "Konami (Yu-Gi-Oh!)",
+            Ok(_) => "Unknown",
+            Err(_) => "Unknown",
+        }
+        .to_string()
+    }
 }
 
 struct RTC {
@@ -384,6 +503,10 @@ impl Cartridge for NoCartridge {
     fn read_abs(&self, address: usize) -> u8 {
         0
     }
+
+    fn header(&self) -> &CartridgeHeader {
+        panic!("Can't return header when there's no cartridge in place")
+    }
 }
 
 pub struct NoMBC {
@@ -391,6 +514,7 @@ pub struct NoMBC {
     pub rom: Box<[u8]>,
     pub ram: Option<Box<[u8]>>,
     cartridge_type: CartridgeType,
+    header: CartridgeHeader,
 }
 
 impl NoMBC {
@@ -411,6 +535,7 @@ impl NoMBC {
             rom,
             ram,
             cartridge_type,
+            header: CartridgeHeader::from_header(data),
         }
     }
 }
@@ -421,9 +546,9 @@ impl MemoryMapped for NoMBC {
             0x0000..=0x7FFF => self.rom[address as usize],
             0xA000..=0xBFFF => match &self.ram {
                 Some(ram) => ram[address as usize],
-                None => 0x00,
+                None => 0xFF,
             },
-            _ => 0,
+            _ => 0xFF,
         }
     }
 
@@ -449,6 +574,10 @@ impl Cartridge for NoMBC {
     fn read_abs(&self, address: usize) -> u8 {
         self.rom[address]
     }
+
+    fn header(&self) -> &CartridgeHeader {
+        &self.header
+    }
 }
 
 pub struct MBC1 {
@@ -469,6 +598,7 @@ pub struct MBC1 {
 
     // Meta
     pub cartridge_type: CartridgeType,
+    header: CartridgeHeader,
 }
 
 impl Cartridge for MBC1 {
@@ -478,6 +608,10 @@ impl Cartridge for MBC1 {
 
     fn cartridge_type(&self) -> CartridgeType {
         return self.cartridge_type;
+    }
+
+    fn header(&self) -> &CartridgeHeader {
+        &self.header
     }
 }
 
@@ -505,6 +639,7 @@ impl MBC1 {
             bank2: 0,
             mode: 0,
             cartridge_type,
+            header: CartridgeHeader::from_header(data),
         };
 
         cartridge.reset();
@@ -522,7 +657,7 @@ impl MBC1 {
     }
 
     pub fn selected_ram_bank(&self) -> usize {
-        let bank_count = self.ram_bank_count();
+        let bank_count = self.header.ram_bank_count;
         let bank_mask = if bank_count > 0 {
             (bank_count - 1) as u8
         } else {
@@ -533,7 +668,7 @@ impl MBC1 {
             return 0;
         }
 
-        if self.rom_size() >= conv::MIB / 8 {
+        if self.header.rom_size >= conv::MIB / 8 {
             return 0;
         } else {
             return (self.bank2 & 0b11 & bank_mask) as usize;
@@ -541,7 +676,7 @@ impl MBC1 {
     }
 
     fn update_offsets(&mut self) {
-        let bank_mask = self.rom_bank_count() - 1;
+        let bank_mask = self.header.rom_bank_count - 1;
 
         if self.is_multicart() {
             self.rom_offset_0x0000_0x3fff = (((self.bank2 as usize) << 4) & bank_mask) << 14;
@@ -641,6 +776,7 @@ pub struct MBC2 {
 
     // Meta
     pub cartridge_type: CartridgeType,
+    header: CartridgeHeader,
 }
 
 impl MBC2 {
@@ -661,6 +797,7 @@ impl MBC2 {
             bank: 1,
             rom_offset_0x4000_0x7fff: 0,
             cartridge_type,
+            header: CartridgeHeader::from_header(data),
         };
 
         cartridge.reset();
@@ -668,8 +805,22 @@ impl MBC2 {
     }
 
     fn update_offsets(&mut self) {
-        let bank_mask = self.rom_bank_count() - 1;
+        let bank_mask = self.header.rom_bank_count - 1;
         self.rom_offset_0x4000_0x7fff = ((self.bank as usize) & bank_mask) << 14;
+    }
+}
+
+impl Cartridge for MBC2 {
+    fn cartridge_type(&self) -> CartridgeType {
+        self.cartridge_type
+    }
+
+    fn read_abs(&self, address: usize) -> u8 {
+        self.rom[address]
+    }
+
+    fn header(&self) -> &CartridgeHeader {
+        &self.header
     }
 }
 
@@ -713,9 +864,93 @@ impl MemoryMapped for MBC2 {
     }
 }
 
-impl Cartridge for MBC2 {
+pub struct MBC5 {
+    // Memory buffers
+    pub rom: Box<[u8]>,
+    pub ram: Option<Box<[u8]>>,
+
+    // Current ROM and RAM offsets
+    rom_offset_0x4000_0x7fff: usize,
+    ram_offset: usize,
+
+    // MBC registers
+    pub ram_enabled: bool,
+    pub ram_bank: usize,
+    pub rom_bank: usize,
+
+    // Meta
+    pub cartridge_type: CartridgeType,
+    header: CartridgeHeader,
+}
+
+impl MBC5 {
+    fn new(cartridge_type: CartridgeType, data: &Vec<u8>) -> Self {
+        let header = CartridgeHeader::from_header(data);
+
+        let mut rom = vec![0; header.rom_size].into_boxed_slice();
+        for (src, dst) in rom.iter_mut().zip(data.iter()) {
+            *src = *dst
+        }
+
+        let ram = match header.ram_size {
+            0 => None,
+            sz => Some(vec![0; sz].into_boxed_slice()),
+        };
+
+        let mut cartridge = MBC5 {
+            rom,
+            ram,
+            ram_bank: 0,
+            rom_bank: 1,
+            ram_offset: 0,
+            rom_offset_0x4000_0x7fff: 0,
+            ram_enabled: false,
+            cartridge_type,
+            header,
+        };
+
+        cartridge.reset();
+        cartridge
+    }
+
+    fn read_ram(&self, offset: usize) -> u8 {
+        match self.ram_enabled {
+            true => match &self.ram {
+                Some(ram) => ram[self.ram_offset + offset as usize],
+                None => 0xFF,
+            },
+            false => 0xFF,
+        }
+    }
+
+    fn write_ram(&mut self, offset: usize, value: u8) {
+        match self.ram_enabled {
+            true => match &mut self.ram {
+                Some(ram) => ram[self.ram_offset + offset as usize] = value,
+                None => {}
+            },
+            false => {}
+        }
+    }
+
+    fn update_offsets(&mut self) {
+        let rom_mask = self.header.rom_bank_count - 1;
+
+        let bank_count = self.header.ram_bank_count;
+        let ram_mask = if bank_count > 0 { bank_count - 1 } else { 0 };
+
+        self.rom_offset_0x4000_0x7fff = (self.rom_bank & rom_mask) * ROM_BANK_SIZE;
+        self.ram_offset = (self.ram_bank & ram_mask) * RAM_BANK_SIZE;
+    }
+}
+
+impl Cartridge for MBC5 {
     fn cartridge_type(&self) -> CartridgeType {
         self.cartridge_type
+    }
+
+    fn header(&self) -> &CartridgeHeader {
+        &self.header
     }
 
     fn read_abs(&self, address: usize) -> u8 {
@@ -723,42 +958,48 @@ impl Cartridge for MBC2 {
     }
 }
 
+impl MemoryMapped for MBC5 {
+    fn read(&self, address: u16) -> u8 {
+        match address {
+            0x0000..=0x3FFF => self.rom[address as usize],
+            0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + address as usize - 0x4000],
+            0xA000..=0xBFFF => self.read_ram(address as usize - 0xA000),
+            _ => 0xFF,
+        }
+    }
+
+    fn write(&mut self, address: u16, value: u8) {
+        match address {
+            0x0000..=0x1FFF => self.ram_enabled = value == 0x0A,
+            0x2000..=0x2FFF => {
+                self.rom_bank = (self.rom_bank & 0x100) | value as usize;
+                self.update_offsets();
+            }
+            0x3000..=0x3FFF => {
+                self.rom_bank = (self.rom_bank & 0xFF) | (((value & 1) as usize) << 8);
+                self.update_offsets();
+            }
+            0x4000..=0x5FFF => {
+                self.ram_bank = (value as usize) & 0x0F;
+                self.update_offsets();
+            }
+            0xA000..=0xBFFF => self.write_ram(address as usize - 0xA000, value),
+            _ => {}
+        }
+    }
+
+    fn reset(&mut self) {
+        self.rom_bank = 1;
+        self.ram_bank = 0;
+        self.ram_enabled = false;
+        self.update_offsets();
+    }
+}
+
 pub trait Cartridge: MemoryMapped {
     fn cartridge_type(&self) -> CartridgeType;
+    fn header(&self) -> &CartridgeHeader;
     fn read_abs(&self, address: usize) -> u8;
-
-    fn rom_bank_count(&self) -> usize {
-        let c = self.read_abs(0x148);
-        match c {
-            0..=8 => 2 << c,
-            n => {
-                println!("Unknown ROM size code in cartridge header: 0x{:02X}", n);
-                0
-            }
-        }
-    }
-
-    fn rom_size(&self) -> usize {
-        self.rom_bank_count() * conv::kib(16)
-    }
-
-    fn ram_bank_count(&self) -> usize {
-        match self.read_abs(0x0149) {
-            0 => 0,
-            2 => 1,
-            3 => 4,
-            4 => 16,
-            5 => 8,
-            n => {
-                println!("Unknown RAM size code in cartridge header: 0x{:02X}", n);
-                0
-            }
-        }
-    }
-
-    fn ram_size(&self) -> usize {
-        self.ram_bank_count() * conv::kib(8)
-    }
 }
 
 pub fn load_cartridge(filename: String) -> Box<dyn Cartridge> {
@@ -777,6 +1018,7 @@ pub fn load_cartridge(filename: String) -> Box<dyn Cartridge> {
                 CartridgeType::NoMBC { .. } => Box::new(NoMBC::new(t, &content)),
                 CartridgeType::MBC1 { .. } => Box::new(MBC1::new(t, &content)),
                 CartridgeType::MBC2 { .. } => Box::new(MBC2::new(t, &content)),
+                CartridgeType::MBC5 { .. } => Box::new(MBC5::new(t, &content)),
                 _ => panic!("Unsupported cartridge type: 0x{:02x}", code),
             }
         }
