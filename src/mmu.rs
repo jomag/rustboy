@@ -8,8 +8,7 @@ use crate::interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
 
 use crate::apu::AudioProcessingUnit;
 use crate::buttons::Buttons;
-use crate::cartridge::{load_cartridge, Cartridge, NoCartridge};
-use crate::debug::Debug;
+use crate::cartridge::{cartridge::Cartridge, cartridge::NoCartridge, load_cartridge};
 use crate::dma::DMA;
 use crate::instructions;
 use crate::interrupt::handle_interrupts;
@@ -78,9 +77,17 @@ pub const NR52_REG: u16 = 0xFF26;
 // Memory areas
 pub const _OAM_OFFSET: u16 = 0xFE00;
 
+pub trait MemoryMapped {
+    fn read(&self, address: u16) -> u8;
+    fn write(&mut self, address: u16, value: u8);
+
+    // Perform reset as after power cycle
+    fn reset(&mut self);
+}
+
 pub struct MMU {
     pub reg: Registers,
-    pub cartridge: Box<Cartridge>,
+    pub cartridge: Box<dyn Cartridge>,
 
     // RAM bank (0xC000 to 0xCFFF)
     pub ram: [u8; 0x2000],

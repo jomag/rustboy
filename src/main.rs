@@ -10,7 +10,7 @@ mod macros;
 
 mod apu;
 mod buttons;
-mod cartridge;
+pub mod cartridge;
 mod conv;
 mod debug;
 mod dma;
