@@ -34,7 +34,7 @@ A personal project to learn Rust and basic emulator development.
 | | [:red_circle:](x "tma_write_reloading: FAIL") |
 | emulator-only/mbc1 | [:green_heart:](x "bits_bank1: PASS") | [:green_heart:](x "bits_bank2: PASS") | [:green_heart:](x "bits_mode: PASS") | [:green_heart:](x "bits_ramg: PASS") | [:green_heart:](x "multicart_rom_8Mb: PASS") | [:green_heart:](x "ram_256kb: PASS") | [:green_heart:](x "ram_64kb: PASS") | [:green_heart:](x "rom_16Mb: PASS") | [:green_heart:](x "rom_1Mb: PASS") | [:green_heart:](x "rom_2Mb: PASS") | [:green_heart:](x "rom_4Mb: PASS") | [:green_heart:](x "rom_512kb: PASS") |
 | | [:green_heart:](x "rom_8Mb: PASS") |
-| emulator-only/mbc2 | [:green_heart:](x "bits_ramg: PASS") | [:green_heart:](x "bits_romb: PASS") | [:green_heart:](x "bits_unused: PASS") | [:green_heart:](x "ram: PASS") | [:green_heart:](x "rom_1Mb: PASS") | [:green_heart:](x "rom_2Mb: PASS") | [:green_heart:](x "rom_512kb: PASS") |
+| emulator-only/mbc2 | [:red_circle:](x "bits_ramg: FAIL") | [:green_heart:](x "bits_romb: PASS") | [:red_circle:](x "bits_unused: FAIL") | [:red_circle:](x "ram: FAIL") | [:green_heart:](x "rom_1Mb: PASS") | [:green_heart:](x "rom_2Mb: PASS") | [:green_heart:](x "rom_512kb: PASS") |
 | emulator-only/mbc5 | [:green_heart:](x "rom_16Mb: PASS") | [:green_heart:](x "rom_1Mb: PASS") | [:green_heart:](x "rom_2Mb: PASS") | [:green_heart:](x "rom_32Mb: PASS") | [:green_heart:](x "rom_4Mb: PASS") | [:green_heart:](x "rom_512kb: PASS") | [:green_heart:](x "rom_64Mb: PASS") | [:green_heart:](x "rom_8Mb: PASS") |
 
 
