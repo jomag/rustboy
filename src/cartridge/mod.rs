@@ -10,6 +10,8 @@ pub mod no_mbc;
 use std::fs::File;
 use std::io::Read;
 
+use crate::cartridge::mbc3::MBC3;
+
 use super::cartridge::{
     cartridge::Cartridge, cartridge_type::CartridgeType, mbc1::MBC1, mbc2::MBC2, mbc5::MBC5,
     no_mbc::NoMBC,
@@ -65,6 +67,7 @@ pub fn load_cartridge(filename: String) -> Box<dyn Cartridge> {
                 CartridgeType::NoMBC { .. } => Box::new(NoMBC::new(t, &content)),
                 CartridgeType::MBC1 { .. } => Box::new(MBC1::new(t, &content)),
                 CartridgeType::MBC2 { .. } => Box::new(MBC2::new(t, &content)),
+                CartridgeType::MBC3 { .. } => Box::new(MBC3::new(t, &content)),
                 CartridgeType::MBC5 { .. } => Box::new(MBC5::new(t, &content)),
                 _ => panic!("Unsupported cartridge type: 0x{:02x}", code),
             }

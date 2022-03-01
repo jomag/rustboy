@@ -25,31 +25,18 @@ pub struct MBC1 {
     header: CartridgeHeader,
 }
 
-impl Cartridge for MBC1 {
-    fn read_abs(&self, address: usize) -> u8 {
-        return self.rom[address];
-    }
-
-    fn cartridge_type(&self) -> CartridgeType {
-        return self.cartridge_type;
-    }
-
-    fn header(&self) -> &CartridgeHeader {
-        &self.header
-    }
-}
-
 impl MBC1 {
     pub fn new(cartridge_type: CartridgeType, data: &Vec<u8>) -> Self {
-        let mut rom = vec![0; data.len()].into_boxed_slice();
+        let header = CartridgeHeader::from_header(data);
+
+        let mut rom = vec![0; header.rom_size].into_boxed_slice();
         for (src, dst) in rom.iter_mut().zip(data.iter()) {
             *src = *dst
         }
 
-        let max_ram_size = cartridge_type.max_ram_size();
-        let ram = match max_ram_size {
+        let ram = match header.ram_size {
             0 => None,
-            _ => Some(vec![0; max_ram_size].into_boxed_slice()),
+            sz => Some(vec![0; sz].into_boxed_slice()),
         };
 
         let mut cartridge = MBC1 {
@@ -63,7 +50,7 @@ impl MBC1 {
             bank2: 0,
             mode: 0,
             cartridge_type,
-            header: CartridgeHeader::from_header(data),
+            header,
         };
 
         cartridge.reset();
@@ -183,5 +170,19 @@ impl MemoryMapped for MBC1 {
         self.bank2 = 0;
         self.mode = 0;
         self.update_offsets();
+    }
+}
+
+impl Cartridge for MBC1 {
+    fn read_abs(&self, address: usize) -> u8 {
+        return self.rom[address];
+    }
+
+    fn cartridge_type(&self) -> CartridgeType {
+        return self.cartridge_type;
+    }
+
+    fn header(&self) -> &CartridgeHeader {
+        &self.header
     }
 }

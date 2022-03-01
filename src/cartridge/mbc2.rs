@@ -22,14 +22,14 @@ pub struct MBC2 {
 
 impl MBC2 {
     pub fn new(cartridge_type: CartridgeType, data: &Vec<u8>) -> Self {
-        let max_rom_size = cartridge_type.max_rom_size();
-        let mut rom = vec![0; max_rom_size].into_boxed_slice();
+        let header = CartridgeHeader::from_header(data);
+
+        let mut rom = vec![0; header.rom_size].into_boxed_slice();
         for (src, dst) in rom.iter_mut().zip(data.iter()) {
             *src = *dst
         }
 
-        let max_ram_size = cartridge_type.max_ram_size();
-        let ram = vec![0; max_ram_size].into_boxed_slice();
+        let ram = vec![0; header.ram_size].into_boxed_slice();
 
         let mut cartridge = MBC2 {
             rom,
@@ -38,7 +38,7 @@ impl MBC2 {
             bank: 1,
             rom_offset_0x4000_0x7fff: 0,
             cartridge_type,
-            header: CartridgeHeader::from_header(data),
+            header,
         };
 
         cartridge.reset();

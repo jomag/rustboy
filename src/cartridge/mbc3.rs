@@ -1,4 +1,10 @@
-use super::cartridge_type::Aux;
+use crate::mmu::MemoryMapped;
+
+use super::{
+    cartridge::Cartridge,
+    cartridge_header::{CartridgeHeader, RAM_BANK_SIZE, ROM_BANK_SIZE},
+    cartridge_type::{Aux, CartridgeType},
+};
 use chrono::{Datelike, Timelike};
 
 struct RTC {
@@ -40,7 +46,7 @@ impl RTC {
         self.day_counter = (now.date().num_days_from_ce() & 0x1FF) as u16;
     }
 
-    fn read(&self, adr: usize, reg: u8) -> u8 {
+    fn read_register(&self, reg: u8) -> u8 {
         match reg {
             0x08 => self.second,
             0x09 => self.minute,
@@ -59,36 +65,36 @@ impl RTC {
         }
     }
 
-    fn write(&mut self, adr: u16, reg: u8, value: u8) {
-        match adr {
-            0x6000..=0x7FFF => match value {
-                0 => self.prep_latch = true,
-                1 => {
-                    if self.prep_latch {
-                        self.prep_latch = false;
-                        if !self.halted {
-                            self.latch();
-                        }
+    fn write_latch(&mut self, value: u8) {
+        match value {
+            0 => self.prep_latch = true,
+            1 => {
+                if self.prep_latch {
+                    self.prep_latch = false;
+                    if !self.halted {
+                        self.latch();
                     }
                 }
-                _ => panic!("Invalid RTC latch value: 0x{:02x}", value),
-            },
-            0xA000..=0xBFFF => match reg {
-                0x08 => self.second = value,
-                0x09 => self.minute = value,
-                0x0A => self.hour = value,
-                0x0B => self.day_counter = (self.day_counter & 0x100) | value as u16,
-                0x0C => {
-                    if value & 1 == 0 {
-                        self.day_counter = value as u16;
-                    } else {
-                        self.day_counter = value as u16 | 0x100
-                    }
-                    self.halted = value & 0b0100_0000 != 0;
+            }
+            _ => panic!("Invalid RTC latch value: 0x{:02x}", value),
+        }
+    }
+
+    fn write_register(&mut self, reg: u8, value: u8) {
+        match reg {
+            0x08 => self.second = value,
+            0x09 => self.minute = value,
+            0x0A => self.hour = value,
+            0x0B => self.day_counter = (self.day_counter & 0x100) | value as u16,
+            0x0C => {
+                if value & 1 == 0 {
+                    self.day_counter = value as u16;
+                } else {
+                    self.day_counter = value as u16 | 0x100
                 }
-                _ => panic!("Invalid RTC register: 0x{:02x}", reg),
-            },
-            _ => panic!("Invalid RTC address"),
+                self.halted = value & 0b0100_0000 != 0;
+            }
+            _ => panic!("Invalid RTC register: 0x{:02x}", reg),
         }
     }
 }
@@ -97,46 +103,166 @@ pub struct MBC3 {
     // Memory buffers
     pub rom: Box<[u8]>,
     pub ram: Option<Box<[u8]>>,
-
-    // Current ROM and RAM offsets
-    rom_offset_0x4000_0x7fff: usize,
-
-    aux_selection: Aux,
     rtc: Option<RTC>,
-    pub rtc_register: u8,
-    ram_enabled: bool,
+
+    // Current ROM (0x4000+) and RAM offsets
+    rom_offset: usize,
+    ram_offset: usize,
+
+    // MBC registers
+    rom_bank: u8,
+    aux_enabled: bool,
+    register_selection: u8,
+
+    // Meta
+    pub cartridge_type: CartridgeType,
+    header: CartridgeHeader,
 }
 
 impl MBC3 {
-    fn read_rtc(&self, offset: usize) -> u8 {
-        match &self.rtc {
-            Some(rtc) => rtc.read(offset, self.rtc_register),
-            None => 0,
+    pub fn new(cartridge_type: CartridgeType, data: &Vec<u8>) -> Self {
+        let header = CartridgeHeader::from_header(data);
+
+        let mut rom = vec![0; header.rom_size].into_boxed_slice();
+        for (src, dst) in rom.iter_mut().zip(data.iter()) {
+            *src = *dst
+        }
+
+        let ram = match header.ram_size {
+            0 => None,
+            sz => Some(vec![0; sz].into_boxed_slice()),
+        };
+
+        let rtc = match cartridge_type {
+            CartridgeType::MBC3 { rtc, .. } => Some(RTC::new()),
+            _ => None,
+        };
+
+        let mut cartridge = MBC3 {
+            rom,
+            ram,
+            rtc,
+            rom_offset: 0,
+            ram_offset: 0,
+            rom_bank: 1,
+            register_selection: 0,
+            aux_enabled: false,
+            cartridge_type,
+            header,
+        };
+
+        cartridge.reset();
+        cartridge
+    }
+
+    fn read_ram(&self, offset: usize) -> u8 {
+        match self.aux_enabled {
+            true => match &self.ram {
+                Some(ram) => ram[self.ram_offset + offset],
+                None => 0xFF,
+            },
+            false => 0,
         }
     }
 
-    pub fn reset(&mut self) {
+    fn write_ram(&mut self, offset: usize, value: u8) {
+        match self.aux_enabled {
+            true => match &mut self.ram {
+                Some(ram) => ram[self.ram_offset + offset] = value,
+                None => {}
+            },
+            false => {}
+        }
+    }
+
+    fn update_offsets(&mut self) {
+        let rom_mask = self.header.rom_bank_count - 1;
+        self.rom_offset = (self.rom_bank as usize & rom_mask) * ROM_BANK_SIZE;
+
+        let bank_count = self.header.ram_bank_count;
+        let ram_mask = if bank_count > 0 { bank_count - 1 } else { 0 };
+        self.ram_offset = (self.register_selection as usize & ram_mask) * RAM_BANK_SIZE;
+    }
+}
+
+impl MemoryMapped for MBC3 {
+    fn read(&self, address: u16) -> u8 {
+        match address {
+            0x0000..=0x3FFF => self.rom[address as usize],
+            0x4000..=0x7FFF => self.rom[self.rom_offset + address as usize - 0x4000],
+            0xA000..=0xBFFF => match self.aux_enabled {
+                true => match self.register_selection {
+                    0x00..=0x03 => self.read_ram(address as usize - 0xA000),
+                    0x0B..=0x0C => match &self.rtc {
+                        Some(rtc) => rtc.read_register(self.register_selection),
+                        None => 0xFF,
+                    },
+                    _ => 0xFF,
+                },
+                false => 0xFF,
+            },
+            _ => 0xFF,
+        }
+    }
+
+    fn write(&mut self, address: u16, value: u8) {
+        match address {
+            0x0000..=0x1FFF => self.aux_enabled = value == 0x0A,
+            0x2000..=0x3FFF => {
+                let masked = value & 0b0111_1111;
+                self.rom_bank = if masked == 0 { 1 } else { masked };
+                self.update_offsets();
+            }
+            0x4000..=0x5FFF => {
+                self.register_selection = value;
+                self.update_offsets();
+            }
+            0x6000..=0x7FFF => {
+                if self.aux_enabled {
+                    if let Some(ref mut rtc) = self.rtc {
+                        rtc.write_latch(value);
+                    }
+                }
+            }
+            0xA000..=0xBFFF => {
+                if self.aux_enabled {
+                    match self.register_selection {
+                        0x00..=0x03 => self.write_ram(address as usize - 0xA000, value),
+                        0x08..=0x0C => {
+                            if let Some(ref mut rtc) = self.rtc {
+                                rtc.write_register(self.register_selection, value);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn reset(&mut self) {
         if let Some(ram) = &mut self.ram {
             ram.fill(0);
         }
 
-        self.rtc_register = 0;
-        self.ram_enabled = false;
+        self.rom_bank = 1;
+        self.register_selection = 0;
+        self.aux_enabled = false;
+        self.update_offsets();
+    }
+}
+
+impl Cartridge for MBC3 {
+    fn cartridge_type(&self) -> CartridgeType {
+        return self.cartridge_type;
     }
 
-    fn read_ram(&self, offset: usize) -> u8 {
-        0
+    fn header(&self) -> &CartridgeHeader {
+        &self.header
     }
 
-    fn read(&self, address: u16) -> u8 {
-        match address {
-            0x0000..=0x3FFF => self.rom[address as usize],
-            0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + address as usize - 0x4000],
-            0xA000..=0xBFFF => match &self.aux_selection {
-                RAM => self.read_ram(address as usize - 0xA000),
-                RTC => self.read_rtc(address as usize - 0xA000),
-            },
-            _ => 0,
-        }
+    fn read_abs(&self, address: usize) -> u8 {
+        return self.rom[address];
     }
 }
