@@ -29,7 +29,9 @@ impl MBC2 {
             *src = *dst
         }
 
-        let ram = vec![0; header.ram_size].into_boxed_slice();
+        // Note: the RAM size reported in the header seems to be 0 bytes,
+        // but MBC2 always have 512 x 4 bit RAM.
+        let ram = vec![0; cartridge_type.max_ram_size()].into_boxed_slice();
 
         let mut cartridge = MBC2 {
             rom,
