@@ -3,7 +3,7 @@ use crate::mmu::MemoryMapped;
 use super::{
     cartridge::Cartridge,
     cartridge_header::{CartridgeHeader, RAM_BANK_SIZE, ROM_BANK_SIZE},
-    cartridge_type::{Aux, CartridgeType},
+    cartridge_type::CartridgeType,
 };
 use chrono::{Datelike, Timelike};
 
