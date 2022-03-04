@@ -8,8 +8,7 @@ use crate::interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
 
 use crate::apu::AudioProcessingUnit;
 use crate::buttons::Buttons;
-use crate::cartridge::{load_cartridge, Cartridge, NullCartridge};
-use crate::debug::Debug;
+use crate::cartridge::{cartridge::Cartridge, cartridge::NoCartridge, load_cartridge};
 use crate::dma::DMA;
 use crate::instructions;
 use crate::interrupt::handle_interrupts;
@@ -78,12 +77,17 @@ pub const NR52_REG: u16 = 0xFF26;
 // Memory areas
 pub const _OAM_OFFSET: u16 = 0xFE00;
 
+pub trait MemoryMapped {
+    fn read(&self, address: u16) -> u8;
+    fn write(&mut self, address: u16, value: u8);
+
+    // Perform reset as after power cycle
+    fn reset(&mut self);
+}
+
 pub struct MMU {
     pub reg: Registers,
     pub cartridge: Box<dyn Cartridge>,
-
-    // External RAM in cartridge
-    pub external_ram: [u8; 0x2000],
 
     // RAM bank (0xC000 to 0xCFFF)
     pub ram: [u8; 0x2000],
@@ -116,8 +120,7 @@ impl MMU {
     pub fn new(machine: Machine) -> Self {
         MMU {
             reg: Registers::new(),
-            cartridge: Box::new(NullCartridge {}),
-            external_ram: [0; 0x2000],
+            cartridge: Box::new(NoCartridge {}),
             ram: [0; 0x2000],
             io_reg: [0; 0x80],
             ie_reg: 0,
@@ -139,7 +142,6 @@ impl MMU {
     pub fn reset(&mut self) {
         self.reg = Registers::new();
         self.cartridge.reset();
-        self.external_ram.fill(0);
         self.ram.fill(0);
         self.io_reg.fill(0);
         self.ie_reg = 0;
@@ -271,7 +273,7 @@ impl MMU {
             0x0100..=0x3FFF => self.cartridge.read(addr),
             0x4000..=0x7FFF => self.cartridge.read(addr), // self.romx[(addr - 0x4000) as usize],
             0x8000..=0x9FFF => self.lcd.read_display_ram(addr),
-            0xA000..=0xBFFF => self.external_ram[(addr - 0xA000) as usize],
+            0xA000..=0xBFFF => self.cartridge.read(addr),
             0xC000..=0xCFFF => self.ram[(addr - 0xC000) as usize], // RAM
             0xD000..=0xDFFF => self.ram[(addr - 0xC000) as usize], // RAM (switchable on GBC)
             0xE000..=0xFDFF => self.ram[(addr - 0xE000) as usize], // RAM echo
@@ -358,7 +360,7 @@ impl MMU {
             0x0000..=0x3FFF => self.cartridge.write(addr, value),
             0x4000..=0x7FFF => self.cartridge.write(addr, value),
             0x8000..=0x9FFF => self.lcd.write_display_ram(addr, value),
-            0xA000..=0xBFFF => self.external_ram[(addr - 0xA000) as usize] = value,
+            0xA000..=0xBFFF => self.cartridge.write(addr, value),
             0xC000..=0xCFFF => self.ram[(addr - 0xC000) as usize] = value,
             0xD000..=0xDFFF => self.ram[(addr - 0xC000) as usize] = value,
             0xE000..=0xFDFF => self.ram[(addr - 0xE000) as usize] = value,
