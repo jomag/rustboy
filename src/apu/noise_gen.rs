@@ -1,7 +1,7 @@
 use crate::apu::dac::DAC;
 use crate::apu::length_counter::LengthCounter;
 use crate::emu::Machine;
-use crate::mmu::NR41_REG;
+use crate::mmu::{NR40_REG, NR41_REG, NR42_REG, NR43_REG, NR44_REG};
 
 pub struct NoiseSoundGenerator {
     // ---------

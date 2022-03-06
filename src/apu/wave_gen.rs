@@ -1,7 +1,7 @@
 use crate::apu::dac::DAC;
 use crate::apu::length_counter::LengthCounter;
 use crate::emu::Machine;
-use crate::mmu::{NR31_REG, NR32_REG, NR33_REG};
+use crate::mmu::{NR30_REG, NR31_REG, NR32_REG, NR33_REG, NR34_REG};
 
 pub const CH3_WAVE_MEMORY_SIZE: usize = 16;
 
@@ -16,7 +16,6 @@ pub struct WaveSoundGenerator {
 
     // NR31 (0xFF1B): length load
     // 7..0: load sound length (write only)
-    nr31: u8,
 
     // NR32 (0xFF1C): Volume envelope
     // bit 7, 4..0: not used
@@ -51,7 +50,7 @@ pub struct WaveSoundGenerator {
     // Internal register. When this counter reaches zero,
     // it is reset to the frequency value (NR13, NR14) and
     // wave_duty_position moves to next position
-    pub frequency_timer: u16,
+    pub frequency_timer: i16,
 
     pub wave_position: u16,
 
@@ -79,7 +78,6 @@ pub struct WaveSoundGenerator {
 impl WaveSoundGenerator {
     pub fn new(machine: Machine) -> Self {
         WaveSoundGenerator {
-            nr31: 0,
             frequency: 0,
 
             // The wave is initialized at power-on with some semi-random values.
@@ -111,7 +109,6 @@ impl WaveSoundGenerator {
     // Reset everything except wave, which is what happens
     // when the sound hardware is powered off by NR52.
     pub fn power_off_reset(&mut self) {
-        self.nr31 = 0;
         self.frequency = 0;
         self.length_counter.power_off();
         self.wave_position = 0;
@@ -183,10 +180,7 @@ impl WaveSoundGenerator {
                 self.dac.powered_on = value & 0x80 != 0;
                 self.enabled = self.enabled && self.dac.powered_on;
             }
-            NR31_REG => {
-                self.length_counter.write_reg_nrx1(value);
-                self.nr31 = value;
-            }
+            NR31_REG => self.length_counter.write_reg_nrx1(value),
             NR32_REG => self.volume_code = (value & 0b0110_0000) >> 5,
             NR33_REG => self.frequency = (self.frequency & 0b111_0000_0000) | value as u16,
             NR34_REG => {
@@ -255,7 +249,7 @@ impl WaveSoundGenerator {
 
         self.enabled = true;
         self.length_counter.trigger(256, seq_step);
-        self.frequency_timer = (2048 - self.frequency) * 2 + 6;
+        self.frequency_timer = (2048 - self.frequency as i16) * 2 + 6;
 
         self.wave_position = 0;
         self.sample_buffer = self.wave[self.wave_position as usize / 2];
@@ -275,7 +269,7 @@ impl WaveSoundGenerator {
 
             // If frequency timer reaches 0, reset it to the selected frequency
             // (NR13, NR14) and increment the wave position
-            self.frequency_timer += (2048 - self.frequency) * 2 - 4;
+            self.frequency_timer += (2048 - self.frequency as i16) * 2 - 4;
             self.wave_position = (self.wave_position + 1) & 31;
             self.sample_buffer = self.wave[self.wave_position as usize / 2]
         } else {
