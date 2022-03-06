@@ -1,7 +1,7 @@
 use std::{fs::File, io::BufWriter, iter, thread::sleep, time::Instant};
 
 use crate::{
-    apu::AudioRecorder,
+    apu::apu::AudioRecorder,
     buttons::ButtonType,
     debug::Debug,
     emu::Emu,
