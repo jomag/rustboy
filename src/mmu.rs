@@ -6,7 +6,7 @@ use std::io::Read;
 use crate::emu::Machine;
 use crate::interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
 
-use crate::apu::AudioProcessingUnit;
+use crate::apu::apu::AudioProcessingUnit;
 use crate::buttons::Buttons;
 use crate::cartridge::{cartridge::Cartridge, cartridge::NoCartridge, load_cartridge};
 use crate::dma::DMA;

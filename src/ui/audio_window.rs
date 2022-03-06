@@ -2,7 +2,7 @@ use egui::{
     emath, epaint, pos2, style, vec2, Color32, CtxRef, Pos2, Rect, Sense, Shape, Stroke, Ui,
 };
 
-use crate::{apu::CH3_WAVE_MEMORY_SIZE, emu::Emu};
+use crate::{apu::wave_gen::CH3_WAVE_MEMORY_SIZE, emu::Emu};
 
 pub fn render_wavetable(ui: &mut Ui, emu: &mut Emu) {
     let sample_count = CH3_WAVE_MEMORY_SIZE * 2;
