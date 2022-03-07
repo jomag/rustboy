@@ -122,7 +122,40 @@ impl AudioProcessingUnit {
         let ch3_output = self.ch3.update_4t(hz256);
         let ch4_output = self.ch4.update_4t(hz64, hz256);
 
-        let sample = (ch1_output + ch2_output + ch3_output + ch4_output) as f32;
+        // Mixer
+        let mut left: f32 = 0.0;
+        if self.nr51 & 128 != 0 {
+            left += ch4_output;
+        }
+        if self.nr51 & 64 != 0 {
+            left += ch3_output;
+        }
+        if self.nr51 & 32 != 0 {
+            left += ch2_output;
+        }
+        if self.nr51 & 16 != 0 {
+            left += ch1_output;
+        }
+
+        let mut right: f32 = 0.0;
+        if self.nr51 & 8 != 0 {
+            right += ch4_output;
+        }
+        if self.nr51 & 4 != 0 {
+            right += ch3_output;
+        }
+        if self.nr51 & 2 != 0 {
+            right += ch2_output;
+        }
+        if self.nr51 & 1 != 0 {
+            right += ch1_output;
+        }
+
+        // FIXME: for now, left and right channel
+        // is joined to a mono channel, and the volume
+        // is lowered to 30%.
+        let sample = (left + right) / 2.0;
+        let sample = sample * 0.3;
 
         if let Some(ref mut rec) = self.recorder {
             rec.gen1(ch1_output as f32);

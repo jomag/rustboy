@@ -53,6 +53,7 @@ pub fn render_audio_window(ctx: &CtxRef, emu: &mut Emu) {
         ui.heading("Channel 1");
         ui.label(format!("Enabled: {}", emu.mmu.apu.s1.enabled));
         ui.label(format!("Envelope: {}", emu.mmu.apu.s1.envelope));
+        ui.label(format!("Frequency: {}", emu.mmu.apu.s1.frequency));
 
         ui.heading("Channel 2");
         ui.label(format!("Enabled: {}", emu.mmu.apu.s2.enabled));
