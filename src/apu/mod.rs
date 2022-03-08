@@ -16,6 +16,7 @@
 // - After the sound hardware is powered on, frame sequencer should be
 //   reset so next step is step 0.
 // - Remove duplicated envelope code
+// - Volume for left and right channel (NR50) is not handled
 
 pub mod apu;
 pub mod dac;

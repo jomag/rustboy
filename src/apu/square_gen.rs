@@ -43,7 +43,7 @@ use crate::mmu::{
 //
 pub struct SquareWaveSoundGenerator {
     // Frequency. 10 bits. Bit 7..0 in NR13 + bit 9..8 in NR14.
-    frequency: u16,
+    pub frequency: u16,
 
     // Internal register. When this counter reaches zero,
     // it is reset to the frequency value (NR13, NR14) and
@@ -203,11 +203,11 @@ impl SquareWaveSoundGenerator {
                 self.envelope_periods_initial = value & 0b111;
             }
             NR13_REG | NR23_REG => {
-                self.frequency = (self.frequency & 0b11_0000_0000) | value as u16
+                self.frequency = (self.frequency & 0b111_0000_0000) | value as u16
             }
             NR14_REG | NR24_REG => {
                 self.frequency =
-                    (self.frequency & 0b00_1111_1111) | (((value & 0b111) as u16) << 8);
+                    (self.frequency & 0b000_1111_1111) | (((value & 0b111) as u16) << 8);
 
                 if self
                     .length_counter
@@ -234,8 +234,6 @@ impl SquareWaveSoundGenerator {
         if let Some(ref mut sweep) = self.sweep {
             sweep.trigger(&mut self.enabled, &mut self.frequency);
         }
-
-        // FIXME: add sweep trigger handling
 
         // If DAC is not powered, immediately disable the channel again
         if !self.dac.powered_on {
