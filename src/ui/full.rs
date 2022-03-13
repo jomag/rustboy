@@ -1,4 +1,4 @@
-use std::{fs::File, io::BufWriter, iter, thread::sleep, time::Instant};
+use std::{collections::HashMap, fs::File, io::BufWriter, iter, thread::sleep, time::Instant};
 
 use crate::{
     apu::apu::AudioRecorder,
@@ -6,6 +6,7 @@ use crate::{
     debug::Debug,
     emu::Emu,
     lcd::{SCREEN_HEIGHT, SCREEN_WIDTH},
+    wave_audio_recorder::WaveAudioRecorder,
     APPNAME, CLOCK_SPEED, CYCLES_PER_FRAME,
 };
 use cpal::{
@@ -29,7 +30,7 @@ use super::{
     render_stats::RenderStats, serial_window::SerialWindow,
 };
 
-const TARGET_FPS: u64 = 60;
+const TARGET_FPS: u64 = 2; // 60;
 
 /// A custom event type for the winit app.
 enum Event {
@@ -65,46 +66,8 @@ struct MoeApp {
     serial_window: SerialWindow,
     cartridge_window: CartridgeWindow,
     memory_window: MemoryWindow,
-}
 
-pub struct WaveAudioRecorder {
-    pub mono_writer: Option<hound::WavWriter<BufWriter<File>>>,
-    pub gen1_writer: Option<hound::WavWriter<BufWriter<File>>>,
-    pub gen2_writer: Option<hound::WavWriter<BufWriter<File>>>,
-}
-
-impl AudioRecorder for WaveAudioRecorder {
-    fn mono(&mut self, sample: f32) {
-        if let Some(ref mut wr) = self.mono_writer {
-            wr.write_sample(sample);
-        }
-    }
-
-    fn gen1(&mut self, sample: f32) {
-        if let Some(ref mut wr) = self.gen1_writer {
-            wr.write_sample(sample);
-        }
-    }
-
-    fn gen2(&mut self, sample: f32) {
-        if let Some(ref mut wr) = self.gen2_writer {
-            wr.write_sample(sample);
-        }
-    }
-
-    fn flush(&mut self) {
-        if let Some(ref mut wr) = self.mono_writer {
-            wr.flush();
-        }
-
-        if let Some(ref mut wr) = self.gen1_writer {
-            wr.flush();
-        }
-
-        if let Some(ref mut wr) = self.gen2_writer {
-            wr.flush();
-        }
-    }
+    keymap: HashMap<Key, ButtonType>,
 }
 
 impl MoeApp {
@@ -249,6 +212,16 @@ impl MoeApp {
             cartridge_window: CartridgeWindow::new(),
             memory_window: MemoryWindow::new(),
             serial_buffer_consumer: None,
+            keymap: HashMap::from([
+                (Key::ArrowLeft, ButtonType::Left),
+                (Key::ArrowRight, ButtonType::Right),
+                (Key::ArrowUp, ButtonType::Up),
+                (Key::ArrowDown, ButtonType::Down),
+                (Key::Z, ButtonType::A),
+                (Key::X, ButtonType::B),
+                (Key::Enter, ButtonType::Start),
+                (Key::Space, ButtonType::Select),
+            ]),
         }
     }
 
@@ -259,87 +232,24 @@ impl MoeApp {
             }
         }
 
+        // Handle keyboard input
         if ctx.wants_keyboard_input() {
             self.emu.mmu.buttons.release_all();
         } else {
             let inp = ctx.input();
-
-            if inp.key_down(Key::ArrowLeft) {
-                self.emu.mmu.buttons.handle_press(ButtonType::Left)
-            }
-
-            if inp.key_down(Key::ArrowRight) {
-                self.emu.mmu.buttons.handle_press(ButtonType::Right)
-            }
-
-            if inp.key_down(Key::ArrowUp) {
-                self.emu.mmu.buttons.handle_press(ButtonType::Up)
-            }
-
-            if inp.key_down(Key::ArrowDown) {
-                self.emu.mmu.buttons.handle_press(ButtonType::Down)
-            }
-
-            if inp.key_down(Key::Z) {
-                self.emu.mmu.buttons.handle_press(ButtonType::A)
-            }
-
-            if inp.key_down(Key::X) {
-                self.emu.mmu.buttons.handle_press(ButtonType::B)
-            }
-
-            if inp.key_down(Key::Enter) {
-                self.emu.mmu.buttons.handle_press(ButtonType::Select)
-            }
-
-            if inp.key_down(Key::Space) {
-                self.emu.mmu.buttons.handle_press(ButtonType::Start)
-            }
-
-            if inp.key_released(Key::ArrowLeft) {
-                self.emu.mmu.buttons.handle_release(ButtonType::Left)
-            }
-
-            if inp.key_released(Key::ArrowRight) {
-                self.emu.mmu.buttons.handle_release(ButtonType::Right)
-            }
-
-            if inp.key_released(Key::ArrowUp) {
-                self.emu.mmu.buttons.handle_release(ButtonType::Up)
-            }
-
-            if inp.key_released(Key::ArrowDown) {
-                self.emu.mmu.buttons.handle_release(ButtonType::Down)
-            }
-
-            if inp.key_released(Key::Z) {
-                self.emu.mmu.buttons.handle_release(ButtonType::A)
-            }
-
-            if inp.key_released(Key::X) {
-                self.emu.mmu.buttons.handle_release(ButtonType::B)
-            }
-
-            if inp.key_released(Key::Enter) {
-                self.emu.mmu.buttons.handle_release(ButtonType::Select)
-            }
-
-            if inp.key_released(Key::Space) {
-                self.emu.mmu.buttons.handle_release(ButtonType::Start)
+            for key in self.keymap.keys() {
+                if inp.key_down(*key) {
+                    self.emu.mmu.buttons.handle_press(self.keymap[&key])
+                }
+                if inp.key_released(*key) {
+                    self.emu.mmu.buttons.handle_release(self.keymap[&key])
+                }
             }
         }
 
         // Update render stats with new frame info
         self.ui_render_stats
             .on_new_frame(ctx.input().time, frame.info().cpu_usage);
-
-        // egui::CentralPanel::default().show(ctx, |ui| {
-        //     if let Some(texture) = self.fb_texture {
-        //         let size = [SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32];
-        //         ui.heading("This is an image:");
-        //         ui.image(texture, size);
-        //     }
-        // });
 
         if let Some(texture_id) = self.fb_texture {
             egui::Window::new("Gameboy").show(ctx, |ui| {
@@ -362,11 +272,13 @@ impl MoeApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading(APPNAME);
             ui.label(format!("UI FPS: {:.1}", self.ui_render_stats.fps()));
-            ui.label(format!("Emulator FPS: {:.1}", self.emu_render_stats.fps()));
+            ui.label(format!("Emulator FPS: {:.10}", self.emu_render_stats.fps()));
             egui::warn_if_debug_build(ui);
         });
     }
 }
+
+fn setup_wgpu() {}
 
 pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
     let mut app = MoeApp::new(emu);
@@ -375,7 +287,7 @@ pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
         .with_decorations(true)
         .with_resizable(true)
         .with_transparent(false)
-        .with_title("egui-wgpu_winit example")
+        .with_title(APPNAME)
         .with_inner_size(winit::dpi::PhysicalSize {
             width: 2800,
             height: 1800,
@@ -448,7 +360,7 @@ pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
 
     event_loop.run(move |event, _, control_flow| {
         // Debugging: print all events
-        if false {
+        if true {
             match &event {
                 NewEvents(start_cause) => match start_cause {
                     // StartCause::ResumeTimeReached { .. } => assert!(false, "RESUME TIME REACHED!"),
@@ -626,12 +538,12 @@ pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
                     app.emu_render_stats
                         .on_new_frame(abs_elapsed_time, Some(0.0));
 
-                    // println!("New frame ready!");
+                    println!("New frame ready!");
                 } else {
                     let wait_us = us_per_frame - elapsed_time;
                     let new_inst = start_time + std::time::Duration::from_micros(wait_us);
                     *control_flow = ControlFlow::WaitUntil(new_inst);
-                    // println!("New timeout in: {} us", wait_us);
+                    println!("New timeout in: {} us", wait_us);
                 }
             }
 

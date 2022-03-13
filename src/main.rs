@@ -25,6 +25,7 @@ mod test_runner;
 mod timer;
 mod ui;
 mod utils;
+mod wave_audio_recorder;
 
 use emu::Emu;
 use lcd::{LCD, SCREEN_HEIGHT, SCREEN_WIDTH};
