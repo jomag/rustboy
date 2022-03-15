@@ -33,7 +33,7 @@ use super::{
 const TARGET_FPS: u64 = 2; // 60;
 
 /// A custom event type for the winit app.
-enum Event {
+enum AppEvent {
     RequestRedraw,
 }
 
@@ -43,7 +43,11 @@ struct ExampleRepaintSignal(std::sync::Mutex<winit::event_loop::EventLoopProxy<E
 
 impl epi::backend::RepaintSignal for ExampleRepaintSignal {
     fn request_repaint(&self) {
-        self.0.lock().unwrap().send_event(Event::RequestRedraw).ok();
+        self.0
+            .lock()
+            .unwrap()
+            .send_event(AppEvent::RequestRedraw)
+            .ok();
     }
 }
 
@@ -278,7 +282,24 @@ impl MoeApp {
     }
 }
 
-fn setup_wgpu() {}
+/// Debug function to print event details
+fn print_event(event: &winit::event::Event<AppEvent>) {
+    match &event {
+        NewEvents(start_cause) => match start_cause {
+            // StartCause::ResumeTimeReached { .. } => assert!(false, "RESUME TIME REACHED!"),
+            _ => println!("\n--> NewEvents: {:?}", start_cause),
+        },
+        RedrawRequested(..) => println!("--> RedrawRequested"),
+        WindowEvent { event, .. } => println!("--> WindowEvent {:?}", event),
+        DeviceEvent { event, .. } => println!("--> DeviceEvent {:?}", event),
+        UserEvent(..) => println!("--> UserEvent"),
+        Suspended => println!("--> Suspended"),
+        Resumed => println!("--> Resumed"),
+        MainEventsCleared => println!("--> MainEventsCleared"),
+        RedrawEventsCleared => println!("--> RedrawEventsCleared"),
+        LoopDestroyed => println!("--> LoopDestroyed"),
+    }
+}
 
 pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
     let mut app = MoeApp::new(emu);
@@ -359,23 +380,8 @@ pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
     app.setup_serial();
 
     event_loop.run(move |event, _, control_flow| {
-        // Debugging: print all events
         if true {
-            match &event {
-                NewEvents(start_cause) => match start_cause {
-                    // StartCause::ResumeTimeReached { .. } => assert!(false, "RESUME TIME REACHED!"),
-                    _ => println!("\n--> NewEvents: {:?}", start_cause),
-                },
-                RedrawRequested(..) => println!("--> RedrawRequested"),
-                WindowEvent { event, .. } => println!("--> WindowEvent {:?}", event),
-                DeviceEvent { event, .. } => println!("--> DeviceEvent {:?}", event),
-                UserEvent(..) => println!("--> UserEvent"),
-                Suspended => println!("--> Suspended"),
-                Resumed => println!("--> Resumed"),
-                MainEventsCleared => println!("--> MainEventsCleared"),
-                RedrawEventsCleared => println!("--> RedrawEventsCleared"),
-                LoopDestroyed => println!("--> LoopDestroyed"),
-            }
+            print_event(&event);
         }
 
         // Pass the winit events to the platform integration.
@@ -510,7 +516,7 @@ pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
                 }
             }
 
-            MainEventsCleared | UserEvent(Event::RequestRedraw) => {
+            MainEventsCleared | UserEvent(AppEvent::RequestRedraw) => {
                 let now = Instant::now();
                 let elapsed_time = now.duration_since(emulator_frame_timestamp).as_micros() as u64;
 
