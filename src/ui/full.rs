@@ -1,4 +1,6 @@
-use std::{collections::HashMap, fs::File, io::BufWriter, iter, thread::sleep, time::Instant};
+use std::{
+    collections::HashMap, fs::File, io::BufWriter, iter, sync::Arc, thread::sleep, time::Instant,
+};
 
 use crate::{
     apu::apu::AudioRecorder,
@@ -18,10 +20,11 @@ use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use epi::*;
 use ringbuf::{Consumer, RingBuffer};
-use wgpu::FilterMode;
+use wgpu::{Device, FilterMode, Queue, Surface, SurfaceConfiguration};
 use winit::{
     event::{Event::*, StartCause},
     event_loop::ControlFlow,
+    window::Window,
 };
 
 use super::{
@@ -30,7 +33,7 @@ use super::{
     render_stats::RenderStats, serial_window::SerialWindow,
 };
 
-const TARGET_FPS: u64 = 2; // 60;
+const TARGET_FPS: u64 = 60;
 
 /// A custom event type for the winit app.
 enum AppEvent {
@@ -39,7 +42,7 @@ enum AppEvent {
 
 /// This is the repaint signal type that egui needs for requesting a repaint from another thread.
 /// It sends the custom RequestRedraw event to the winit event loop.
-struct ExampleRepaintSignal(std::sync::Mutex<winit::event_loop::EventLoopProxy<Event>>);
+struct ExampleRepaintSignal(std::sync::Mutex<winit::event_loop::EventLoopProxy<AppEvent>>);
 
 impl epi::backend::RepaintSignal for ExampleRepaintSignal {
     fn request_repaint(&self) {
@@ -63,6 +66,7 @@ struct MoeApp {
 
     // Statistics for the emulator frame rate
     emu_render_stats: RenderStats,
+    previous_frame_time: Option<f32>,
 
     // Windows
     debug_window: DebugWindow,
@@ -80,6 +84,140 @@ impl MoeApp {
         let (producer, consumer) = buf.split();
         self.emu.mmu.serial.output = Some(producer);
         self.serial_buffer_consumer = Some(consumer);
+    }
+
+    fn render_next_frame(
+        &mut self,
+        platform: &mut Platform,
+        surface: &Surface,
+        window: &Window,
+        repaint_signal: &Arc<ExampleRepaintSignal>,
+        device: &Device,
+        queue: &Queue,
+        egui_rpass: &mut RenderPass,
+        surface_config: &SurfaceConfiguration,
+        debug: &mut Debug,
+    ) {
+        let output_frame = match surface.get_current_texture() {
+            Ok(frame) => frame,
+            Err(wgpu::SurfaceError::Outdated) => {
+                // This error occurs when the app is minimized on Windows.
+                // Silently return here to prevent spamming the console with:
+                // "The underlying surface has changed, and therefore the swap chain must be updated"
+                return;
+            }
+            Err(e) => {
+                eprintln!("Dropped frame with error: {}", e);
+                return;
+            }
+        };
+
+        let output_view = output_frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Begin to draw the UI frame.
+        let egui_start = Instant::now();
+        platform.begin_frame();
+        let app_output = epi::backend::AppOutput::default();
+
+        let mut frame = epi::Frame::new(epi::backend::FrameData {
+            info: epi::IntegrationInfo {
+                name: "egui_example",
+                web_info: None,
+                cpu_usage: self.previous_frame_time,
+                native_pixels_per_point: Some(window.scale_factor() as _),
+                prefer_dark_mode: None,
+            },
+            output: app_output,
+            repaint_signal: repaint_signal.clone(),
+        });
+
+        // Copy Gameboy screen to texture
+        if self.fb_texture.is_none() || self.emu.mmu.display_updated {
+            let texture_size = wgpu::Extent3d {
+                width: SCREEN_WIDTH as u32,
+                height: SCREEN_HEIGHT as u32,
+                depth_or_array_layers: 1,
+            };
+
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                size: texture_size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                label: Some("emulator screen texture"),
+            });
+
+            queue.write_texture(
+                wgpu::ImageCopyTexture {
+                    texture: &texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &self.emu.mmu.lcd.buf_rgba8,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: std::num::NonZeroU32::new(4 * SCREEN_WIDTH as u32),
+                    rows_per_image: std::num::NonZeroU32::new(SCREEN_HEIGHT as u32),
+                },
+                texture_size,
+            );
+
+            let texture_id =
+                egui_rpass.egui_texture_from_wgpu_texture(&device, &texture, FilterMode::Nearest);
+
+            self.fb_texture = Some(texture_id);
+        }
+
+        // Build the whole app UI
+        self.update(&platform.context(), &mut frame, debug);
+
+        // End the UI frame
+        let (output, paint_commands) = platform.end_frame(Some(&window));
+        let paint_jobs = platform.context().tessellate(paint_commands);
+
+        let frame_time = (Instant::now() - egui_start).as_secs_f64() as f32;
+        self.previous_frame_time = Some(frame_time);
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("encoder"),
+        });
+
+        // Upload all resources for the GPU.
+        let screen_descriptor = ScreenDescriptor {
+            physical_width: surface_config.width,
+            physical_height: surface_config.height,
+            scale_factor: window.scale_factor() as f32,
+        };
+
+        egui_rpass.update_texture(&device, &queue, &platform.context().font_image());
+        egui_rpass.update_user_textures(&device, &queue);
+        egui_rpass.update_buffers(&device, &queue, &paint_jobs, &screen_descriptor);
+
+        // Record all render passes.
+        egui_rpass
+            .execute(
+                &mut encoder,
+                &output_view,
+                &paint_jobs,
+                &screen_descriptor,
+                Some(wgpu::Color::BLACK),
+            )
+            .unwrap();
+
+        // Submit the commands.
+        queue.submit(iter::once(encoder.finish()));
+
+        // Redraw egui
+        output_frame.present();
+
+        if output.needs_repaint {
+            window.request_redraw();
+        }
     }
 
     pub fn setup_audio(&mut self) -> Stream {
@@ -226,6 +364,7 @@ impl MoeApp {
                 (Key::Enter, ButtonType::Start),
                 (Key::Space, ButtonType::Select),
             ]),
+            previous_frame_time: None,
         }
     }
 
@@ -368,7 +507,6 @@ pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
     let mut egui_rpass = RenderPass::new(&device, surface_format, 1);
 
     let start_time = Instant::now();
-    let mut previous_frame_time = None;
 
     // The emulator should run at a fixed FPS, which is not necessarily
     // the same as the host UI PFS. This timestamp holds the time when
@@ -380,7 +518,7 @@ pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
     app.setup_serial();
 
     event_loop.run(move |event, _, control_flow| {
-        if true {
+        if false {
             print_event(&event);
         }
 
@@ -390,130 +528,17 @@ pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
         match event {
             RedrawRequested(..) => {
                 platform.update_time(start_time.elapsed().as_secs_f64());
-
-                let output_frame = match surface.get_current_texture() {
-                    Ok(frame) => frame,
-                    Err(wgpu::SurfaceError::Outdated) => {
-                        // This error occurs when the app is minimized on Windows.
-                        // Silently return here to prevent spamming the console with:
-                        // "The underlying surface has changed, and therefore the swap chain must be updated"
-                        return;
-                    }
-                    Err(e) => {
-                        eprintln!("Dropped frame with error: {}", e);
-                        return;
-                    }
-                };
-
-                let output_view = output_frame
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
-
-                // Begin to draw the UI frame.
-                let egui_start = Instant::now();
-                platform.begin_frame();
-                let app_output = epi::backend::AppOutput::default();
-
-                let mut frame = epi::Frame::new(epi::backend::FrameData {
-                    info: epi::IntegrationInfo {
-                        name: "egui_example",
-                        web_info: None,
-                        cpu_usage: previous_frame_time,
-                        native_pixels_per_point: Some(window.scale_factor() as _),
-                        prefer_dark_mode: None,
-                    },
-                    output: app_output,
-                    repaint_signal: repaint_signal.clone(),
-                });
-
-                // Copy Gameboy screen to texture
-                if app.fb_texture.is_none() || app.emu.mmu.display_updated {
-                    let texture_size = wgpu::Extent3d {
-                        width: SCREEN_WIDTH as u32,
-                        height: SCREEN_HEIGHT as u32,
-                        depth_or_array_layers: 1,
-                    };
-
-                    let texture = device.create_texture(&wgpu::TextureDescriptor {
-                        size: texture_size,
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: wgpu::TextureDimension::D2,
-                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                        label: Some("emulator screen texture"),
-                    });
-
-                    queue.write_texture(
-                        wgpu::ImageCopyTexture {
-                            texture: &texture,
-                            mip_level: 0,
-                            origin: wgpu::Origin3d::ZERO,
-                            aspect: wgpu::TextureAspect::All,
-                        },
-                        &app.emu.mmu.lcd.buf_rgba8,
-                        wgpu::ImageDataLayout {
-                            offset: 0,
-                            bytes_per_row: std::num::NonZeroU32::new(4 * SCREEN_WIDTH as u32),
-                            rows_per_image: std::num::NonZeroU32::new(SCREEN_HEIGHT as u32),
-                        },
-                        texture_size,
-                    );
-
-                    let texture_id = egui_rpass.egui_texture_from_wgpu_texture(
-                        &device,
-                        &texture,
-                        FilterMode::Nearest,
-                    );
-
-                    app.fb_texture = Some(texture_id);
-                }
-
-                // Build the whole app UI
-                app.update(&platform.context(), &mut frame, &mut debug);
-
-                // End the UI frame
-                let (output, paint_commands) = platform.end_frame(Some(&window));
-                let paint_jobs = platform.context().tessellate(paint_commands);
-
-                let frame_time = (Instant::now() - egui_start).as_secs_f64() as f32;
-                previous_frame_time = Some(frame_time);
-
-                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("encoder"),
-                });
-
-                // Upload all resources for the GPU.
-                let screen_descriptor = ScreenDescriptor {
-                    physical_width: surface_config.width,
-                    physical_height: surface_config.height,
-                    scale_factor: window.scale_factor() as f32,
-                };
-
-                egui_rpass.update_texture(&device, &queue, &platform.context().font_image());
-                egui_rpass.update_user_textures(&device, &queue);
-                egui_rpass.update_buffers(&device, &queue, &paint_jobs, &screen_descriptor);
-
-                // Record all render passes.
-                egui_rpass
-                    .execute(
-                        &mut encoder,
-                        &output_view,
-                        &paint_jobs,
-                        &screen_descriptor,
-                        Some(wgpu::Color::BLACK),
-                    )
-                    .unwrap();
-
-                // Submit the commands.
-                queue.submit(iter::once(encoder.finish()));
-
-                // Redraw egui
-                output_frame.present();
-
-                if output.needs_repaint {
-                    window.request_redraw();
-                }
+                app.render_next_frame(
+                    &mut platform,
+                    &surface,
+                    &window,
+                    &repaint_signal,
+                    &device,
+                    &queue,
+                    &mut egui_rpass,
+                    &surface_config,
+                    &mut debug,
+                );
             }
 
             MainEventsCleared | UserEvent(AppEvent::RequestRedraw) => {
