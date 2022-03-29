@@ -86,6 +86,13 @@ impl MoeApp {
         self.serial_buffer_consumer = Some(consumer);
     }
 
+    fn run_until_next_frame(&mut self, debug: &mut Debug) {
+        self.emu.mmu.display_updated = false;
+        while debug.before_op(&self.emu) && !self.emu.mmu.display_updated {
+            self.emu.mmu.exec_op();
+        }
+    }
+
     fn render_next_frame(
         &mut self,
         platform: &mut Platform,
@@ -133,7 +140,7 @@ impl MoeApp {
             repaint_signal: repaint_signal.clone(),
         });
 
-        // Copy Gameboy screen to texture
+        // Copy Gameboy screen to texture if it has changed since last render
         if self.fb_texture.is_none() || self.emu.mmu.display_updated {
             let texture_size = wgpu::Extent3d {
                 width: SCREEN_WIDTH as u32,
@@ -508,11 +515,8 @@ pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
 
     let start_time = Instant::now();
 
-    // The emulator should run at a fixed FPS, which is not necessarily
-    // the same as the host UI PFS. This timestamp holds the time when
-    // the previous frame was rendered, so that we know when it's time
-    // for the next frame to be rendered in order to keep the FPS stable.
-    let mut emulator_frame_timestamp = Instant::now();
+    // Time for when the next frame should be rendered
+    let mut next_frame_instant = Instant::now();
 
     let _stream = app.setup_audio();
     app.setup_serial();
@@ -541,41 +545,40 @@ pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
                 );
             }
 
-            MainEventsCleared | UserEvent(AppEvent::RequestRedraw) => {
+            MainEventsCleared => {
+                const US_PER_FRAME: u64 = 1_000_000 / TARGET_FPS;
+                let one_frame_duration = std::time::Duration::from_micros(US_PER_FRAME);
                 let now = Instant::now();
-                let elapsed_time = now.duration_since(emulator_frame_timestamp).as_micros() as u64;
 
-                let us_per_frame = 1_000_000 / TARGET_FPS;
+                // let elapsed_time = now.duration_since(emulator_frame_timestamp).as_micros() as u64;
 
-                if elapsed_time >= us_per_frame {
+                if now >= next_frame_instant {
                     // Run emulator until next frame is ready
-                    app.emu.mmu.display_updated = false;
-
-                    // FIXME: Fix this complicated logic. Also in test_runner.rs
-                    while debug.before_op(&app.emu) && !app.emu.mmu.display_updated {
-                        app.emu.mmu.exec_op();
-                    }
+                    app.run_until_next_frame(&mut debug);
 
                     // Flush recorded audio every frame
                     if let Some(ref mut rec) = app.emu.mmu.apu.recorder {
                         rec.flush()
                     }
 
-                    emulator_frame_timestamp = now;
-                    *control_flow = ControlFlow::Wait;
-                    window.request_redraw();
+                    // Calculate the time for the next frame to be rendered
+                    next_frame_instant = next_frame_instant + one_frame_duration;
 
+                    // Special handling is time is out of sync so that the
+                    // next frame should already be rendered.
+                    if now > next_frame_instant {
+                        next_frame_instant = now;
+                    }
+
+                    // Record frame render time statistics
                     let abs_elapsed_time = now.duration_since(start_time).as_secs_f64();
                     app.emu_render_stats
                         .on_new_frame(abs_elapsed_time, Some(0.0));
 
-                    println!("New frame ready!");
-                } else {
-                    let wait_us = us_per_frame - elapsed_time;
-                    let new_inst = start_time + std::time::Duration::from_micros(wait_us);
-                    *control_flow = ControlFlow::WaitUntil(new_inst);
-                    println!("New timeout in: {} us", wait_us);
+                    window.request_redraw();
                 }
+
+                *control_flow = ControlFlow::WaitUntil(next_frame_instant);
             }
 
             WindowEvent { event, .. } => match event {
@@ -596,7 +599,7 @@ pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
                 }
 
                 _ => {
-                    window.request_redraw();
+                    // window.request_redraw();
                 }
             },
 
