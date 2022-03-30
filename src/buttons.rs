@@ -1,3 +1,4 @@
+#[derive(Copy, Clone)]
 pub enum ButtonType {
     Up = 64,
     Down = 128,
