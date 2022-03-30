@@ -33,7 +33,7 @@ use super::{
     render_stats::RenderStats, serial_window::SerialWindow,
 };
 
-const TARGET_FPS: u64 = 60;
+const TARGET_FPS: u64 = 30;
 
 /// A custom event type for the winit app.
 enum AppEvent {
@@ -275,16 +275,20 @@ impl MoeApp {
         let sample_rate = config.sample_rate.0 as f32;
         let channels = config.channels as usize;
 
+        let step = ((CYCLES_PER_FRAME as f64) / ((sample_rate as f64) / (TARGET_FPS as f64))) / 4.0;
+
         let mut avg: u8 = 0;
 
         let mut next_value = move || {
             // println!("enter next_value");
-            avg = (avg + 1) % 3;
-            if avg == 0 {
-                consumer.discard(23);
-            } else {
-                consumer.discard(22);
-            }
+            // avg = (avg + 1) % 3;
+            // if avg == 0 {
+            //     consumer.discard(23);
+            // } else {
+            //     consumer.discard(22);
+            // }
+
+            consumer.discard(step as usize);
 
             // println!("remaining samples: {}", consumer.remaining());
             match consumer.pop() {
