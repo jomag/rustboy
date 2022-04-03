@@ -260,7 +260,7 @@ impl WaveSoundGenerator {
         }
     }
 
-    pub fn update_4t(&mut self, hz256: bool) -> f32 {
+    pub fn update_4t(&mut self, hz256: bool) -> i16 {
         if self.frequency_timer <= 4 {
             // Handle obscure behavior in DMG
             if self.frequency_timer == 4 {
@@ -300,6 +300,6 @@ impl WaveSoundGenerator {
             return self.dac.convert(out);
         }
 
-        return 0.0;
+        0
     }
 }

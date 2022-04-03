@@ -32,3 +32,5 @@ sdl2 = "0.34.2"
 serde = "*"
 wgpu = "0.12"
 winit = "0.26"
+blip_buf = "0.1.4"
+

@@ -183,7 +183,7 @@ impl NoiseSoundGenerator {
         }
     }
 
-    pub fn update_4t(&mut self, hz64: bool, hz256: bool) -> f32 {
+    pub fn update_4t(&mut self, hz64: bool, hz256: bool) -> i16 {
         assert!(self.frequency_timer % 4 == 0);
 
         // Decrement frequency timer
@@ -239,6 +239,6 @@ impl NoiseSoundGenerator {
             return self.dac.convert(dac_input);
         }
 
-        0.0
+        0
     }
 }
