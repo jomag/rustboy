@@ -6,7 +6,7 @@ use std::io::Read;
 use crate::emu::Machine;
 use crate::interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
 
-use crate::apu::apu::AudioProcessingUnit;
+use crate::apu::apu::{AudioProcessingUnit, SAMPLES_PER_FRAME};
 use crate::buttons::Buttons;
 use crate::cartridge::{cartridge::Cartridge, cartridge::NoCartridge, load_cartridge};
 use crate::dma::DMA;
@@ -133,7 +133,10 @@ impl MMU {
             lcd: LCD::new(),
             buttons: Buttons::new(),
             display_updated: false,
-            apu: AudioProcessingUnit::new(machine),
+
+            // Create APU that will buffer up to 10 frames of audio
+            apu: AudioProcessingUnit::new(machine, SAMPLES_PER_FRAME as u32 * 10),
+
             sample_count: 0,
             serial: Serial::new(None),
         }

@@ -8,9 +8,15 @@ use crate::{
         NR24_REG, NR30_REG, NR31_REG, NR32_REG, NR33_REG, NR34_REG, NR40_REG, NR41_REG, NR42_REG,
         NR43_REG, NR44_REG, NR50_REG, NR51_REG, NR52_REG,
     },
+    CYCLES_PER_FRAME,
 };
 
-use ringbuf::Producer;
+use blip_buf::BlipBuf;
+use num_traits::abs;
+
+// Approx numberof samples per frame at native frame rate.
+// The actual count is a little less than this.
+pub const SAMPLES_PER_FRAME: usize = CYCLES_PER_FRAME / 59;
 
 pub trait AudioRecorder {
     fn mono(&mut self, sample: f32);
@@ -32,9 +38,11 @@ pub struct AudioProcessingUnit {
     // Bit 7 of NR52. Controls power to the audio hardware
     pub powered_on: bool,
 
-    // Producer for the output ring buffer.
-    // Every cycle one sample is appended to this buffer.
-    pub buf: Option<Producer<f32>>,
+    pub buf_left: BlipBuf,
+    pub buf_right: BlipBuf,
+    pub buf_clock: u32,
+    pub buf_left_amp: i16,
+    pub buf_right_amp: i16,
 
     pub recorder: Option<Box<dyn AudioRecorder>>,
 
@@ -44,7 +52,7 @@ pub struct AudioProcessingUnit {
 }
 
 impl AudioProcessingUnit {
-    pub fn new(machine: Machine) -> Self {
+    pub fn new(machine: Machine, buf_size: u32) -> Self {
         AudioProcessingUnit {
             machine,
             s1: SquareWaveSoundGenerator::new(true, machine),
@@ -53,7 +61,11 @@ impl AudioProcessingUnit {
             ch4: NoiseSoundGenerator::new(machine),
             nr50: 0,
             nr51: 0,
-            buf: None,
+            buf_left: BlipBuf::new(buf_size),
+            buf_right: BlipBuf::new(buf_size),
+            buf_clock: 0,
+            buf_left_amp: 0,
+            buf_right_amp: 0,
             recorder: None,
             powered_on: false,
             frame_seq_step: 0,
@@ -123,56 +135,46 @@ impl AudioProcessingUnit {
         let ch4_output = self.ch4.update_4t(hz64, hz256);
 
         // Mixer
-        let mut left: f32 = 0.0;
+        let mut left: i16 = 0;
         if self.nr51 & 128 != 0 {
-            left += ch4_output;
+            left += ch4_output >> 2;
         }
         if self.nr51 & 64 != 0 {
-            left += ch3_output;
+            left += ch3_output >> 2;
         }
         if self.nr51 & 32 != 0 {
-            left += ch2_output;
+            left += ch2_output >> 2;
         }
         if self.nr51 & 16 != 0 {
-            left += ch1_output;
+            left += ch1_output >> 2;
         }
 
-        let mut right: f32 = 0.0;
+        let mut right: i16 = 0;
         if self.nr51 & 8 != 0 {
-            right += ch4_output;
+            right += ch4_output >> 2;
         }
         if self.nr51 & 4 != 0 {
-            right += ch3_output;
+            right += ch3_output >> 2;
         }
         if self.nr51 & 2 != 0 {
-            right += ch2_output;
+            right += ch2_output >> 2;
         }
         if self.nr51 & 1 != 0 {
-            right += ch1_output;
+            right += ch1_output >> 2;
         }
 
-        // FIXME: for now, left and right channel
-        // is joined to a mono channel, and the volume
-        // is lowered to 30%.
-        let sample = (left + right) / 2.0;
-        let sample = sample * 0.3;
-
-        if let Some(ref mut rec) = self.recorder {
-            rec.gen1(ch1_output as f32);
-            rec.gen2(ch2_output as f32);
-            rec.mono(sample);
+        let left_delta = (left as i32) - (self.buf_left_amp as i32);
+        let right_delta = (right as i32) - (self.buf_right_amp as i32);
+        self.buf_left_amp = left;
+        self.buf_right_amp = right;
+        if left_delta != 0 {
+            self.buf_left.add_delta(self.buf_clock, left_delta as i32);
+        }
+        if right_delta != 0 {
+            self.buf_right.add_delta(self.buf_clock, right_delta as i32);
         }
 
-        if let Some(ref mut producer) = self.buf {
-            if producer.is_full() {
-                eprintln!("Buffer is full {} {}", producer.capacity(), producer.len());
-                return;
-            }
-
-            producer
-                .push(sample as f32)
-                .expect("Failed to push sample to audio buffer");
-        }
+        self.buf_clock = self.buf_clock.wrapping_add(1);
     }
 
     pub fn read_nr52(&self) -> u8 {

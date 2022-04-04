@@ -1,4 +1,4 @@
-pub mod audio;
+pub mod audio_player;
 pub mod audio_window;
 pub mod breakpoints_window;
 pub mod cartridge_window;

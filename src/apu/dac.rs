@@ -9,11 +9,11 @@ impl DAC {
         DAC { powered_on: false }
     }
 
-    pub fn convert(&self, inp: u8) -> f32 {
+    pub fn convert(&self, inp: u8) -> i16 {
         assert!(inp & 0xF0 == 0);
         match self.powered_on {
-            true => inp as f32 * (2.0 / 15.0) - 1.0,
-            false => 0.0,
+            true => ((inp as i32) * 0x1111 - 0x8000) as i16,
+            false => 0,
         }
     }
 }
