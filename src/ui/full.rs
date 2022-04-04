@@ -108,28 +108,15 @@ impl MoeApp {
             .end_frame(self.emu.mmu.apu.buf_clock);
         self.emu.mmu.apu.buf_clock = 0;
 
-        // println!(
-        //     "Samples avail: {}",
-        //     self.emu.mmu.apu.buf_left.samples_avail()
-        // );
-
         while self.emu.mmu.apu.buf_left.samples_avail() > 0 {
             let n = self.emu.mmu.apu.buf_left.read_samples(&mut b, false);
             if n == 0 {
-                println!("No samples in blibuf!");
                 break;
-            } else {
-                // println!("{} samples in  blipbuf", n);
             }
 
             match self.audio.producer {
                 Some(ref mut p) => {
-                    // println!(
-                    //     "Pushing slice {} samples: {} {} {} {} ...",
-                    //     n, b[0], b[1], b[2], b[3]
-                    // );
                     p.push_slice(&b[..n]);
-                    // println!("rinbuf after push: {} / {}", p.len(), p.capacity())
                 }
                 None => {}
             }
