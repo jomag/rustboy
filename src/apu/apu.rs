@@ -14,7 +14,8 @@ use crate::{
 use blip_buf::BlipBuf;
 use num_traits::abs;
 
-// Approx numberof samples per frame. The actual count is a little less than this.
+// Approx numberof samples per frame at native frame rate.
+// The actual count is a little less than this.
 pub const SAMPLES_PER_FRAME: usize = CYCLES_PER_FRAME / 59;
 
 pub trait AudioRecorder {
@@ -37,12 +38,6 @@ pub struct AudioProcessingUnit {
     // Bit 7 of NR52. Controls power to the audio hardware
     pub powered_on: bool,
 
-    // PREVIOUS METHOD:
-    // Producer for the output ring buffer.
-    // Every cycle one sample is appended to this buffer.
-    //pub buf: Option<Producer<f32>>,
-
-    // NEW METHOD using blip_buf:
     pub buf_left: BlipBuf,
     pub buf_right: BlipBuf,
     pub buf_clock: u32,
@@ -168,17 +163,8 @@ impl AudioProcessingUnit {
             right += ch1_output >> 2;
         }
 
-        // FIXME: Recorder is disabled for now
-        // if let Some(ref mut rec) = self.recorder {
-        //     rec.gen1(ch1_output as f32);
-        //     rec.gen2(ch2_output as f32);
-        //     rec.mono(sample);
-        // }
-
         let left_delta = (left as i32) - (self.buf_left_amp as i32);
         let right_delta = (right as i32) - (self.buf_right_amp as i32);
-        assert!(abs(left_delta) <= 0xffff);
-        assert!(abs(right_delta) <= 0xffff);
         self.buf_left_amp = left;
         self.buf_right_amp = right;
         if left_delta != 0 {
@@ -187,23 +173,6 @@ impl AudioProcessingUnit {
         if right_delta != 0 {
             self.buf_right.add_delta(self.buf_clock, right_delta as i32);
         }
-
-        // Add left and right output to Blip buffer and increment buffer clock
-        // if self.buf_left.samples_avail() == 0 {
-        //     if self.buf_right.samples_avail() == 0 {
-        //         eprintln!("Audio buffer is full");
-        //     } else {
-        //         // eprintln!("Left audio buffer is full");
-        //         self.buf_right.add_delta(self.buf_clock, right as i32);
-        //     }
-        // } else {
-        //     self.buf_left.add_delta(self.buf_clock, left as i32);
-        //     if self.buf_right.samples_avail() == 0 {
-        //         // eprintln!("Right audio buffer is full");
-        //     } else {
-        //         self.buf_right.add_delta(self.buf_clock, right as i32);
-        //     }
-        // }
 
         self.buf_clock = self.buf_clock.wrapping_add(1);
     }

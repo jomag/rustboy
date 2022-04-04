@@ -34,14 +34,6 @@ impl AudioPlayer {
             sample_format: hound::SampleFormat::Int,
         };
 
-        let recorder = WaveAudioRecorder {
-            mono_writer: Some(hound::WavWriter::create("mono.wav", spec).unwrap()),
-            gen1_writer: Some(hound::WavWriter::create("gen1.wav", spec).unwrap()),
-            gen2_writer: Some(hound::WavWriter::create("gen2.wav", spec).unwrap()),
-        };
-
-        // self.emu.mmu.apu.recorder = Some(Box::new(recorder));
-
         let host = cpal::default_host();
         let device = host
             .default_output_device()
@@ -65,18 +57,9 @@ impl AudioPlayer {
         let sample_rate = config.sample_rate.0 as f32;
         let channels = config.channels as usize;
 
-        let step = 22; //((CYCLES_PER_FRAME as f64) / ((sample_rate as f64) / (TARGET_FPS as f64))) / 4.0;
-
         let mut next_value = move || match consumer.pop() {
-            Some(sample) => {
-                // println!("Sample found. {}", sample);
-                (sample as f32) / 32768.0
-                // ((sample as f32) - 32768.0) / 32768.0
-            }
-            None => {
-                println!("NO sample found!");
-                0.0
-            }
+            Some(sample) => (sample as f32) / 32768.0,
+            None => 0.0,
         };
 
         fn write_beep<T: Sample>(
@@ -86,9 +69,6 @@ impl AudioPlayer {
         ) {
             for frame in output.chunks_mut(channels) {
                 let value: T = cpal::Sample::from::<f32>(&next_sample());
-                // if (value.to_i16() != 0) {
-                //     println!("Sample: {:04x}", value.to_i16());
-                // }
                 for sample in frame.iter_mut() {
                     *sample = value;
                 }
