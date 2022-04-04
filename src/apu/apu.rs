@@ -12,6 +12,7 @@ use crate::{
 };
 
 use blip_buf::BlipBuf;
+use num_traits::abs;
 
 // Approx numberof samples per frame. The actual count is a little less than this.
 pub const SAMPLES_PER_FRAME: usize = CYCLES_PER_FRAME / 59;
@@ -141,30 +142,30 @@ impl AudioProcessingUnit {
         // Mixer
         let mut left: i16 = 0;
         if self.nr51 & 128 != 0 {
-            left += ch4_output;
+            left += ch4_output >> 2;
         }
         if self.nr51 & 64 != 0 {
-            left += ch3_output;
+            left += ch3_output >> 2;
         }
         if self.nr51 & 32 != 0 {
-            left += ch2_output;
+            left += ch2_output >> 2;
         }
         if self.nr51 & 16 != 0 {
-            left += ch1_output;
+            left += ch1_output >> 2;
         }
 
         let mut right: i16 = 0;
         if self.nr51 & 8 != 0 {
-            right += ch4_output;
+            right += ch4_output >> 2;
         }
         if self.nr51 & 4 != 0 {
-            right += ch3_output;
+            right += ch3_output >> 2;
         }
         if self.nr51 & 2 != 0 {
-            right += ch2_output;
+            right += ch2_output >> 2;
         }
         if self.nr51 & 1 != 0 {
-            right += ch1_output;
+            right += ch1_output >> 2;
         }
 
         // FIXME: Recorder is disabled for now
@@ -174,8 +175,10 @@ impl AudioProcessingUnit {
         //     rec.mono(sample);
         // }
 
-        let left_delta = left - self.buf_left_amp;
-        let right_delta = right - self.buf_right_amp;
+        let left_delta = (left as i32) - (self.buf_left_amp as i32);
+        let right_delta = (right as i32) - (self.buf_right_amp as i32);
+        assert!(abs(left_delta) <= 0xffff);
+        assert!(abs(right_delta) <= 0xffff);
         self.buf_left_amp = left;
         self.buf_right_amp = right;
         if left_delta != 0 {
