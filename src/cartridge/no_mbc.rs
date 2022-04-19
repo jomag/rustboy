@@ -35,22 +35,22 @@ impl NoMBC {
 }
 
 impl MemoryMapped for NoMBC {
-    fn read(&self, address: u16) -> u8 {
+    fn read(&self, address: usize) -> u8 {
         match address {
-            0x0000..=0x7FFF => self.rom[address as usize],
+            0x0000..=0x7FFF => self.rom[address],
             0xA000..=0xBFFF => match &self.ram {
-                Some(ram) => ram[address as usize],
+                Some(ram) => ram[address],
                 None => 0xFF,
             },
             _ => 0xFF,
         }
     }
 
-    fn write(&mut self, address: u16, value: u8) {
+    fn write(&mut self, address: usize, value: u8) {
         match address {
             0xA000..=0xBFFF => {
                 if let Some(ref mut ram) = self.ram {
-                    ram[address as usize - 0xA000] = value;
+                    ram[address - 0xA000] = value;
                 }
             }
             _ => {}

@@ -197,7 +197,7 @@ impl AudioProcessingUnit {
         nr52
     }
 
-    pub fn read_reg(&self, address: u16) -> u8 {
+    pub fn read_reg(&self, address: usize) -> u8 {
         match address {
             0xFF10..=0xFF14 => self.s1.read_reg(address),
             0xFF15..=0xFF19 => self.s2.read_reg(address),
@@ -234,7 +234,7 @@ impl AudioProcessingUnit {
         }
     }
 
-    pub fn write_reg(&mut self, address: u16, value: u8) {
+    pub fn write_reg(&mut self, address: usize, value: u8) {
         // Writes to NR52 and the wave memory allways work, even
         // when the sound hardware is powered off.
         match address {

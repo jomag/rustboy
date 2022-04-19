@@ -19,6 +19,7 @@ mod instructions;
 mod interrupt;
 mod lcd;
 mod mmu;
+mod ppu;
 mod registers;
 mod serial;
 mod test_runner;

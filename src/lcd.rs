@@ -1,3 +1,10 @@
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//
+// DEPRECATED!
+// This implementation is naive and inexact. `ppu.rs` should be used instead.
+//
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 use crate::interrupt::{IF_LCDC_BIT, IF_VBLANK_BIT};
 
 // Bits of LCDC register:
@@ -16,11 +23,23 @@ const BUFFER_BYTES_PER_PIXEL: usize = 4;
 const BUFFER_SIZE_RGBA8: usize = SCREEN_WIDTH * SCREEN_HEIGHT * BUFFER_BYTES_PER_PIXEL;
 
 pub struct LCD {
-    scanline_cycles: u32,
-
+    // Current scanline being rendered
     pub scanline: u8,
 
+    // Current cycle of the current scanline
+    scanline_cycles: u32,
+
+    // LCDC ("LCD Control") register:
+    // Bit 7: LCD and PPU enable (0 = off, 1 = on)
+    //     6: Window tile map area (0 = 9800..9bff, 1 = 9c00..9fff)
+    //     5: Window enable (0 = off, 1 = on)
+    //     4: BG and window tile data area (0 = 8800..97ff, 1 = 8000..8fff)
+    //     3: BG tile map area (0 = 9800..9bff, 1 = 9c00..9fff)
+    //     2: OBJ size (0 = 8x8, 1 = 8x16)
+    //     1: OBJ enable (0 = off, 1 = on)
+    //     0: BG and Window enable/priority (0 = off, 1 = on)
     pub lcdc: u8,
+
     pub lyc: u8,
     pub scy: u8,
     pub scx: u8,

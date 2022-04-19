@@ -34,7 +34,7 @@ impl Serial {
         }
     }
 
-    pub fn read_reg(&self, address: u16) -> u8 {
+    pub fn read_reg(&self, address: usize) -> u8 {
         match address {
             SB_REG => self.reg_sb,
             SC_REG => self.reg_sc,
@@ -42,7 +42,7 @@ impl Serial {
         }
     }
 
-    pub fn write_reg(&mut self, address: u16, value: u8) {
+    pub fn write_reg(&mut self, address: usize, value: u8) {
         match address {
             SB_REG => self.reg_sb = value,
             SC_REG => {

@@ -11,11 +11,11 @@ pub trait Cartridge: MemoryMapped {
 pub struct NoCartridge {}
 
 impl MemoryMapped for NoCartridge {
-    fn read(&self, address: u16) -> u8 {
+    fn read(&self, address: usize) -> u8 {
         0
     }
 
-    fn write(&mut self, address: u16, value: u8) {}
+    fn write(&mut self, address: usize, value: u8) {}
     fn reset(&mut self) {}
 }
 

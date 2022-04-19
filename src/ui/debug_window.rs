@@ -131,7 +131,7 @@ impl DisassemblyView {
         let mut adr = self.start_address;
 
         for _ in 0..lines {
-            match instructions::op_length(emu.mmu.direct_read(adr as u16)) {
+            match instructions::op_length(emu.mmu.direct_read(adr)) {
                 Some(len) => adr += len,
                 None => break,
             }
@@ -164,7 +164,7 @@ impl DisassemblyView {
         let pc = emu.mmu.reg.pc as usize;
 
         for _ in 0..lines {
-            let text = format!("{:04x}: {}", addr, format_mnemonic(&emu.mmu, addr as u16));
+            let text = format!("{:04x}: {}", addr, format_mnemonic(&emu.mmu, addr));
 
             let lbl;
             if addr == pc {
@@ -177,7 +177,7 @@ impl DisassemblyView {
 
             ui.add(lbl);
 
-            match instructions::op_length(emu.mmu.direct_read(addr as u16)) {
+            match instructions::op_length(emu.mmu.direct_read(addr)) {
                 Some(len) => addr += len,
                 None => break,
             }

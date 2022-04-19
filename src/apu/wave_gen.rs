@@ -119,7 +119,7 @@ impl WaveSoundGenerator {
         self.dac = DAC::new();
     }
 
-    pub fn read_reg(&self, address: u16) -> u8 {
+    pub fn read_reg(&self, address: usize) -> u8 {
         match address {
             NR30_REG => {
                 if self.dac.powered_on {
@@ -163,7 +163,7 @@ impl WaveSoundGenerator {
         self.wave[address - 0xFF30]
     }
 
-    pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8, powered_on: bool) {
+    pub fn write_reg(&mut self, address: usize, value: u8, seq_step: u8, powered_on: bool) {
         // If unpowered, all writes should be ignored except
         // length value if the machine is original Gameboy DMG
         if !powered_on {

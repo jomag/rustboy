@@ -145,8 +145,8 @@ pub fn run_with_minimal_ui(
         if stepping {
             print_registers(&emu.mmu);
             let pc = emu.mmu.reg.pc;
-            let mut list_offset = pc;
-            println!("0x{:04X}: {}", pc, format_mnemonic(&emu.mmu, pc));
+            let mut list_offset = pc as usize;
+            println!("0x{:04X}: {}", pc, format_mnemonic(&emu.mmu, pc as usize));
 
             loop {
                 print!("(debug) ");
@@ -181,7 +181,7 @@ pub fn run_with_minimal_ui(
                     }
                     "l" => {
                         if args.len() > 1 {
-                            list_offset = args[1].parse::<u16>().unwrap();
+                            list_offset = args[1].parse::<usize>().unwrap();
                         }
                         list_offset = print_listing(&emu.mmu, list_offset, 10);
                     }
@@ -190,7 +190,7 @@ pub fn run_with_minimal_ui(
                     }
                     "r" => {
                         if args.len() > 1 {
-                            match parse_number::<u16>(args[1]) {
+                            match parse_number::<usize>(args[1]) {
                                 Ok(addr) => println!(
                                     "[{:04X}] = 0x{:02X}",
                                     addr,
@@ -264,11 +264,11 @@ pub fn run_with_minimal_ui(
                 .unwrap();
                 */
 
-            texture
-                .with_lock(None, |buffer: &mut [u8], _pitch: usize| {
-                    buffer.copy_from_slice(&emu.mmu.lcd.buf_rgba8);
-                })
-                .unwrap();
+            // texture
+            //     .with_lock(None, |buffer: &mut [u8], _pitch: usize| {
+            //         buffer.copy_from_slice(&emu.mmu.lcd.buf_rgba8);
+            //     })
+            //     .unwrap();
 
             canvas.clear();
 

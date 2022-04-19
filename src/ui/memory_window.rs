@@ -18,7 +18,7 @@ impl MemoryView {
         let mut char_str = String::with_capacity(MemoryView::bytes_per_row);
 
         for i in 0..=(MemoryView::bytes_per_row - 1) {
-            let b = emu.mmu.direct_read((offset + i) as u16);
+            let b = emu.mmu.direct_read(offset + i);
             hex_str.push_str(&format!(" {:02X}", b));
             char_str.push(match b {
                 32..=126 => b as char,
