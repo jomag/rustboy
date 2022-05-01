@@ -17,6 +17,8 @@ use crate::registers::Registers;
 use crate::serial::Serial;
 use crate::timer::Timer;
 
+pub const OAM_OFFSET: usize = 0xFE00;
+
 // Port/Mode registers
 pub const P1_REG: usize = 0xFF00;
 pub const SB_REG: usize = 0xFF01; // serial transfer data
@@ -73,9 +75,6 @@ pub const NR44_REG: usize = 0xFF23;
 pub const NR50_REG: usize = 0xFF24;
 pub const NR51_REG: usize = 0xFF25;
 pub const NR52_REG: usize = 0xFF26;
-
-// Memory areas
-pub const _OAM_OFFSET: usize = 0xFE00;
 
 // FIXME: Same as MemoryMapped, but using u16 instead of usize.
 //        All code should be updated to use MemoryMapped instead.
@@ -235,7 +234,7 @@ impl MMU {
                     } else {
                         self.ram[(offset + idx - 0xE000) as usize]
                     };
-                    self.ppu.oam[idx as usize] = b;
+                    self.ppu.write(OAM_OFFSET + idx, b)
                 }
                 self.dma.update();
             }
@@ -287,13 +286,7 @@ impl MMU {
             0xC000..=0xCFFF => self.ram[(addr - 0xC000)], // RAM
             0xD000..=0xDFFF => self.ram[(addr - 0xC000)], // RAM (switchable on GBC)
             0xE000..=0xFDFF => self.ram[(addr - 0xE000)], // RAM echo
-            0xFE00..=0xFE9F => {
-                if self.dma.is_active() {
-                    0xFF
-                } else {
-                    self.ppu.oam[addr - 0xFE00]
-                }
-            }
+            0xFE00..=0xFE9F => self.ppu.read(addr),
 
             0xFEA0..=0xFEFF => {
                 println!("read of unused memory area: 0x{:04X}", addr);
@@ -376,12 +369,7 @@ impl MMU {
             0xC000..=0xCFFF => self.ram[(addr - 0xC000)] = value,
             0xD000..=0xDFFF => self.ram[(addr - 0xC000)] = value,
             0xE000..=0xFDFF => self.ram[(addr - 0xE000)] = value,
-            0xFE00..=0xFE9F => {
-                if !self.dma.is_active() {
-                    self.ppu.oam[addr - 0xFE00] = value
-                }
-            }
-
+            0xFE00..=0xFE9F => self.ppu.write(addr, value),
             0xFEA0..=0xFEFF => {}
 
             // Sound registers
