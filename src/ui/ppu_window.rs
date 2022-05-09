@@ -4,7 +4,7 @@ use sdl2::libc::select;
 use crate::{
     emu::Emu,
     mmu::{MemoryMapped, LCDC_REG, SCX_REG, SCY_REG, STAT_REG},
-    ppu::ppu::{
+    ppu_fifo::ppu::{
         BG_AND_WINDOW_TILE_DATA_OFFSET_0, BG_AND_WINDOW_TILE_DATA_OFFSET_1, BG_TILE_MAP_OFFSET_0,
         BG_TILE_MAP_OFFSET_1, WINDOW_TILE_MAP_OFFSET_0, WINDOW_TILE_MAP_OFFSET_1,
     },

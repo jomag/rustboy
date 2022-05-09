@@ -47,6 +47,7 @@ pub const SCREEN_WIDTH: usize = 160;
 pub const SCREEN_HEIGHT: usize = 144;
 pub const OAM_SIZE: usize = 0xA0;
 pub const OAM_OBJECT_SIZE: usize = 4;
+pub const OAM_OBJECT_COUNT: usize = OAM_SIZE / OAM_OBJECT_SIZE;
 pub const OAM_END: usize = OAM_OFFSET + OAM_SIZE - 1;
 pub const VRAM_SIZE: usize = 0x2000;
 pub const VRAM_OFFSET: usize = 0x8000;
@@ -134,7 +135,7 @@ impl Default for Sprite {
 
 impl Sprite {
     fn read(&self, offset: usize) -> u8 {
-        match offset {
+        match offset & 3 {
             0 => self.x,
             1 => self.y,
             2 => self.tile_index,
@@ -162,7 +163,7 @@ impl Sprite {
     }
 
     fn write(&mut self, offset: usize, value: u8) {
-        match offset {
+        match offset & 3 {
             0 => self.x = value,
             1 => self.y = value,
             2 => self.tile_index = value,
@@ -258,16 +259,18 @@ pub struct PPU {
     scanline_timer: usize,
 
     // Selected OAM objects (sprites) for current scanline. Max 10.
-    scanline_objects: [u8; 10],
+    scanline_objects: [usize; 10],
 
     // OAM object selection count for current scanline. Max 10.
-    scanline_object_count: u8,
+    scanline_object_count: usize,
 
     // Pointer to the next pixel to be written to.
     // Reset to zero on every vblank.
     buffer_pos: usize,
 
     fetcher: Fetcher,
+
+    obj_fifo: FIFO,
 
     // Assigns gray shades for bg and window color indexes. DMG only.
     // Accessed through register BGP (0xFF47).
@@ -305,6 +308,7 @@ impl PPU {
                 tile_data_high: 0,
                 fifo: FIFO::new(),
             },
+            obj_fifo: FIFO::new(),
             mode: Mode::OAMSearch,
             ly: 0,
             scanline_timer: 0,
@@ -341,10 +345,43 @@ impl PPU {
         self.fetcher.fifo.clear();
     }
 
-    fn select_scanline_objects(&mut self) {}
+    fn select_scanline_objects(&mut self) {
+        let mut n = 0;
+        let obj_height = if self.objects_are_8x16 { 16 } else { 8 };
+        self.scanline_object_count = 0;
+        while self.scanline_object_count < 10 && n < OAM_OBJECT_COUNT {
+            let obj = &self.oam[n];
+            let oy = obj.y as usize;
+            if self.ly + 16 >= oy && self.ly + 16 < oy + obj_height {
+                self.scanline_objects[self.scanline_object_count] = n;
+                self.scanline_object_count += 1;
+            }
+            n += 1;
+        }
 
-    pub fn step_fetcher_2t(&mut self) {
-        // Background fetch
+        if self.scanline_object_count > 0 {
+            println!(
+                "LY {}: {} ({})",
+                self.ly, self.scanline_object_count, self.scanline_objects[0],
+            );
+        }
+    }
+
+    pub fn step_fetcher_2m(&mut self) {
+        // Fetcher is clocked at 2 MHz, so it should be updated
+        // every second M-cycle.
+        //
+        // The fetcher cycles through four states:
+        //
+        // 1. Fetch tile number
+        // 2. Fetch tile data, low bits
+        // 3. Fetch tile data, high bits
+        // 4. Push to FIFO
+        //
+        // Step 1, 2 and 3 takes 1 cycle each (2 M-cycles).
+        // The fetcher will wait at step 4 until the FIFO is
+        // empty so that it can push 8 new pixels.
+
         match self.fetcher.state {
             FetchState::FetchTileNo => {
                 let tile_map_offset =
@@ -357,10 +394,6 @@ impl PPU {
             FetchState::FetchTileDataLow => {
                 let offset = self.fetcher.tile_id * 16 + self.fetcher.tile_line * 2;
                 let offset = offset + self.bg_and_window_tile_data_offset - 0x8000;
-                //println!(
-                //    "tile index: {}, tile id: {}. offset: {:x}",
-                //    self.fetcher.tile_index, self.fetcher.tile_id, offset,
-                //);
                 self.fetcher.tile_data_low = self.vram[offset];
                 self.fetcher.state = FetchState::FetchTileDataHigh;
             }
@@ -373,9 +406,9 @@ impl PPU {
             }
 
             FetchState::PushToFIFO => {
-                let lo = self.fetcher.tile_data_low;
-                let hi = self.fetcher.tile_data_high;
-                if self.fetcher.fifo.len() <= 8 {
+                if self.fetcher.fifo.len() == 0 {
+                    let lo = self.fetcher.tile_data_low;
+                    let hi = self.fetcher.tile_data_high;
                     for i in 0..8 {
                         let pxl = ((lo >> (7 - i)) & 1) | (((hi >> (7 - i)) & 1) << 1);
                         self.fetcher.fifo.enqueue(pxl as u8, 0, 0, false);
@@ -385,30 +418,41 @@ impl PPU {
                 }
             }
         }
+
+        
     }
 
-    pub fn step_2t(&mut self) -> bool {
-        self.scanline_timer += 2;
+    pub fn step_1m(&mut self) -> bool {
+        self.scanline_timer += 1;
 
         match self.mode {
             Mode::OAMSearch => {
                 // TODO: implement OAM search
                 if self.scanline_timer == 80 {
+                    // It should be sufficient to do this once
+                    // at the end of OAM search as the OAM can
+                    // not be changed while in this mode.
+                    self.select_scanline_objects();
                     self.lx = 0;
                     self.init_fetcher();
                     self.fetcher.tile_line = (self.scy + self.ly) % 8;
+                    self.obj_fifo.clear();
                     self.mode = Mode::PixelTransfer;
                 }
             }
 
             Mode::PixelTransfer => {
-                self.step_fetcher_2t();
+                if self.scanline_timer & 1 == 0 {
+                    self.step_fetcher_2m();
+                }
+
                 if self.fetcher.fifo.len() > 0 {
                     let data = self.fetcher.fifo.dequeue();
                     self.buffer[self.buffer_pos] = data.0;
                     self.buffer_pos += 1;
                     self.lx += 1;
                     if self.lx == 160 {
+                        println!("hblank after {} cycles", self.scanline_timer);
                         self.mode = Mode::HorizontalBlank;
                     }
                 }
@@ -450,8 +494,8 @@ impl PPU {
     pub fn update(&mut self, cycles: u32) -> bool {
         assert!(cycles % 2 == 0);
         let mut display_update = false;
-        for _ in 0..(cycles / 2) {
-            display_update = display_update || self.step_2t();
+        for _ in 0..cycles {
+            display_update = display_update || self.step_1m();
         }
         display_update
     }

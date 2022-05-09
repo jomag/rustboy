@@ -12,7 +12,7 @@ use crate::cartridge::{cartridge::Cartridge, cartridge::NoCartridge, load_cartri
 use crate::dma::DMA;
 use crate::instructions;
 use crate::interrupt::handle_interrupts;
-use crate::ppu::ppu::PPU;
+use crate::ppu_fifo::ppu::PPU;
 use crate::registers::Registers;
 use crate::serial::Serial;
 use crate::timer::Timer;
