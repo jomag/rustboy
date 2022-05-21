@@ -21,8 +21,8 @@ use winit::{event::Event::*, event_loop::ControlFlow, window::Window};
 use super::{
     audio_player::AudioPlayer, audio_window::render_audio_window,
     breakpoints_window::BreakpointsWindow, cartridge_window::CartridgeWindow,
-    debug_window::DebugWindow, memory_window::MemoryWindow, ppu_window::render_video_window,
-    render_stats::RenderStats, serial_window::SerialWindow,
+    debug_window::DebugWindow, memory_window::MemoryWindow, oam_window::render_oam_window,
+    ppu_window::render_video_window, render_stats::RenderStats, serial_window::SerialWindow,
 };
 
 pub const TARGET_FPS: f64 = 59.727500569606;
@@ -129,10 +129,10 @@ impl MoeApp {
         let buf = &self.emu.mmu.ppu.buffer;
 
         let palette: [(u8, u8, u8); 4] = [
-            (0x0f, 0x38, 0x0f),
-            (0x30, 0x62, 0x30),
-            (0x8B, 0xAC, 0x0F),
             (0x9B, 0xBC, 0x0F),
+            (0x8B, 0xAC, 0x0F),
+            (0x30, 0x62, 0x30),
+            (0x0f, 0x38, 0x0f),
         ];
 
         for i in 0..(SCREEN_WIDTH * SCREEN_HEIGHT) {
@@ -350,6 +350,7 @@ impl MoeApp {
 
         render_audio_window(ctx, &mut self.emu);
         render_video_window(ctx, &mut self.emu);
+        render_oam_window(ctx, &mut self.emu);
         self.debug_window.render(ctx, &mut self.emu, debug);
         self.breakpoints_window.render(ctx, &mut self.emu, debug);
         self.serial_window.render(ctx);

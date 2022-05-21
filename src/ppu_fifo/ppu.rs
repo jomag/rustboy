@@ -418,8 +418,6 @@ impl PPU {
                 }
             }
         }
-
-        
     }
 
     pub fn step_1m(&mut self) -> bool {

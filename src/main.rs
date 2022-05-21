@@ -19,6 +19,7 @@ mod instructions;
 mod interrupt;
 mod lcd;
 mod mmu;
+mod ppu;
 mod ppu_fifo;
 mod registers;
 mod serial;
@@ -174,6 +175,10 @@ fn main() -> Result<(), ()> {
     if ff_bootstrap {
         println!("Fast forward bootstrap ...");
         while emu.mmu.bootstrap_mode {
+            // println!(
+            //     "@{:04x}, LY: 0x{:02x} ({})",
+            //     emu.mmu.reg.pc, emu.mmu.ppu.ly, emu.mmu.ppu.ly
+            // );
             emu.mmu.exec_op();
         }
         println!("Bootstrap mode disabled");

@@ -2,6 +2,19 @@
 
 A personal project to learn Rust and basic emulator development.
 
+## PPU
+
+The PPU is implemented on a scanline basis. There was an attempt
+at a more accurate FIFO implementation, but as the documentation
+of this diverges quite a bit and gives very little benefit compared
+to a scanline-based approach I decided to not continue down that
+path for now. This also has the benefit of being a lot faster.
+
+Because of this a few demos and one game ("Prehistoric Man") will
+not work as intended. If the knowledge and documentation about the
+inner workings of the Gameboy improves in the future, I might take
+another stab at the FIFO based approach.
+
 ## Blargg Test Suite
 
 {% include "./blargg.md" %}
@@ -9,15 +22,6 @@ A personal project to learn Rust and basic emulator development.
 ## Mooneye Test Suite
 
 {% include "./mooneye.md" %}
-
-## Graphics
-
-- Resolution: 160 x 144
-- Real resolution: 256 x 256
-- Tiles: 32 x 32
-- Real resolution: 256 x 256 (32 x (8 x 32) x 8)
-- Clock speed: 4.194304 MHz (2 \*\* 22)
-- Vertical sync: 59.73 Hz
 
 ## References
 

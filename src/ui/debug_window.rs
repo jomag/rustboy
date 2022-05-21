@@ -4,6 +4,7 @@ use std::ops::Sub;
 use crate::debug::{format_mnemonic, Debug};
 use crate::emu::Emu;
 use crate::instructions;
+use crate::ppu::SCREEN_HEIGHT;
 use crate::registers::Registers;
 
 // cycle   reg   prev reg   frm
@@ -226,6 +227,10 @@ impl DebugWindow {
                     if ui.button("Continue").clicked() {
                         debug.continue_execution();
                     };
+                    if ui.button("Next scanline").clicked() {
+                        debug.break_on_scanline((emu.mmu.ppu.ly + 1) % SCREEN_HEIGHT);
+                        debug.continue_execution();
+                    }
                     if ui.button("Reset").clicked() {
                         emu.reset();
                     }

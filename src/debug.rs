@@ -45,6 +45,13 @@ pub struct Debug {
     pub steps: u32,
 
     pub breakpoints: HashMap<u16, Vec<Breakpoint>>,
+
+    // Execution will break when this scanline is reached.
+    // Set to a value >153 to disable.
+    pub break_on_scanline: usize,
+
+    // Break on interrupt if not masked
+    pub break_on_interrupt: u8,
 }
 
 impl Debug {
@@ -55,11 +62,17 @@ impl Debug {
             state: ExecState::RUN,
             steps: 0,
             breakpoints: HashMap::new(),
+            break_on_scanline: 0xFFFF,
+            break_on_interrupt: 0x00,
         }
     }
 
     pub fn add_breakpoint(&mut self, adr: u16, bp: Breakpoint) {
         self.breakpoints.entry(adr).or_insert(vec![]).push(bp);
+    }
+
+    pub fn break_on_scanline(&mut self, scanline: usize) {
+        self.break_on_scanline = scanline;
     }
 
     pub fn break_execution(&mut self) {
@@ -168,6 +181,15 @@ impl Debug {
                     0x40 => self.state = ExecState::STEP,
                     _ => {}
                 }
+            }
+
+            if emu.mmu.ppu.ly == self.break_on_scanline {
+                self.break_on_scanline = 0xFFFF;
+                self.state = ExecState::STEP;
+            }
+
+            if emu.mmu.entered_interrupt_handler & self.break_on_interrupt != 0 {
+                self.state = ExecState::STEP;
             }
         }
 

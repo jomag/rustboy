@@ -12,7 +12,7 @@ use crate::cartridge::{cartridge::Cartridge, cartridge::NoCartridge, load_cartri
 use crate::dma::DMA;
 use crate::instructions;
 use crate::interrupt::handle_interrupts;
-use crate::ppu_fifo::ppu::PPU;
+use crate::ppu::PPU;
 use crate::registers::Registers;
 use crate::serial::Serial;
 use crate::timer::Timer;
@@ -122,6 +122,12 @@ pub struct MMU {
     pub serial: Serial,
 
     pub display_updated: bool,
+
+    // If interrupt handler was entered while executing
+    // the previous operation, this variable is set to
+    // the interrupt bit. Otherwise it's reset to zero.
+    pub entered_interrupt_handler: u8,
+
     pub sample_count: u32,
 }
 
@@ -142,6 +148,7 @@ impl MMU {
             ppu: PPU::new(),
             buttons: Buttons::new(),
             display_updated: false,
+            entered_interrupt_handler: 0,
 
             // Create APU that will buffer up to 10 frames of audio
             apu: AudioProcessingUnit::new(machine, SAMPLES_PER_FRAME as u32 * 10),
@@ -165,6 +172,7 @@ impl MMU {
         self.ppu.reset();
         self.buttons = Buttons::new();
         self.display_updated = false;
+        self.entered_interrupt_handler = 0;
 
         // The APU shares a ringbuf with audio code so it can't be recreated
         self.apu.reset();
@@ -210,7 +218,7 @@ impl MMU {
             self.tick(4);
         }
 
-        handle_interrupts(self);
+        self.entered_interrupt_handler = handle_interrupts(self);
     }
 
     pub fn tick(&mut self, cycles: u32) {
@@ -222,7 +230,9 @@ impl MMU {
         }
 
         self.buttons.update();
-        self.display_updated = self.display_updated || self.ppu.update(cycles);
+
+        let updated = self.ppu.update(cycles);
+        self.display_updated = self.display_updated || updated;
 
         if !self.reg.halted {
             for _ in 0..(cycles / 4) {
@@ -234,6 +244,12 @@ impl MMU {
                     } else {
                         self.ram[(offset + idx - 0xE000) as usize]
                     };
+                    println!(
+                        "DMA write: {:04x} = {:02x} from {:04x}",
+                        OAM_OFFSET + idx,
+                        b,
+                        offset + idx
+                    );
                     self.ppu.write(OAM_OFFSET + idx, b)
                 }
                 self.dma.update();
@@ -288,10 +304,9 @@ impl MMU {
             0xE000..=0xFDFF => self.ram[(addr - 0xE000)], // RAM echo
             0xFE00..=0xFE9F => self.ppu.read(addr),
 
-            0xFEA0..=0xFEFF => {
-                println!("read of unused memory area: 0x{:04X}", addr);
-                0xFF
-            }
+            // Unused and undocumented area. Seems to return 0 on DMG, and
+            // random values on CGB.
+            0xFEA0..=0xFEFF => 0x00,
 
             // Special registers in area 0xFF00 to 0xFFFF
             SB_REG..=SC_REG => self.serial.read_reg(addr),
@@ -401,7 +416,10 @@ impl MMU {
             0xFF4D => println!("write to 0xFF4D - KEY1 (CGB only): {}", value),
 
             // 0xFF50: write 1 to disable bootstrap ROM
-            0xFF50 => self.bootstrap_mode = false,
+            0xFF50 => {
+                println!("BOOT STRAP MODE IS NOW FALSE!!!");
+                self.bootstrap_mode = false;
+            }
 
             // Invalid registers, that are still used by for example Tetris
             // https://www.reddit.com/r/EmuDev/comments/5nixai/gb_tetris_writing_to_unused_memory/

@@ -1,10 +1,9 @@
 use egui::{CtxRef, Ui};
-use sdl2::libc::select;
 
 use crate::{
     emu::Emu,
-    mmu::{MemoryMapped, LCDC_REG, SCX_REG, SCY_REG, STAT_REG},
-    ppu_fifo::ppu::{
+    mmu::{MemoryMapped, LCDC_REG, LY_REG, SCX_REG, SCY_REG, STAT_REG},
+    ppu::{
         BG_AND_WINDOW_TILE_DATA_OFFSET_0, BG_AND_WINDOW_TILE_DATA_OFFSET_1, BG_TILE_MAP_OFFSET_0,
         BG_TILE_MAP_OFFSET_1, WINDOW_TILE_MAP_OFFSET_0, WINDOW_TILE_MAP_OFFSET_1,
     },
@@ -29,6 +28,11 @@ fn selectable_area(ui: &mut Ui, value: bool, area0: usize, area1: usize, size: u
 
 fn render_property_grid(ui: &mut Ui, emu: &mut Emu) {
     let ppu = &emu.mmu.ppu;
+
+    let ly = ppu.read(LY_REG);
+    ui.label("LY");
+    ui.label(format!("0x{:02X} ({})", ly, ly));
+    ui.end_row();
 
     let scx = ppu.read(SCX_REG);
     ui.label("SCX");
