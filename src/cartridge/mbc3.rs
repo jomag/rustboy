@@ -134,7 +134,7 @@ impl MBC3 {
         };
 
         let rtc = match cartridge_type {
-            CartridgeType::MBC3 { rtc, .. } => Some(RTC::new()),
+            CartridgeType::MBC3 { rtc: _, .. } => Some(RTC::new()),
             _ => None,
         };
 

@@ -326,6 +326,8 @@ impl MMU {
             BGP_REG => self.ppu.read(addr),
             OBP0_REG => self.ppu.read(addr),
             OBP1_REG => self.ppu.read(addr),
+            WX_REG => self.ppu.read(addr),
+            WY_REG => self.ppu.read(addr),
 
             // Sound registers
             0xFF10..=0xFF3F => self.apu.read_reg(addr),
@@ -410,8 +412,8 @@ impl MMU {
             BGP_REG => self.ppu.write(addr, value),
             OBP0_REG => self.ppu.write(addr, value),
             OBP1_REG => self.ppu.write(addr, value),
-            WY_REG => {}
-            WX_REG => {}
+            WY_REG => self.ppu.write(addr, value),
+            WX_REG => self.ppu.write(addr, value),
 
             0xFF4D => println!("write to 0xFF4D - KEY1 (CGB only): {}", value),
 

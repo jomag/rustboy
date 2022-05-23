@@ -72,6 +72,7 @@ fn parse<T: num_traits::Num>(value: Option<&str>, default: T) -> T {
     }
 }
 
+#[allow(dead_code)]
 fn capture_frame(filename: &str, frame: u32, lcd: &LCD) -> Result<(), std::io::Error> {
     // For reading and opening files
     use std::fs::File;

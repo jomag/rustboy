@@ -7,17 +7,17 @@ pub struct MemoryView {
 }
 
 impl MemoryView {
-    const bytes_per_row: usize = 16;
+    const BYTES_PER_ROW: usize = 16;
 
     pub fn new(mem_size: usize) -> Self {
         MemoryView { mem_size }
     }
 
     fn render_row(offset: usize, ui: &mut Ui, emu: &Emu) {
-        let mut hex_str = String::with_capacity(MemoryView::bytes_per_row * 3);
-        let mut char_str = String::with_capacity(MemoryView::bytes_per_row);
+        let mut hex_str = String::with_capacity(MemoryView::BYTES_PER_ROW * 3);
+        let mut char_str = String::with_capacity(MemoryView::BYTES_PER_ROW);
 
-        for i in 0..=(MemoryView::bytes_per_row - 1) {
+        for i in 0..=(MemoryView::BYTES_PER_ROW - 1) {
             let b = emu.mmu.direct_read(offset + i);
             hex_str.push_str(&format!(" {:02X}", b));
             char_str.push(match b {
@@ -33,7 +33,7 @@ impl MemoryView {
         ui.scope(|ui| {
             let text_style = egui::TextStyle::Monospace;
             let row_height = ui.fonts()[text_style].row_height();
-            let num_rows = self.mem_size / MemoryView::bytes_per_row;
+            let num_rows = self.mem_size / MemoryView::BYTES_PER_ROW;
 
             ui.style_mut().override_text_style = Some(text_style);
 
@@ -43,7 +43,7 @@ impl MemoryView {
                 num_rows,
                 |ui, row_range| {
                     for row in row_range {
-                        MemoryView::render_row(row * MemoryView::bytes_per_row, ui, emu);
+                        MemoryView::render_row(row * MemoryView::BYTES_PER_ROW, ui, emu);
                     }
                 },
             )

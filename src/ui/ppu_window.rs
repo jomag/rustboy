@@ -2,7 +2,7 @@ use egui::{CtxRef, Ui};
 
 use crate::{
     emu::Emu,
-    mmu::{MemoryMapped, LCDC_REG, LY_REG, SCX_REG, SCY_REG, STAT_REG},
+    mmu::{MemoryMapped, LCDC_REG, LY_REG, SCX_REG, SCY_REG, STAT_REG, WX_REG, WY_REG},
     ppu::{
         BG_AND_WINDOW_TILE_DATA_OFFSET_0, BG_AND_WINDOW_TILE_DATA_OFFSET_1, BG_TILE_MAP_OFFSET_0,
         BG_TILE_MAP_OFFSET_1, WINDOW_TILE_MAP_OFFSET_0, WINDOW_TILE_MAP_OFFSET_1,
@@ -102,6 +102,12 @@ fn render_property_grid(ui: &mut Ui, emu: &mut Emu) {
     let stat = ppu.read(STAT_REG);
     ui.label("STAT");
     ui.label(format!("0x{:02X} ({})", stat, stat));
+    ui.end_row();
+
+    let wx = ppu.read(WX_REG);
+    let wy = ppu.read(WY_REG);
+    ui.label("WX, WY");
+    ui.label(format!("{}, {}", wx, wy));
     ui.end_row();
 }
 

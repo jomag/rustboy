@@ -3,16 +3,11 @@ use crate::{
     apu::square_gen::SquareWaveSoundGenerator,
     apu::wave_gen::WaveSoundGenerator,
     emu::Machine,
-    mmu::{
-        NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, NR20_REG, NR21_REG, NR22_REG, NR23_REG,
-        NR24_REG, NR30_REG, NR31_REG, NR32_REG, NR33_REG, NR34_REG, NR40_REG, NR41_REG, NR42_REG,
-        NR43_REG, NR44_REG, NR50_REG, NR51_REG, NR52_REG,
-    },
+    mmu::{NR50_REG, NR51_REG, NR52_REG},
     CYCLES_PER_FRAME,
 };
 
 use blip_buf::BlipBuf;
-use num_traits::abs;
 
 // Approx numberof samples per frame at native frame rate.
 // The actual count is a little less than this.
@@ -280,15 +275,5 @@ impl AudioProcessingUnit {
             0xFF27..=0xFF2F => {}
             _ => {}
         }
-    }
-}
-
-fn reg_name(address: u16) -> String {
-    match address {
-        0xFF10..=0xFF14 => format!("NR{:02X}", address - 0xFF10 + 0x10),
-        0xFF15..=0xFF19 => format!("NR{:02X}", address - 0xFF15 + 0x20),
-        0xFF1A..=0xFF1E => format!("NR{:02X}", address - 0xFF1A + 0x30),
-        0xFF1F..=0xFF23 => format!("NR{:02X}", address - 0xFF1F + 0x40),
-        _ => format!("{:04X}", address),
     }
 }

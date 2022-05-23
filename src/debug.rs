@@ -28,7 +28,7 @@ pub struct Breakpoint {
 }
 
 impl Breakpoint {
-    pub fn evaluate(&self, emu: &Emu) -> bool {
+    pub fn evaluate(&self, _emu: &Emu) -> bool {
         self.enabled
     }
 }
@@ -65,6 +65,10 @@ impl Debug {
             break_on_scanline: 0xFFFF,
             break_on_interrupt: 0x00,
         }
+    }
+
+    pub fn is_stopped(&self) -> bool {
+        self.state != ExecState::STEP
     }
 
     pub fn add_breakpoint(&mut self, adr: u16, bp: Breakpoint) {
@@ -119,6 +123,7 @@ impl Debug {
         );
     }
 
+    #[allow(dead_code)]
     pub fn finalize(&mut self) {
         match self.debug_log {
             Some(ref mut f) => {
