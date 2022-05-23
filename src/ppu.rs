@@ -607,7 +607,6 @@ impl MemoryMapped for PPU {
                 self.obj1_palette[3] = (value >> 6) & 3;
             }
             LCDC_REG => {
-                println!("LCDC: 0x{:02x} b{:b}", value, value);
                 self.enabled = (value & 128) != 0;
                 self.window_tile_map_offset = if value & 64 == 0 {
                     WINDOW_TILE_MAP_OFFSET_0
