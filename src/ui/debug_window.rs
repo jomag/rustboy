@@ -4,6 +4,7 @@ use std::ops::Sub;
 use crate::debug::{format_mnemonic, Debug};
 use crate::emu::Emu;
 use crate::instructions;
+use crate::ppu::SCREEN_HEIGHT;
 use crate::registers::Registers;
 
 // cycle   reg   prev reg   frm
@@ -131,7 +132,7 @@ impl DisassemblyView {
         let mut adr = self.start_address;
 
         for _ in 0..lines {
-            match instructions::op_length(emu.mmu.direct_read(adr as u16)) {
+            match instructions::op_length(emu.mmu.direct_read(adr)) {
                 Some(len) => adr += len,
                 None => break,
             }
@@ -164,7 +165,7 @@ impl DisassemblyView {
         let pc = emu.mmu.reg.pc as usize;
 
         for _ in 0..lines {
-            let text = format!("{:04x}: {}", addr, format_mnemonic(&emu.mmu, addr as u16));
+            let text = format!("{:04x}: {}", addr, format_mnemonic(&emu.mmu, addr));
 
             let lbl;
             if addr == pc {
@@ -177,7 +178,7 @@ impl DisassemblyView {
 
             ui.add(lbl);
 
-            match instructions::op_length(emu.mmu.direct_read(addr as u16)) {
+            match instructions::op_length(emu.mmu.direct_read(addr)) {
                 Some(len) => addr += len,
                 None => break,
             }
@@ -226,6 +227,10 @@ impl DebugWindow {
                     if ui.button("Continue").clicked() {
                         debug.continue_execution();
                     };
+                    if ui.button("Next scanline").clicked() {
+                        debug.break_on_scanline((emu.mmu.ppu.ly + 1) % SCREEN_HEIGHT);
+                        debug.continue_execution();
+                    }
                     if ui.button("Reset").clicked() {
                         emu.reset();
                     }

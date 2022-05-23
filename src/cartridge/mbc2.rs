@@ -68,19 +68,19 @@ impl Cartridge for MBC2 {
 }
 
 impl MemoryMapped for MBC2 {
-    fn read(&self, address: u16) -> u8 {
+    fn read(&self, address: usize) -> u8 {
         match address {
-            0x0000..=0x3FFF => self.rom[address as usize],
-            0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + address as usize - 0x4000],
+            0x0000..=0x3FFF => self.rom[address],
+            0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + address - 0x4000],
             0xA000..=0xBFFF => match self.ram_enabled {
-                true => self.ram[(address as usize - 0xA000) & 0x1ff] | 0xF0,
+                true => self.ram[(address - 0xA000) & 0x1ff] | 0xF0,
                 false => 0xFF,
             },
             _ => 0,
         }
     }
 
-    fn write(&mut self, address: u16, value: u8) {
+    fn write(&mut self, address: usize, value: u8) {
         match address {
             0x0000..=0x3FFF => {
                 if address & 0x100 == 0 {
@@ -93,7 +93,7 @@ impl MemoryMapped for MBC2 {
             }
             0xA000..=0xBFFF => {
                 if self.ram_enabled {
-                    self.ram[(address as usize - 0xA000) & 0x1ff] = value;
+                    self.ram[(address - 0xA000) & 0x1ff] = value;
                 }
             }
             _ => {}

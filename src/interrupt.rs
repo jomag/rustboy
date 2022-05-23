@@ -32,7 +32,10 @@ fn interrupt(mmu: &mut MMU, bit: u8, addr: u16) {
     mmu.reg.ime = 0;
 }
 
-pub fn handle_interrupts(mmu: &mut MMU) {
+// Handles interrupt by checking for interrupt requests in correct order
+// and trigger the interrupt handler after proper delay.
+// Returns the triggered interrupt bit, or zero if no interrupt triggered.
+pub fn handle_interrupts(mmu: &mut MMU) -> u8 {
     let if_reg = mmu.direct_read(IF_REG);
     let ie_reg = mmu.direct_read(IE_REG);
     let masked = if_reg & ie_reg;
@@ -46,20 +49,27 @@ pub fn handle_interrupts(mmu: &mut MMU) {
 
     if mmu.reg.ime == 1 {
         mmu.reg.ime = 2;
-        return;
+        return 0;
     }
 
     if mmu.reg.ime == 2 {
         if masked & IF_VBLANK_BIT != 0 {
             interrupt(mmu, IF_VBLANK_BIT, VBLANK_ADDR);
+            return IF_VBLANK_BIT;
         } else if masked & IF_LCDC_BIT != 0 {
-            interrupt(mmu, IF_LCDC_BIT, LCDC_ADDR)
+            interrupt(mmu, IF_LCDC_BIT, LCDC_ADDR);
+            return IF_LCDC_BIT;
         } else if masked & IF_TMR_BIT != 0 {
-            interrupt(mmu, IF_TMR_BIT, TMR_ADDR)
+            interrupt(mmu, IF_TMR_BIT, TMR_ADDR);
+            return IF_TMR_BIT;
         } else if masked & IF_SERIAL_BIT != 0 {
-            interrupt(mmu, IF_SERIAL_BIT, SERIAL_ADDR)
+            interrupt(mmu, IF_SERIAL_BIT, SERIAL_ADDR);
+            return IF_SERIAL_BIT;
         } else if masked & IF_INP_BIT != 0 {
-            interrupt(mmu, IF_INP_BIT, INP_ADDR)
+            interrupt(mmu, IF_INP_BIT, INP_ADDR);
+            return IF_INP_BIT;
         }
     }
+
+    return 0;
 }

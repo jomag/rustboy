@@ -50,9 +50,9 @@ pub fn op_length(op: u8) -> Option<usize> {
 pub fn push_op(mmu: &mut MMU, value: u16) {
     // For correct emulation the high byte is pushed first, then the low byte
     let sp = mmu.reg.sp.wrapping_sub(1);
-    mmu.write(sp, ((value >> 8) & 0xFF) as u8);
+    mmu.write(sp as usize, ((value >> 8) & 0xFF) as u8);
     let sp = sp.wrapping_sub(1);
-    mmu.write(sp, (value & 0xFF) as u8);
+    mmu.write(sp as usize, (value & 0xFF) as u8);
 
     mmu.reg.sp = sp;
 }
@@ -63,9 +63,9 @@ pub fn push_op(mmu: &mut MMU, value: u16) {
 // Note that flags are still affected by POP AF
 fn pop_op(mmu: &mut MMU) -> u16 {
     let sp = mmu.reg.sp;
-    let lo = mmu.read(sp);
+    let lo = mmu.read(sp as usize);
     let sp = sp.wrapping_add(1);
-    let hi = mmu.read(sp);
+    let hi = mmu.read(sp as usize);
     mmu.reg.sp = sp.wrapping_add(1);
     ((hi as u16) << 8) | (lo as u16)
 }
@@ -395,12 +395,12 @@ pub fn step(mmu: &mut MMU) {
         0x02 => {
             let bc = mmu.reg.bc();
             let a = mmu.reg.a;
-            mmu.write(bc, a);
+            mmu.write(bc as usize, a);
         }
         0x12 => {
             let de = mmu.reg.de();
             let a = mmu.reg.a;
-            mmu.write(de, a);
+            mmu.write(de as usize, a);
         }
 
         // LD A, (nn): loads value stored in memory at address nn (immediate)
@@ -409,7 +409,7 @@ pub fn step(mmu: &mut MMU) {
         // Flags: - - - -
         0xFA => {
             let addr = mmu.fetch_u16();
-            mmu.reg.a = mmu.read(addr);
+            mmu.reg.a = mmu.read(addr as usize);
         }
 
         // INC n: increment register n
@@ -451,9 +451,9 @@ pub fn step(mmu: &mut MMU) {
         // Flags: Z 0 H -
         0x34 => {
             let hl = mmu.reg.hl();
-            let v = mmu.read(hl);
+            let v = mmu.read(hl as usize);
             let v = inc_op(&mut mmu.reg, v);
-            mmu.write(hl, v);
+            mmu.write(hl as usize, v);
         }
 
         // INC nn: increments content of register pair nn by 1
@@ -545,9 +545,9 @@ pub fn step(mmu: &mut MMU) {
         // Flags: Z 1 H -
         0x35 => {
             let hl = mmu.reg.hl();
-            let v = mmu.read(hl);
+            let v = mmu.read(hl as usize);
             let v = dec_op(&mut mmu.reg, v);
-            mmu.write(hl, v);
+            mmu.write(hl as usize, v);
         }
 
         // ADD r, ADD (hl): add register r or value at (hl) to accumulator
@@ -580,7 +580,7 @@ pub fn step(mmu: &mut MMU) {
         }
         0x86 => {
             let hl = mmu.reg.hl();
-            let v = mmu.read(hl);
+            let v = mmu.read(hl as usize);
             add_op(&mut mmu.reg, v);
         }
         0x87 => {
@@ -627,7 +627,7 @@ pub fn step(mmu: &mut MMU) {
         }
         0x8E => {
             let hl = mmu.reg.hl();
-            let v = mmu.read(hl);
+            let v = mmu.read(hl as usize);
             adc_op(&mut mmu.reg, v);
         }
         0x8F => {
@@ -675,7 +675,7 @@ pub fn step(mmu: &mut MMU) {
         }
         0x9E => {
             let hl = mmu.reg.hl();
-            let v = mmu.read(hl);
+            let v = mmu.read(hl as usize);
             sbc_op(&mut mmu.reg, v)
         }
         0x9F => {
@@ -765,7 +765,7 @@ pub fn step(mmu: &mut MMU) {
         }
         0x96 => {
             let hl = mmu.reg.hl();
-            let v = mmu.read(hl);
+            let v = mmu.read(hl as usize);
             sub_op(&mut mmu.reg, v);
         }
         0x97 => {
@@ -812,7 +812,7 @@ pub fn step(mmu: &mut MMU) {
         }
         0xA6 => {
             let hl = mmu.reg.hl();
-            let v = mmu.read(hl);
+            let v = mmu.read(hl as usize);
             and_op(&mut mmu.reg, v);
         }
         0xA7 => {
@@ -854,7 +854,7 @@ pub fn step(mmu: &mut MMU) {
         }
         0xB6 => {
             let hl = mmu.reg.hl();
-            let v = mmu.read(hl);
+            let v = mmu.read(hl as usize);
             or_op(&mut mmu.reg, v);
         }
         0xB7 => {
@@ -966,31 +966,31 @@ pub fn step(mmu: &mut MMU) {
         // Flags: - - - -
         0x46 => {
             let hl = mmu.reg.hl();
-            mmu.reg.b = mmu.read(hl)
+            mmu.reg.b = mmu.read(hl as usize)
         }
         0x4E => {
             let hl = mmu.reg.hl();
-            mmu.reg.c = mmu.read(hl)
+            mmu.reg.c = mmu.read(hl as usize)
         }
         0x56 => {
             let hl = mmu.reg.hl();
-            mmu.reg.d = mmu.read(hl)
+            mmu.reg.d = mmu.read(hl as usize)
         }
         0x5E => {
             let hl = mmu.reg.hl();
-            mmu.reg.e = mmu.read(hl)
+            mmu.reg.e = mmu.read(hl as usize)
         }
         0x66 => {
             let hl = mmu.reg.hl();
-            mmu.reg.h = mmu.read(hl)
+            mmu.reg.h = mmu.read(hl as usize)
         }
         0x6E => {
             let hl = mmu.reg.hl();
-            mmu.reg.l = mmu.read(hl)
+            mmu.reg.l = mmu.read(hl as usize)
         }
         0x7E => {
             let hl = mmu.reg.hl();
-            mmu.reg.a = mmu.read(hl)
+            mmu.reg.a = mmu.read(hl as usize)
         }
 
         // LD n, (mm): load value from memory into register n
@@ -999,11 +999,11 @@ pub fn step(mmu: &mut MMU) {
         // Flags: - - - -
         0x0A => {
             let bc = mmu.reg.bc();
-            mmu.reg.a = mmu.read(bc)
+            mmu.reg.a = mmu.read(bc as usize)
         }
         0x1A => {
             let de = mmu.reg.de();
-            mmu.reg.a = mmu.read(de)
+            mmu.reg.a = mmu.read(de as usize)
         }
 
         // LD ($FF00+n), A: Put A into memory address $FF00+n
@@ -1012,8 +1012,9 @@ pub fn step(mmu: &mut MMU) {
         // Flags: - - - -
         0xE0 => {
             let n = mmu.fetch();
+            let adr = (n as u16).wrapping_add(0xFF00);
             let a = mmu.reg.a;
-            mmu.write(0xFF00 + n as u16, a);
+            mmu.write(adr as usize, a);
         }
 
         // LD A, ($FF00+n): read from memory $FF00+n to register A
@@ -1022,7 +1023,7 @@ pub fn step(mmu: &mut MMU) {
         // Flags: - - - -
         0xF0 => {
             let n = mmu.fetch();
-            mmu.reg.a = mmu.read(0xFF00 + n as u16);
+            mmu.reg.a = mmu.read(0xFF00 + n as usize);
         }
 
         // LD (HL), n: store register value to memory at address HL
@@ -1032,37 +1033,37 @@ pub fn step(mmu: &mut MMU) {
         0x70 => {
             let hl = mmu.reg.hl();
             let b = mmu.reg.b;
-            mmu.write(hl, b)
+            mmu.write(hl as usize, b)
         }
         0x71 => {
             let hl = mmu.reg.hl();
             let c = mmu.reg.c;
-            mmu.write(hl, c)
+            mmu.write(hl as usize, c)
         }
         0x72 => {
             let hl = mmu.reg.hl();
             let d = mmu.reg.d;
-            mmu.write(hl, d)
+            mmu.write(hl as usize, d)
         }
         0x73 => {
             let hl = mmu.reg.hl();
             let e = mmu.reg.e;
-            mmu.write(hl, e)
+            mmu.write(hl as usize, e)
         }
         0x74 => {
             let hl = mmu.reg.hl();
             let h = mmu.reg.h;
-            mmu.write(hl, h)
+            mmu.write(hl as usize, h)
         }
         0x75 => {
             let hl = mmu.reg.hl();
             let l = mmu.reg.l;
-            mmu.write(hl, l)
+            mmu.write(hl as usize, l)
         }
         0x77 => {
             let hl = mmu.reg.hl();
             let a = mmu.reg.a;
-            mmu.write(hl, a)
+            mmu.write(hl as usize, a)
         }
 
         // RET: set PC to 16-bit value popped from stack
@@ -1285,7 +1286,7 @@ pub fn step(mmu: &mut MMU) {
             // invalid length of 2. The correct length is 1.
             let addr = 0xFF00 + mmu.reg.c as u16;
             let a = mmu.reg.a;
-            mmu.write(addr, a);
+            mmu.write(addr as usize, a);
         }
 
         // LD A, ($FF00+C): store value at address 0xFF00 + C in A
@@ -1294,7 +1295,7 @@ pub fn step(mmu: &mut MMU) {
         // Flags: - - - -
         0xF2 => {
             let addr = 0xFF00 + mmu.reg.c as u16;
-            mmu.reg.a = mmu.read(addr);
+            mmu.reg.a = mmu.read(addr as usize);
         }
 
         // JR d8: relative jump
@@ -1455,7 +1456,7 @@ pub fn step(mmu: &mut MMU) {
         0x32 => {
             let hl = mmu.reg.hl();
             let a = mmu.reg.a;
-            mmu.write(hl, a);
+            mmu.write(hl as usize, a);
             mmu.reg.set_hl(hl.wrapping_sub(1));
         }
 
@@ -1489,7 +1490,7 @@ pub fn step(mmu: &mut MMU) {
         }
         0xAE => {
             let hl = mmu.reg.hl();
-            let v = mmu.read(hl);
+            let v = mmu.read(hl as usize);
             xor_op(&mut mmu.reg, v);
         }
         0xAF => {
@@ -1526,7 +1527,7 @@ pub fn step(mmu: &mut MMU) {
         0x22 => {
             let hl = mmu.reg.hl();
             let a = mmu.reg.a;
-            mmu.write(hl, a);
+            mmu.write(hl as usize, a);
             mmu.reg.set_hl(hl + 1);
         }
 
@@ -1537,7 +1538,7 @@ pub fn step(mmu: &mut MMU) {
         0x36 => {
             let v = mmu.fetch();
             let hl = mmu.reg.hl();
-            mmu.write(hl, v);
+            mmu.write(hl as usize, v);
         }
 
         // LD A, (HL+): load value from (HL) to A and increment HL
@@ -1546,7 +1547,7 @@ pub fn step(mmu: &mut MMU) {
         // Flags: - - - -
         0x2A => {
             let hl = mmu.reg.hl();
-            mmu.reg.a = mmu.read(hl);
+            mmu.reg.a = mmu.read(hl as usize);
             mmu.reg.set_hl(hl + 1);
         }
 
@@ -1556,7 +1557,7 @@ pub fn step(mmu: &mut MMU) {
         // Flags: - - - -
         0x3A => {
             let hl = mmu.reg.hl();
-            mmu.reg.a = mmu.read(hl);
+            mmu.reg.a = mmu.read(hl as usize);
             mmu.reg.set_hl(hl.wrapping_sub(1));
         }
 
@@ -1567,7 +1568,7 @@ pub fn step(mmu: &mut MMU) {
         0xEA => {
             let addr = mmu.fetch_u16();
             let a = mmu.reg.a;
-            mmu.write(addr, a);
+            mmu.write(addr as usize, a);
         }
 
         // LD (a16), SP: store SP at address (a16)
@@ -1577,7 +1578,7 @@ pub fn step(mmu: &mut MMU) {
         0x08 => {
             let addr = mmu.fetch_u16();
             let sp = mmu.reg.sp;
-            mmu.write_u16(addr, sp);
+            mmu.write_u16(addr as usize, sp);
         }
 
         // LD HL, SP+d8: load HL with value of SP + immediate value r8
@@ -1628,7 +1629,7 @@ pub fn step(mmu: &mut MMU) {
         }
         0xBE => {
             let hl = mmu.reg.hl();
-            let v = mmu.read(hl);
+            let v = mmu.read(hl as usize);
             cp_op(&mut mmu.reg, v);
         }
         0xBF => {
@@ -1741,9 +1742,9 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x06 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     let rot = rlc_op(&mut mmu.reg, v);
-                    mmu.write(hl, rot);
+                    mmu.write(hl as usize, rot);
                 }
                 0x07 => {
                     let a = mmu.reg.a;
@@ -1777,9 +1778,9 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x0E => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     let rot = rrc_op(&mut mmu.reg, v);
-                    mmu.write(hl, rot);
+                    mmu.write(hl as usize, rot);
                 }
                 0x0F => {
                     let a = mmu.reg.a;
@@ -1813,9 +1814,9 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x16 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     let rot = rl_op(&mut mmu.reg, v);
-                    mmu.write(hl, rot);
+                    mmu.write(hl as usize, rot);
                 }
                 0x17 => {
                     let a = mmu.reg.a;
@@ -1849,9 +1850,9 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x1E => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     let rot = rr_op(&mut mmu.reg, v);
-                    mmu.write(hl, rot);
+                    mmu.write(hl as usize, rot);
                 }
                 0x1F => {
                     let a = mmu.reg.a;
@@ -1885,9 +1886,9 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x26 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     let result = sla_op(&mut mmu.reg, v);
-                    mmu.write(hl, result);
+                    mmu.write(hl as usize, result);
                 }
                 0x27 => {
                     let a = mmu.reg.a;
@@ -1921,9 +1922,9 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x2E => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     let result = sra_op(&mut mmu.reg, v);
-                    mmu.write(hl, result);
+                    mmu.write(hl as usize, result);
                 }
                 0x2F => {
                     let a = mmu.reg.a;
@@ -1957,9 +1958,9 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x36 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     let result = swap_op(&mut mmu.reg, v);
-                    mmu.write(hl, result);
+                    mmu.write(hl as usize, result);
                 }
                 0x37 => {
                     let a = mmu.reg.a;
@@ -1993,9 +1994,9 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x3E => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     let result = srl_op(&mut mmu.reg, v);
-                    mmu.write(hl, result);
+                    mmu.write(hl as usize, result);
                 }
                 0x3F => {
                     let a = mmu.reg.a;
@@ -2031,7 +2032,7 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x46 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     bit_op(&mut mmu.reg, 0, v)
                 }
                 0x47 => {
@@ -2065,7 +2066,7 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x4E => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     bit_op(&mut mmu.reg, 1, v)
                 }
                 0x4F => {
@@ -2099,7 +2100,7 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x56 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     bit_op(&mut mmu.reg, 2, v)
                 }
                 0x57 => {
@@ -2133,7 +2134,7 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x5E => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     bit_op(&mut mmu.reg, 3, v)
                 }
                 0x5F => {
@@ -2167,7 +2168,7 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x66 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     bit_op(&mut mmu.reg, 4, v)
                 }
                 0x67 => {
@@ -2201,7 +2202,7 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x6E => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     bit_op(&mut mmu.reg, 5, v)
                 }
                 0x6F => {
@@ -2235,7 +2236,7 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x76 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     bit_op(&mut mmu.reg, 6, v)
                 }
                 0x77 => {
@@ -2269,7 +2270,7 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x7E => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
+                    let v = mmu.read(hl as usize);
                     bit_op(&mut mmu.reg, 7, v)
                 }
                 0x7F => {
@@ -2301,8 +2302,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x86 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v & !1);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v & !1);
                 }
                 0x87 => {
                     mmu.reg.a &= !1;
@@ -2328,8 +2329,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x8E => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v & !2);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v & !2);
                 }
                 0x8F => {
                     mmu.reg.a &= !2;
@@ -2355,8 +2356,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x96 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v & !4);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v & !4);
                 }
                 0x97 => {
                     mmu.reg.a &= !4;
@@ -2382,8 +2383,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0x9E => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v & !8);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v & !8);
                 }
                 0x9F => {
                     mmu.reg.a &= !8;
@@ -2409,8 +2410,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0xA6 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v & !16);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v & !16);
                 }
                 0xA7 => {
                     mmu.reg.a &= !16;
@@ -2436,8 +2437,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0xAE => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v & !32);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v & !32);
                 }
                 0xAF => {
                     mmu.reg.a &= !32;
@@ -2463,8 +2464,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0xB6 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v & !64);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v & !64);
                 }
                 0xB7 => {
                     mmu.reg.a &= !64;
@@ -2490,8 +2491,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0xBE => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v & !128);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v & !128);
                 }
                 0xBF => {
                     mmu.reg.a &= !128;
@@ -2519,8 +2520,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0xC6 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v | 1);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v | 1);
                 }
                 0xC7 => {
                     mmu.reg.a |= 1;
@@ -2546,8 +2547,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0xCE => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v | 2);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v | 2);
                 }
                 0xCF => {
                     mmu.reg.a |= 2;
@@ -2573,8 +2574,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0xD6 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v | 4);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v | 4);
                 }
                 0xD7 => {
                     mmu.reg.a |= 4;
@@ -2600,8 +2601,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0xDE => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v | 8);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v | 8);
                 }
                 0xDF => {
                     mmu.reg.a |= 8;
@@ -2627,8 +2628,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0xE6 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v | 16);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v | 16);
                 }
                 0xE7 => {
                     mmu.reg.a |= 16;
@@ -2654,8 +2655,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0xEE => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v | 32);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v | 32);
                 }
                 0xEF => {
                     mmu.reg.a |= 32;
@@ -2681,8 +2682,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0xF6 => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v | 64);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v | 64);
                 }
                 0xF7 => {
                     mmu.reg.a |= 64;
@@ -2708,8 +2709,8 @@ pub fn step(mmu: &mut MMU) {
                 }
                 0xFE => {
                     let hl = mmu.reg.hl();
-                    let v = mmu.read(hl);
-                    mmu.write(hl, v | 128);
+                    let v = mmu.read(hl as usize);
+                    mmu.write(hl as usize, v | 128);
                 }
                 0xFF => {
                     mmu.reg.a |= 128;

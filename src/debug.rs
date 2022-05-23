@@ -28,7 +28,7 @@ pub struct Breakpoint {
 }
 
 impl Breakpoint {
-    pub fn evaluate(&self, emu: &Emu) -> bool {
+    pub fn evaluate(&self, _emu: &Emu) -> bool {
         self.enabled
     }
 }
@@ -45,6 +45,13 @@ pub struct Debug {
     pub steps: u32,
 
     pub breakpoints: HashMap<u16, Vec<Breakpoint>>,
+
+    // Execution will break when this scanline is reached.
+    // Set to a value >153 to disable.
+    pub break_on_scanline: usize,
+
+    // Break on interrupt if not masked
+    pub break_on_interrupt: u8,
 }
 
 impl Debug {
@@ -55,11 +62,21 @@ impl Debug {
             state: ExecState::RUN,
             steps: 0,
             breakpoints: HashMap::new(),
+            break_on_scanline: 0xFFFF,
+            break_on_interrupt: 0x00,
         }
+    }
+
+    pub fn is_stopped(&self) -> bool {
+        self.state != ExecState::STEP
     }
 
     pub fn add_breakpoint(&mut self, adr: u16, bp: Breakpoint) {
         self.breakpoints.entry(adr).or_insert(vec![]).push(bp);
+    }
+
+    pub fn break_on_scanline(&mut self, scanline: usize) {
+        self.break_on_scanline = scanline;
     }
 
     pub fn break_execution(&mut self) {
@@ -106,6 +123,7 @@ impl Debug {
         );
     }
 
+    #[allow(dead_code)]
     pub fn finalize(&mut self) {
         match self.debug_log {
             Some(ref mut f) => {
@@ -123,7 +141,7 @@ impl Debug {
         match self.debug_log {
             Some(ref mut f) => {
                 let reg = &emu.mmu.reg;
-                let pc = reg.pc;
+                let pc = reg.pc as usize;
                 if !emu.mmu.bootstrap_mode {
                     let m0 = emu.mmu.direct_read(pc);
                     let m1 = emu.mmu.direct_read(pc + 1);
@@ -164,10 +182,19 @@ impl Debug {
             }
 
             if self.source_code_breakpoints {
-                match emu.mmu.direct_read(emu.mmu.reg.pc) {
+                match emu.mmu.direct_read(emu.mmu.reg.pc as usize) {
                     0x40 => self.state = ExecState::STEP,
                     _ => {}
                 }
+            }
+
+            if emu.mmu.ppu.ly == self.break_on_scanline {
+                self.break_on_scanline = 0xFFFF;
+                self.state = ExecState::STEP;
+            }
+
+            if emu.mmu.entered_interrupt_handler & self.break_on_interrupt != 0 {
+                self.state = ExecState::STEP;
             }
         }
 
@@ -194,8 +221,8 @@ fn add_i8_to_u16(a: u16, b: i8) -> u16 {
 //     ));
 // }
 
-pub fn print_stack(mmu: &MMU, sp: u16) {
-    let mut a: u16 = 0xFFFC;
+pub fn print_stack(mmu: &MMU, sp: usize) {
+    let mut a: usize = 0xFFFC;
 
     if sp < 0xFF80 {
         println!("  stack: SP at 0x{:04X}. Stack corrupted?", sp);
@@ -215,7 +242,7 @@ pub fn print_stack(mmu: &MMU, sp: u16) {
 }
 
 pub fn print_sprite(mmu: &MMU, i: usize) {
-    let offset = 0xFE00 + (i * 4) as u16;
+    let offset = 0xFE00 + (i * 4);
     let x = mmu.direct_read(offset + 1);
     let y = mmu.direct_read(offset);
     if x != 0 && y != 0 {
@@ -345,7 +372,7 @@ pub fn print_registers(mmu: &MMU) {
 
     print_interrupt_state(&mmu);
     print_timer_state(&mmu.timer);
-    print_stack(&mmu, mmu.reg.sp);
+    print_stack(&mmu, mmu.reg.sp as usize);
 
     if mmu.reg.halted {
         println!("  CPU is halted");
@@ -663,7 +690,7 @@ const SIMPLE_MNEMONICS: [&str; 256] = [
     "RST  38H",
 ];
 
-pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
+pub fn format_mnemonic(mmu: &MMU, addr: usize) -> String {
     let op: u8 = mmu.direct_read(addr);
 
     match op {
@@ -687,19 +714,19 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
 
         0x18 => {
             let rel = mmu.direct_read_i8(addr + 1);
-            let abs = add_i8_to_u16(addr + 2, rel);
+            let abs = add_i8_to_u16(addr as u16 + 2, rel);
             format!("JR   {}  ; jump to 0x{:04X}", rel, abs)
         }
 
         0x1A => {
             let de = mmu.reg.de();
-            let val = mmu.direct_read(de);
+            let val = mmu.direct_read(de as usize);
             format!("LD   A, (DE)  ; DE=0x{:04X} (DE)=0x{:02X}", de, val)
         }
 
         0x20 => {
             let rel = mmu.direct_read_i8(addr + 1);
-            let abs = add_i8_to_u16(addr + 2, rel);
+            let abs = add_i8_to_u16(addr as u16 + 2, rel);
             format!("JR   NZ, {}    ; jump to 0x{:04X}", rel, abs)
         }
 
@@ -711,13 +738,13 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
 
         0x28 => {
             let rel = mmu.direct_read_i8(addr + 1);
-            let abs = add_i8_to_u16(addr + 2, rel);
+            let abs = add_i8_to_u16(addr as u16 + 2, rel);
             format!("JR   Z, {}        ; jump to 0x{:04X}", rel, abs)
         }
 
         0x30 => {
             let rel = mmu.direct_read_i8(addr + 1);
-            let abs = add_i8_to_u16(addr + 2, rel);
+            let abs = add_i8_to_u16(addr as u16 + 2, rel);
             format!("JR   NC, {}    ; jump to 0x{:04X}", rel, abs)
         }
 
@@ -731,14 +758,14 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
 
         0x38 => {
             let rel = mmu.direct_read_i8(addr + 1);
-            let abs = add_i8_to_u16(addr + 2, rel);
+            let abs = add_i8_to_u16(addr as u16 + 2, rel);
             format!("JR   C, {}        ; jump to 0x{:04X}", rel, abs)
         }
 
         0xBE => format!(
             "CP   (HL)  ; HL=0x{:04X} (HL)=0x{:02X}",
             mmu.reg.hl(),
-            mmu.direct_read(mmu.reg.hl())
+            mmu.direct_read(mmu.reg.hl() as usize)
         ),
 
         0xC2 => format!("JP   NZ, 0x{:04X}", mmu.direct_read_u16(addr + 1)),
@@ -803,16 +830,15 @@ pub fn format_mnemonic(mmu: &MMU, addr: u16) -> String {
     }
 }
 
-pub fn print_listing(mmu: &MMU, addr: u16, line_count: i32) -> u16 {
-    let mut a = addr as usize;
+pub fn print_listing(mmu: &MMU, mut addr: usize, line_count: i32) -> usize {
     for _n in 0..line_count {
-        println!("0x{:04X}: {}", a, format_mnemonic(&mmu, a as u16));
+        println!("0x{:04X}: {}", addr, format_mnemonic(&mmu, addr));
         match op_length(mmu.direct_read(addr)) {
-            Some(len) => a = a + len,
+            Some(len) => addr = addr + len,
             None => break,
         }
     }
-    a as u16
+    addr
 }
 
 #[allow(dead_code)]

@@ -5,6 +5,7 @@ pub fn kib(n: usize) -> usize {
     return n * KIB;
 }
 
+#[allow(dead_code)]
 pub fn mib(n: usize) -> usize {
     return n * MIB;
 }

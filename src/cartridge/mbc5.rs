@@ -98,16 +98,16 @@ impl Cartridge for MBC5 {
 }
 
 impl MemoryMapped for MBC5 {
-    fn read(&self, address: u16) -> u8 {
+    fn read(&self, address: usize) -> u8 {
         match address {
-            0x0000..=0x3FFF => self.rom[address as usize],
-            0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + address as usize - 0x4000],
-            0xA000..=0xBFFF => self.read_ram(address as usize - 0xA000),
+            0x0000..=0x3FFF => self.rom[address],
+            0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + address - 0x4000],
+            0xA000..=0xBFFF => self.read_ram(address - 0xA000),
             _ => 0xFF,
         }
     }
 
-    fn write(&mut self, address: u16, value: u8) {
+    fn write(&mut self, address: usize, value: u8) {
         match address {
             0x0000..=0x1FFF => self.ram_enabled = value == 0x0A,
             0x2000..=0x2FFF => {

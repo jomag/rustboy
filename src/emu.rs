@@ -6,9 +6,11 @@ pub enum Machine {
     GameBoyDMG,
 
     // Game Boy Pocket
+    #[allow(dead_code)]
     GameBoyMGB,
 
     // Super Game Boy
+    #[allow(dead_code)]
     GameBoySGB,
 
     // Color Game Boy

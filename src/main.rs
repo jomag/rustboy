@@ -19,6 +19,8 @@ mod instructions;
 mod interrupt;
 mod lcd;
 mod mmu;
+mod ppu;
+mod ppu_fifo;
 mod registers;
 mod serial;
 mod test_runner;
@@ -70,6 +72,7 @@ fn parse<T: num_traits::Num>(value: Option<&str>, default: T) -> T {
     }
 }
 
+#[allow(dead_code)]
 fn capture_frame(filename: &str, frame: u32, lcd: &LCD) -> Result<(), std::io::Error> {
     // For reading and opening files
     use std::fs::File;
@@ -173,6 +176,10 @@ fn main() -> Result<(), ()> {
     if ff_bootstrap {
         println!("Fast forward bootstrap ...");
         while emu.mmu.bootstrap_mode {
+            // println!(
+            //     "@{:04x}, LY: 0x{:02x} ({})",
+            //     emu.mmu.reg.pc, emu.mmu.ppu.ly, emu.mmu.ppu.ly
+            // );
             emu.mmu.exec_op();
         }
         println!("Bootstrap mode disabled");

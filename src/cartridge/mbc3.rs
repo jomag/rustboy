@@ -134,7 +134,7 @@ impl MBC3 {
         };
 
         let rtc = match cartridge_type {
-            CartridgeType::MBC3 { rtc, .. } => Some(RTC::new()),
+            CartridgeType::MBC3 { rtc: _, .. } => Some(RTC::new()),
             _ => None,
         };
 
@@ -186,7 +186,7 @@ impl MBC3 {
 }
 
 impl MemoryMapped for MBC3 {
-    fn read(&self, address: u16) -> u8 {
+    fn read(&self, address: usize) -> u8 {
         match address {
             0x0000..=0x3FFF => self.rom[address as usize],
             0x4000..=0x7FFF => self.rom[self.rom_offset + address as usize - 0x4000],
@@ -205,7 +205,7 @@ impl MemoryMapped for MBC3 {
         }
     }
 
-    fn write(&mut self, address: u16, value: u8) {
+    fn write(&mut self, address: usize, value: u8) {
         match address {
             0x0000..=0x1FFF => self.aux_enabled = value == 0x0A,
             0x2000..=0x3FFF => {
@@ -227,7 +227,7 @@ impl MemoryMapped for MBC3 {
             0xA000..=0xBFFF => {
                 if self.aux_enabled {
                     match self.register_selection {
-                        0x00..=0x03 => self.write_ram(address as usize - 0xA000, value),
+                        0x00..=0x03 => self.write_ram(address - 0xA000, value),
                         0x08..=0x0C => {
                             if let Some(ref mut rtc) = self.rtc {
                                 rtc.write_register(self.register_selection, value);

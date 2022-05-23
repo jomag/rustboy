@@ -21,11 +21,12 @@ use winit::{event::Event::*, event_loop::ControlFlow, window::Window};
 use super::{
     audio_player::AudioPlayer, audio_window::render_audio_window,
     breakpoints_window::BreakpointsWindow, cartridge_window::CartridgeWindow,
-    debug_window::DebugWindow, memory_window::MemoryWindow, render_stats::RenderStats,
-    serial_window::SerialWindow,
+    debug_window::DebugWindow, memory_window::MemoryWindow, oam_window::render_oam_window,
+    ppu_window::render_video_window, render_stats::RenderStats, serial_window::SerialWindow,
 };
 
 pub const TARGET_FPS: f64 = 59.727500569606;
+pub const PIXEL_SIZE: usize = 4;
 
 /// A custom event type for the winit app.
 enum AppEvent {
@@ -53,6 +54,7 @@ struct MoeApp {
     fb_texture: Option<egui::TextureId>,
     serial_buffer_consumer: Option<Consumer<u8>>,
     audio: AudioPlayer,
+    texture_buffer: Box<[u8]>,
 
     // Statistics for the UI frame rate
     ui_render_stats: RenderStats,
@@ -123,6 +125,26 @@ impl MoeApp {
         }
     }
 
+    fn render_texture(&mut self) {
+        let buf = &self.emu.mmu.ppu.buffer;
+
+        let palette: [(u8, u8, u8); 4] = [
+            (0x9B, 0xBC, 0x0F),
+            (0x8B, 0xAC, 0x0F),
+            (0x30, 0x62, 0x30),
+            (0x0f, 0x38, 0x0f),
+        ];
+
+        for i in 0..(SCREEN_WIDTH * SCREEN_HEIGHT) {
+            let p = i << 2;
+            let c = (buf[i] as usize) & 3;
+            self.texture_buffer[p + 0] = palette[c].0;
+            self.texture_buffer[p + 1] = palette[c].1;
+            self.texture_buffer[p + 2] = palette[c].2;
+            self.texture_buffer[p + 3] = 0xFF;
+        }
+    }
+
     fn render_next_frame(
         &mut self,
         platform: &mut Platform,
@@ -188,6 +210,8 @@ impl MoeApp {
                 label: Some("emulator screen texture"),
             });
 
+            self.render_texture();
+
             queue.write_texture(
                 wgpu::ImageCopyTexture {
                     texture: &texture,
@@ -195,7 +219,7 @@ impl MoeApp {
                     origin: wgpu::Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
                 },
-                &self.emu.mmu.lcd.buf_rgba8,
+                &self.texture_buffer,
                 wgpu::ImageDataLayout {
                     offset: 0,
                     bytes_per_row: std::num::NonZeroU32::new(4 * SCREEN_WIDTH as u32),
@@ -264,6 +288,7 @@ impl MoeApp {
             fb_width: SCREEN_WIDTH,
             fb_height: SCREEN_HEIGHT,
             fb_texture: None,
+            texture_buffer: vec![0; SCREEN_WIDTH * SCREEN_HEIGHT * PIXEL_SIZE].into_boxed_slice(),
             ui_render_stats: Default::default(),
             emu_render_stats: Default::default(),
             debug_window: DebugWindow::new(),
@@ -324,6 +349,8 @@ impl MoeApp {
         }
 
         render_audio_window(ctx, &mut self.emu);
+        render_video_window(ctx, &mut self.emu);
+        render_oam_window(ctx, &mut self.emu);
         self.debug_window.render(ctx, &mut self.emu, debug);
         self.breakpoints_window.render(ctx, &mut self.emu, debug);
         self.serial_window.render(ctx);

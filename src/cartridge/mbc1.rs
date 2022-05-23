@@ -128,17 +128,16 @@ impl MBC1 {
 }
 
 impl MemoryMapped for MBC1 {
-    fn read(&self, address: u16) -> u8 {
-        let adr = address as usize;
-        match adr {
-            0x0000..=0x3FFF => self.rom[self.rom_offset_0x0000_0x3fff + adr],
-            0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + adr - 0x4000],
-            0xA000..=0xBFFF => self.read_ram(adr - 0xA000),
+    fn read(&self, address: usize) -> u8 {
+        match address {
+            0x0000..=0x3FFF => self.rom[self.rom_offset_0x0000_0x3fff + address],
+            0x4000..=0x7FFF => self.rom[self.rom_offset_0x4000_0x7fff + address - 0x4000],
+            0xA000..=0xBFFF => self.read_ram(address - 0xA000),
             _ => 0,
         }
     }
 
-    fn write(&mut self, address: u16, value: u8) {
+    fn write(&mut self, address: usize, value: u8) {
         match address {
             0x0000..=0x1FFF => {
                 self.ram_enabled = value & 0xF == 0xA;

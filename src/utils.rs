@@ -1,6 +1,9 @@
 use crate::mmu::MMU;
 
-pub fn read_zero_terminated_string(mmu: &MMU, mut adr: u16) -> Result<String, std::str::Utf8Error> {
+pub fn read_zero_terminated_string(
+    mmu: &MMU,
+    mut adr: usize,
+) -> Result<String, std::str::Utf8Error> {
     let mut c = mmu.direct_read(adr);
     let mut zstr = vec![];
     while c != 0 {

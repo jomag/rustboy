@@ -98,7 +98,7 @@ impl NoiseSoundGenerator {
         self.dac = DAC::new();
     }
 
-    pub fn read_reg(&self, address: u16) -> u8 {
+    pub fn read_reg(&self, address: usize) -> u8 {
         match address {
             NR40_REG => 0xFF,
             NR41_REG => 0xFF,
@@ -125,7 +125,7 @@ impl NoiseSoundGenerator {
         }
     }
 
-    pub fn write_reg(&mut self, address: u16, value: u8, seq_step: u8, powered_on: bool) {
+    pub fn write_reg(&mut self, address: usize, value: u8, seq_step: u8, powered_on: bool) {
         // If unpowered, all writes should be ignored except
         // length value if the machine is original Gameboy DMG
         if !powered_on {

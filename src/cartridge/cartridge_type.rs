@@ -171,6 +171,7 @@ impl CartridgeType {
         }
     }
 
+    #[allow(dead_code)]
     fn has_rtc(&self) -> bool {
         use self::CartridgeType::*;
         match self {

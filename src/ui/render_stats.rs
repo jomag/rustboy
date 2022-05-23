@@ -16,6 +16,7 @@ impl RenderStats {
         self.frame_times.add(now, previous_frame_time);
     }
 
+    #[allow(dead_code)]
     pub fn mean_frame_time(&self) -> f32 {
         self.frame_times.average().unwrap_or_default()
     }
