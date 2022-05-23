@@ -36,7 +36,6 @@ impl DMA {
     }
 
     pub fn start(&mut self, start: u8) {
-        println!("STAAAAAAAAART DMA!");
         self.start_request = Some((start as u16) << 8);
         self.last_write_dma_reg = start;
     }

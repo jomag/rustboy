@@ -1,14 +1,13 @@
-on:
-  push
+on: push
 
 jobs:
   update_test_report:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-      
+
       - name: Install prerequisites
         run: |
           sudo apt-get update
@@ -44,11 +43,11 @@ jobs:
 
       - name: Run Blargg tests
         run: ./run-tests.py blargg --report doc/blargg.md
-      
+
       - name: Generate README
         run: jinja2 doc/README.tpl.md -o README.md
 
-      - name: Commit if README was changed        
+      - name: Commit if README was changed
         run: |
           git config --global user.name 'Test Runner Bot'
           git config --global user.email 'jonatan.magnusson@gmail.com'
