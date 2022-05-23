@@ -244,12 +244,6 @@ impl MMU {
                     } else {
                         self.ram[(offset + idx - 0xE000) as usize]
                     };
-                    println!(
-                        "DMA write: {:04x} = {:02x} from {:04x}",
-                        OAM_OFFSET + idx,
-                        b,
-                        offset + idx
-                    );
                     self.ppu.write(OAM_OFFSET + idx, b)
                 }
                 self.dma.update();
