@@ -310,6 +310,9 @@ class MooneyeTestSuite(TestSuite):
 def run_acid_test():
     from PIL import Image, ImageChops, ImageOps
 
+    test = Test(name="DMG ACID2", rom_path="./test/dmg-acid2.gb", variant="capture")
+    test.run()
+
     reference_image_path = "./dmg-acid2-ref.png"
     emulator_image_path = "./messed-up.png"
     diff_image_path = "./dmg-acid2-result.png"

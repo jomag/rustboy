@@ -209,7 +209,7 @@ pub struct PPU {
     bg_and_window_enable_prio: bool,
 
     // Video RAM (0x8000..0x9FFF)
-    vram: [u8; VRAM_SIZE],
+    pub vram: [u8; VRAM_SIZE],
 
     // Buffer for final pixel data.
     // Each byte in the buffer holds the final color plus

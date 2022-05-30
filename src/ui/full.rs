@@ -23,6 +23,7 @@ use super::{
     breakpoints_window::BreakpointsWindow, cartridge_window::CartridgeWindow,
     debug_window::DebugWindow, memory_window::MemoryWindow, oam_window::render_oam_window,
     ppu_window::render_video_window, render_stats::RenderStats, serial_window::SerialWindow,
+    vram_window::VRAMWindow,
 };
 
 pub const TARGET_FPS: f64 = 59.727500569606;
@@ -64,6 +65,7 @@ struct MoeApp {
     previous_frame_time: Option<f32>,
 
     // Windows
+    vram_window: VRAMWindow,
     debug_window: DebugWindow,
     breakpoints_window: BreakpointsWindow,
     serial_window: SerialWindow,
@@ -235,7 +237,14 @@ impl MoeApp {
         }
 
         // Build the whole app UI
-        self.update(&platform.context(), &mut frame, debug);
+        self.update(
+            &platform.context(),
+            &mut frame,
+            debug,
+            device,
+            queue,
+            egui_rpass,
+        );
 
         // End the UI frame
         let (output, paint_commands) = platform.end_frame(Some(&window));
@@ -291,6 +300,7 @@ impl MoeApp {
             texture_buffer: vec![0; SCREEN_WIDTH * SCREEN_HEIGHT * PIXEL_SIZE].into_boxed_slice(),
             ui_render_stats: Default::default(),
             emu_render_stats: Default::default(),
+            vram_window: VRAMWindow::new(),
             debug_window: DebugWindow::new(),
             breakpoints_window: BreakpointsWindow::new(),
             serial_window: SerialWindow::new(),
@@ -311,7 +321,15 @@ impl MoeApp {
         }
     }
 
-    fn update(&mut self, ctx: &egui::CtxRef, frame: &epi::Frame, debug: &mut Debug) {
+    fn update(
+        &mut self,
+        ctx: &egui::CtxRef,
+        frame: &epi::Frame,
+        debug: &mut Debug,
+        device: &Device,
+        queue: &Queue,
+        egui_rpass: &mut RenderPass,
+    ) {
         if let Some(ref mut consumer) = self.serial_buffer_consumer {
             while let Some(ch) = consumer.pop() {
                 self.serial_window.append(ch);
@@ -351,6 +369,8 @@ impl MoeApp {
         render_audio_window(ctx, &mut self.emu);
         render_video_window(ctx, &mut self.emu);
         render_oam_window(ctx, &mut self.emu);
+        self.vram_window
+            .render(ctx, &mut self.emu, device, queue, egui_rpass);
         self.debug_window.render(ctx, &mut self.emu, debug);
         self.breakpoints_window.render(ctx, &mut self.emu, debug);
         self.serial_window.render(ctx);
