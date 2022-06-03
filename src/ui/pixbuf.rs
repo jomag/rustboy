@@ -5,12 +5,12 @@ use wgpu::{Device, FilterMode, Queue};
 const PIXEL_SIZE: usize = 4;
 
 pub struct PixBuf {
-    dirty: bool,
-    width: usize,
-    height: usize,
-    buf: Box<[u8]>,
+    pub buf: Box<[u8]>,
+    pub width: usize,
+    pub height: usize,
+    pub dirty: bool,
+    pub texture_id: Option<egui::TextureId>,
     texture: Option<wgpu::Texture>,
-    texture_id: Option<egui::TextureId>,
 }
 
 impl PixBuf {
@@ -33,7 +33,11 @@ impl PixBuf {
         }
     }
 
-    fn get_bytes_per_row(&self) -> usize {
+    pub fn get_offset(&self, x: usize, y: usize) -> usize {
+        (y * self.width + x) * PIXEL_SIZE
+    }
+
+    pub fn get_stride(&self) -> usize {
         return self.width * PIXEL_SIZE;
     }
 
@@ -48,11 +52,19 @@ impl PixBuf {
             label: Some("PixBuf texture"),
         });
 
-        let texture_id =
-            rpass.egui_texture_from_wgpu_texture(&device, &texture, FilterMode::Nearest);
+        let view = texture.create_view(&Default::default());
+
+        let texture_id = rpass.egui_texture_from_wgpu_texture(&device, &view, FilterMode::Nearest);
 
         self.texture = Some(texture);
         self.texture_id = Some(texture_id);
+    }
+
+    pub fn is_initialized(&self) -> bool {
+        match self.texture {
+            Some(_) => true,
+            None => false,
+        }
     }
 
     pub fn prepare(&mut self, queue: &wgpu::Queue) {
@@ -68,7 +80,7 @@ impl PixBuf {
                     &self.buf,
                     wgpu::ImageDataLayout {
                         offset: 0,
-                        bytes_per_row: std::num::NonZeroU32::new(self.get_bytes_per_row() as u32),
+                        bytes_per_row: std::num::NonZeroU32::new(self.get_stride() as u32),
                         rows_per_image: std::num::NonZeroU32::new(self.height as u32),
                     },
                     self.get_extent3d(),

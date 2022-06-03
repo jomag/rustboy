@@ -145,7 +145,7 @@ impl MMU {
             watch_triggered: false,
             timer: Timer::new(),
             dma: DMA::new(),
-            ppu: PPU::new(),
+            ppu: PPU::new(machine),
             buttons: Buttons::new(),
             display_updated: false,
             entered_interrupt_handler: 0,

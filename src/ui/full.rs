@@ -21,9 +21,9 @@ use winit::{event::Event::*, event_loop::ControlFlow, window::Window};
 use super::{
     audio_player::AudioPlayer, audio_window::render_audio_window,
     breakpoints_window::BreakpointsWindow, cartridge_window::CartridgeWindow,
-    debug_window::DebugWindow, memory_window::MemoryWindow, oam_window::render_oam_window,
-    ppu_window::render_video_window, render_stats::RenderStats, serial_window::SerialWindow,
-    vram_window::VRAMWindow,
+    debug_window::DebugWindow, main_window::MainWindow, memory_window::MemoryWindow,
+    oam_window::render_oam_window, ppu_window::render_video_window, render_stats::RenderStats,
+    serial_window::SerialWindow, vram_window::VRAMWindow,
 };
 
 pub const TARGET_FPS: f64 = 59.727500569606;
@@ -64,14 +64,7 @@ struct MoeApp {
     emu_render_stats: RenderStats,
     previous_frame_time: Option<f32>,
 
-    // Windows
-    vram_window: VRAMWindow,
-    debug_window: DebugWindow,
-    breakpoints_window: BreakpointsWindow,
-    serial_window: SerialWindow,
-    cartridge_window: CartridgeWindow,
-    memory_window: MemoryWindow,
-
+    main_window: MainWindow,
     keymap: HashMap<Key, ButtonType>,
 }
 
@@ -212,6 +205,8 @@ impl MoeApp {
                 label: Some("emulator screen texture"),
             });
 
+            let texture_view = texture.create_view(&Default::default());
+
             self.render_texture();
 
             queue.write_texture(
@@ -230,25 +225,21 @@ impl MoeApp {
                 texture_size,
             );
 
-            let texture_id =
-                egui_rpass.egui_texture_from_wgpu_texture(&device, &texture, FilterMode::Nearest);
+            let texture_id = egui_rpass.egui_texture_from_wgpu_texture(
+                &device,
+                &texture_view,
+                FilterMode::Nearest,
+            );
 
             self.fb_texture = Some(texture_id);
         }
 
         // Build the whole app UI
-        self.update(
-            &platform.context(),
-            &mut frame,
-            debug,
-            device,
-            queue,
-            egui_rpass,
-        );
+        self.update(&platform.context(), &mut frame, debug, queue);
 
         // End the UI frame
-        let (output, paint_commands) = platform.end_frame(Some(&window));
-        let paint_jobs = platform.context().tessellate(paint_commands);
+        let frame_output = platform.end_frame(Some(&window));
+        let paint_jobs = platform.context().tessellate(frame_output.shapes);
 
         let frame_time = (Instant::now() - egui_start).as_secs_f64() as f32;
         self.previous_frame_time = Some(frame_time);
@@ -264,8 +255,13 @@ impl MoeApp {
             scale_factor: window.scale_factor() as f32,
         };
 
-        egui_rpass.update_texture(&device, &queue, &platform.context().font_image());
-        egui_rpass.update_user_textures(&device, &queue);
+        egui_rpass
+            .add_textures(&device, &queue, &frame_output.textures_delta)
+            .unwrap();
+
+        // egui_rpass.update_texture(&device, &queue, &platform.context().font_image());
+        // egui_rpass.update_user_textures(&device, &queue);
+
         egui_rpass.update_buffers(&device, &queue, &paint_jobs, &screen_descriptor);
 
         // Record all render passes.
@@ -285,7 +281,7 @@ impl MoeApp {
         // Redraw egui
         output_frame.present();
 
-        if output.needs_repaint {
+        if frame_output.needs_repaint {
             window.request_redraw();
         }
     }
@@ -300,13 +296,8 @@ impl MoeApp {
             texture_buffer: vec![0; SCREEN_WIDTH * SCREEN_HEIGHT * PIXEL_SIZE].into_boxed_slice(),
             ui_render_stats: Default::default(),
             emu_render_stats: Default::default(),
-            vram_window: VRAMWindow::new(),
-            debug_window: DebugWindow::new(),
-            breakpoints_window: BreakpointsWindow::new(),
-            serial_window: SerialWindow::new(),
-            cartridge_window: CartridgeWindow::new(),
-            memory_window: MemoryWindow::new(),
             serial_buffer_consumer: None,
+            main_window: MainWindow::new(),
             keymap: HashMap::from([
                 (Key::ArrowLeft, ButtonType::Left),
                 (Key::ArrowRight, ButtonType::Right),
@@ -323,16 +314,14 @@ impl MoeApp {
 
     fn update(
         &mut self,
-        ctx: &egui::CtxRef,
+        ctx: &egui::Context,
         frame: &epi::Frame,
         debug: &mut Debug,
-        device: &Device,
         queue: &Queue,
-        egui_rpass: &mut RenderPass,
     ) {
         if let Some(ref mut consumer) = self.serial_buffer_consumer {
             while let Some(ch) = consumer.pop() {
-                self.serial_window.append(ch);
+                self.main_window.serial_window.append(ch);
             }
         }
 
@@ -355,6 +344,9 @@ impl MoeApp {
         self.ui_render_stats
             .on_new_frame(ctx.input().time, frame.info().cpu_usage);
 
+        self.main_window
+            .render(ctx, &mut self.emu, debug, queue, &self.ui_render_stats);
+
         if let Some(texture_id) = self.fb_texture {
             egui::Window::new("Gameboy").show(ctx, |ui| {
                 let scale: usize = 3;
@@ -365,24 +357,6 @@ impl MoeApp {
                 ui.image(texture_id, size);
             });
         }
-
-        render_audio_window(ctx, &mut self.emu);
-        render_video_window(ctx, &mut self.emu);
-        render_oam_window(ctx, &mut self.emu);
-        self.vram_window
-            .render(ctx, &mut self.emu, device, queue, egui_rpass);
-        self.debug_window.render(ctx, &mut self.emu, debug);
-        self.breakpoints_window.render(ctx, &mut self.emu, debug);
-        self.serial_window.render(ctx);
-        self.cartridge_window.render(ctx, &mut self.emu);
-        self.memory_window.render(ctx, &mut self.emu);
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading(APPNAME);
-            ui.label(format!("UI FPS: {:.1}", self.ui_render_stats.fps()));
-            ui.label(format!("Emulator FPS: {:.10}", self.emu_render_stats.fps()));
-            egui::warn_if_debug_build(ui);
-        });
     }
 }
 
@@ -414,8 +388,8 @@ pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
         .with_transparent(false)
         .with_title(APPNAME)
         .with_inner_size(winit::dpi::PhysicalSize {
-            width: 2800,
-            height: 1800,
+            width: 2800 as u32,
+            height: 1800 as u32,
         })
         .build(&event_loop)
         .unwrap();
@@ -478,6 +452,7 @@ pub fn run_with_wgpu(emu: Emu, mut debug: Debug) {
 
     app.setup_audio();
     app.setup_serial();
+    app.main_window.init(&device, &mut egui_rpass);
 
     event_loop.run(move |event, _, control_flow| {
         if false {

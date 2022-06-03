@@ -1,5 +1,5 @@
 use egui::{
-    emath, epaint, pos2, style, vec2, Color32, CtxRef, Pos2, Rect, Sense, Shape, Stroke, Ui,
+    emath, epaint, pos2, style, vec2, Color32, Context, Pos2, Rect, Sense, Shape, Stroke, Ui,
 };
 
 use crate::{apu::wave_gen::CH3_WAVE_MEMORY_SIZE, emu::Emu};
@@ -15,7 +15,7 @@ pub fn render_wavetable(ui: &mut Ui, emu: &mut Emu) {
     let mut shapes = Vec::with_capacity(3 + CH3_WAVE_MEMORY_SIZE * 2);
     shapes.push(Shape::Rect(epaint::RectShape {
         rect,
-        corner_radius: style.corner_radius,
+        rounding: style.rounding,
         fill: ui.visuals().extreme_bg_color,
         stroke: ui.style().noninteractive().bg_stroke,
     }));
@@ -48,8 +48,8 @@ pub fn render_wavetable(ui: &mut Ui, emu: &mut Emu) {
     ui.painter().extend(shapes);
 }
 
-pub fn render_audio_window(ctx: &CtxRef, emu: &mut Emu) {
-    egui::Window::new("Audio").show(ctx, |ui| {
+pub fn render_audio_window(ctx: &Context, emu: &mut Emu, open: &mut bool) {
+    egui::Window::new("Audio").open(open).show(ctx, |ui| {
         ui.heading("Channel 1");
         ui.label(format!("Enabled: {}", emu.mmu.apu.s1.enabled));
         ui.label(format!("Envelope: {}", emu.mmu.apu.s1.envelope));
