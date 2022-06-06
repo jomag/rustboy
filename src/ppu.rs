@@ -471,13 +471,6 @@ impl PPU {
                     let offset = get_tile_data_offset(tile_id, self.tile_addressing_mode) - 0x8000;
                     let offset = offset + tile_line * 2;
 
-                    if self.ly == 130 {
-                        println!(
-                            "Tile index: {}, tile line: {}, tile id: {}, offset: {}",
-                            tile_index, tile_line, tile_id, offset,
-                        );
-                    }
-
                     let lo = self.vram[offset];
                     let hi = self.vram[offset + 1];
                     let tx = (lx + self.scx) % 8;
