@@ -24,6 +24,8 @@
 // DMG and CGB in single-speed mode. For CGB in double-speed mode
 // it is equivalent to 2 T-cycles.
 
+use std::io::Write;
+
 use crate::{
     emu::Machine,
     interrupt::{IF_LCDC_BIT, IF_VBLANK_BIT},
@@ -571,6 +573,43 @@ impl PPU {
             Mode::HorizontalBlank | Mode::VerticalBlank => true,
             _ => !self.enabled,
         }
+    }
+
+    pub fn to_rgba8(&self, buf: &mut Box<[u8]>, palette: [(u8, u8, u8); 4]) {
+        for i in 0..(SCREEN_WIDTH * SCREEN_HEIGHT) {
+            let p = i << 2;
+            let c = (self.buffer[i] as usize) & 3;
+            buf[p + 0] = palette[c].0;
+            buf[p + 1] = palette[c].1;
+            buf[p + 2] = palette[c].2;
+            buf[p + 3] = 0xFF;
+        }
+    }
+
+    // Capture current framebuffer. Return as stream.
+    pub fn capture(
+        &self,
+        filename: &str,
+        palette: [(u8, u8, u8); 4],
+    ) -> Result<(), std::io::Error> {
+        use png::HasParameters;
+        use std::fs::File;
+        use std::io::BufWriter;
+        use std::path::Path;
+
+        let mut rgba8 = vec![0; SCREEN_WIDTH * SCREEN_HEIGHT * 4].into_boxed_slice();
+        self.to_rgba8(&mut rgba8, palette);
+
+        let path = Path::new(filename);
+        let file = File::create(path).unwrap();
+        let ref mut w = BufWriter::new(file);
+
+        let mut encoder = png::Encoder::new(w, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32);
+        encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
+        let mut writer = encoder.write_header()?;
+        writer.write_image_data(&rgba8)?;
+
+        Ok(())
     }
 }
 

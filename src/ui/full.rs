@@ -121,8 +121,6 @@ impl MoeApp {
     }
 
     fn render_texture(&mut self) {
-        let buf = &self.emu.mmu.ppu.buffer;
-
         let palette: [(u8, u8, u8); 4] = [
             (0x9B, 0xBC, 0x0F),
             (0x8B, 0xAC, 0x0F),
@@ -130,14 +128,7 @@ impl MoeApp {
             (0x0f, 0x38, 0x0f),
         ];
 
-        for i in 0..(SCREEN_WIDTH * SCREEN_HEIGHT) {
-            let p = i << 2;
-            let c = (buf[i] as usize) & 3;
-            self.texture_buffer[p + 0] = palette[c].0;
-            self.texture_buffer[p + 1] = palette[c].1;
-            self.texture_buffer[p + 2] = palette[c].2;
-            self.texture_buffer[p + 3] = 0xFF;
-        }
+        self.emu.mmu.ppu.to_rgba8(&mut self.texture_buffer, palette);
     }
 
     fn render_next_frame(

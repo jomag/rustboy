@@ -47,7 +47,7 @@ pub fn test_runner(variant: &str, emu: &mut Emu, debug: &mut Debug) {
     match variant {
         "capture" => {
             let mut frame: usize = 0;
-            while frame < 150 {
+            while frame < 355 {
                 debug.before_op(emu);
                 emu.mmu.exec_op();
                 if emu.mmu.display_updated {
@@ -56,8 +56,15 @@ pub fn test_runner(variant: &str, emu: &mut Emu, debug: &mut Debug) {
                 }
             }
 
-            // capture_frame("capture.png", frame, nil);
+            // These are the colors used in the dmg-acid2 ref images
+            let palette: [(u8, u8, u8); 4] = [
+                (0xFF, 0xFF, 0xFF),
+                (0xAA, 0xAA, 0xAA),
+                (0x55, 0x55, 0x55),
+                (0x00, 0x00, 0x00),
+            ];
 
+            emu.mmu.ppu.capture("capture.png", palette).unwrap();
             std::process::exit(0);
         }
 
