@@ -10,7 +10,7 @@ use crate::{
     APPNAME, CLOCK_SPEED,
 };
 
-use egui::{FontDefinitions, Key};
+use egui::{FontDefinitions, Key, Label};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use epi::*;
@@ -354,7 +354,18 @@ impl MoeApp {
                     (self.fb_width * scale) as f32,
                     (self.fb_height * scale) as f32,
                 );
-                ui.image(texture_id, size);
+
+                let r = ui.image(texture_id, size);
+                match r.hover_pos() {
+                    Some(p) => {
+                        let x = (p[0] - r.rect.left()) as usize / scale;
+                        let y = (p[1] - r.rect.top()) as usize / scale;
+                        r.on_hover_ui_at_pointer(|ui| {
+                            ui.add(Label::new(format!("({}, {})", x, y)));
+                        });
+                    }
+                    None => {}
+                }
             });
         }
     }

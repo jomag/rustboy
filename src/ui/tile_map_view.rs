@@ -1,4 +1,4 @@
-use egui::Ui;
+use egui::{Color32, Label, Pos2, Stroke, Ui};
 use egui_wgpu_backend::RenderPass;
 use wgpu::{Device, FilterMode, Queue};
 
@@ -10,7 +10,10 @@ use crate::{
     },
 };
 
-use super::{pixbuf::PixBuf, tile_data_view::render_tile};
+use super::{
+    pixbuf::PixBuf,
+    utils::{render_grid, render_tile},
+};
 
 pub enum TileMapArea {
     // Use the current background tile map area
@@ -33,6 +36,8 @@ pub struct TileMapView {
     // Fixed tile data addressing mode. If none, the
     // current addressing mode of the PPU is used.
     tile_addressing_mode: Option<TileAddressingMode>,
+
+    grid: bool,
 }
 
 impl TileMapView {
@@ -41,6 +46,7 @@ impl TileMapView {
             buf: PixBuf::new(TILE_COLUMNS * TILE_WIDTH, TILE_ROWS * TILE_HEIGHT),
             tile_map_area: TileMapArea::AutoBG,
             tile_addressing_mode: None,
+            grid: false,
         }
     }
 
@@ -48,7 +54,9 @@ impl TileMapView {
         self.buf.init(device, rpass);
     }
 
-    fn render_texture(&mut self, ppu: &PPU) {
+    // Find tile data offset at given row and column.
+    // Returns the tile index and tile data offset.
+    fn get_tile_data_offset(&self, col: usize, row: usize, ppu: &PPU) -> (u8, usize) {
         let map_offs = match self.tile_map_area {
             TileMapArea::AutoBG => ppu.bg_tile_map_offset,
             TileMapArea::AutoWindow => ppu.window_tile_map_offset,
@@ -60,11 +68,16 @@ impl TileMapView {
             None => ppu.tile_addressing_mode,
         };
 
+        let idx = ppu.vram[map_offs - 0x8000 + row * TILE_COLUMNS + col];
+        let offs = get_tile_data_offset(idx, mode) - 0x8000;
+
+        return (idx, offs);
+    }
+
+    fn render_texture(&mut self, ppu: &PPU) {
         for row in 0..TILE_ROWS {
             for col in 0..TILE_COLUMNS {
-                let idx = ppu.vram[map_offs - 0x8000 + row * TILE_COLUMNS + col];
-                let offs = get_tile_data_offset(idx, mode) - 0x8000;
-
+                let (_, offs) = self.get_tile_data_offset(col, row, ppu);
                 render_tile(
                     ppu,
                     offs,
@@ -79,11 +92,11 @@ impl TileMapView {
     }
 
     pub fn render(&mut self, ui: &mut Ui, emu: &mut Emu, queue: &Queue) {
+        let scale: usize = 2;
         self.render_texture(&emu.mmu.ppu);
         self.buf.prepare(queue);
 
         if let Some(texture_id) = self.buf.texture_id {
-            let scale: usize = 2;
             let size = egui::Vec2::new(
                 (self.buf.width * scale) as f32,
                 (self.buf.height * scale) as f32,
@@ -132,7 +145,30 @@ impl TileMapView {
                 }
             });
 
-            ui.image(texture_id, size);
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.grid, "Show grid");
+            });
+
+            let resp = ui.image(texture_id, size);
+            if self.grid {
+                render_grid(ui, resp.rect, TILE_COLUMNS, TILE_ROWS, None);
+            }
+
+            match resp.hover_pos() {
+                Some(p) => {
+                    let col = (p[0] - resp.rect.left()) as usize / (8 * scale);
+                    let row = (p[1] - resp.rect.top()) as usize / (8 * scale);
+                    resp.on_hover_ui_at_pointer(|ui| {
+                        let (idx, offs) = self.get_tile_data_offset(col, row, &emu.mmu.ppu);
+                        ui.add(Label::new(format!(
+                            "Index: {}, Data: 0x{:04x}",
+                            idx,
+                            offs + 0x8000
+                        )));
+                    });
+                }
+                None => {}
+            }
         }
     }
 }

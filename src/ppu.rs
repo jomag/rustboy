@@ -386,6 +386,16 @@ impl PPU {
             self.select_scanline_objects();
         }
 
+        if self.ly == 129 + 8 {
+            let tile_map_offset =
+                self.bg_tile_map_offset - 0x8000 + ((self.scy + self.ly) / 8) * 32;
+            let offset = get_tile_data_offset(0, self.tile_addressing_mode) - 0x8000;
+            println!(
+                "LY: {} Tile Map Offset: {:x} TileData OFfset: {:x}",
+                self.ly, tile_map_offset, offset
+            );
+        }
+
         for lx in 0..SCREEN_WIDTH {
             let mut bg_pxl = 0;
             let mut spr_pxl = None;
@@ -452,16 +462,23 @@ impl PPU {
                 } else {
                     let tile_map_offset =
                         self.bg_tile_map_offset - 0x8000 + ((self.scy + self.ly) / 8) * 32;
-                    let tile_index = (lx + self.scx) / 8;
+                    let tile_index = ((lx + self.scx) % 256) / 8; // "tile column"
                     let tile_line = (self.scy + self.ly) % 8;
                     let tile_id = self.vram[tile_map_offset + tile_index];
 
                     let offset = get_tile_data_offset(tile_id, self.tile_addressing_mode) - 0x8000;
                     let offset = offset + tile_line * 2;
 
+                    if self.ly == 130 {
+                        println!(
+                            "Tile index: {}, tile line: {}, tile id: {}, offset: {}",
+                            tile_index, tile_line, tile_id, offset,
+                        );
+                    }
+
                     let lo = self.vram[offset];
                     let hi = self.vram[offset + 1];
-                    let tx = lx % 8;
+                    let tx = (lx + self.scx) % 8;
 
                     ((lo >> (7 - tx)) & 1) | (((hi >> (7 - tx)) & 1) << 1)
                 };

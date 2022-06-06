@@ -14,4 +14,5 @@ pub mod render_stats;
 pub mod serial_window;
 pub mod tile_data_view;
 pub mod tile_map_view;
+pub mod utils;
 pub mod vram_window;
