@@ -23,6 +23,10 @@ another stab at the FIFO based approach.
 
 {% include "./mooneye.md" %}
 
+## DMG ACID2
+
+{% include "./dmg-acid2.md" %}
+
 ## References
 
 Pandocs ("Everything You Always Wanted To Know About GAMEBOY")

@@ -49,6 +49,9 @@ jobs:
       - name: Run Blargg tests
         run: ./run-tests.py blargg --report doc/blargg.md
 
+      - name: Run dmg-acid2 test
+        run: ./run-tests.py acid2 --report doc/dmg-acid2.md
+
       - name: Generate README
         run: jinja2 doc/README.tpl.md -o README.md
 
