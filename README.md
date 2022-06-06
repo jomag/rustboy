@@ -51,6 +51,11 @@ another stab at the FIFO based approach.
 | emulator-only/mbc5 | [:green_heart:](x "rom_16Mb: PASS") | [:green_heart:](x "rom_1Mb: PASS") | [:green_heart:](x "rom_2Mb: PASS") | [:green_heart:](x "rom_32Mb: PASS") | [:green_heart:](x "rom_4Mb: PASS") | [:green_heart:](x "rom_512kb: PASS") | [:green_heart:](x "rom_64Mb: PASS") | [:green_heart:](x "rom_8Mb: PASS") |
 
 
+## DMG ACID2
+
+
+Pass $:green_heart:
+
 ## References
 
 Pandocs ("Everything You Always Wanted To Know About GAMEBOY")
