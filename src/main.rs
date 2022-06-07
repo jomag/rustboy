@@ -17,10 +17,8 @@ mod dma;
 mod emu;
 mod instructions;
 mod interrupt;
-mod lcd;
 mod mmu;
 mod ppu;
-mod ppu_fifo;
 mod registers;
 mod serial;
 mod test_runner;
@@ -30,7 +28,6 @@ mod utils;
 mod wave_audio_recorder;
 
 use emu::Emu;
-use lcd::{LCD, SCREEN_HEIGHT, SCREEN_WIDTH};
 use ui::full::*;
 
 use crate::emu::Machine;
@@ -70,30 +67,6 @@ fn parse<T: num_traits::Num>(value: Option<&str>, default: T) -> T {
         Some(num) => num,
         None => default,
     }
-}
-
-#[allow(dead_code)]
-fn capture_frame(filename: &str, frame: u32, lcd: &LCD) -> Result<(), std::io::Error> {
-    // For reading and opening files
-    use std::fs::File;
-    use std::io::BufWriter;
-    use std::path::Path;
-
-    // To use encoder.set()
-    use png::HasParameters;
-
-    let path = Path::new(filename);
-    let file = File::create(path).unwrap();
-    let ref mut w = BufWriter::new(file);
-
-    let mut encoder = png::Encoder::new(w, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32);
-    encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
-    let mut writer = encoder.write_header().unwrap();
-
-    writer.write_image_data(&lcd.buf_rgba8).unwrap();
-
-    println!("Captured frame {}", frame);
-    return Ok(());
 }
 
 fn handle_machine_option(opt: Option<&str>) -> Result<Machine, ()> {

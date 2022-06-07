@@ -6,7 +6,7 @@ use crate::{
     buttons::ButtonType,
     debug::Debug,
     emu::Emu,
-    lcd::{SCREEN_HEIGHT, SCREEN_WIDTH},
+    ppu::{SCREEN_HEIGHT, SCREEN_WIDTH},
     APPNAME, CLOCK_SPEED,
 };
 
