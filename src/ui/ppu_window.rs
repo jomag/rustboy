@@ -1,4 +1,4 @@
-use egui::{CtxRef, Ui};
+use egui::{Context, Ui};
 
 use crate::{
     emu::Emu,
@@ -111,8 +111,8 @@ fn render_property_grid(ui: &mut Ui, emu: &mut Emu) {
     ui.end_row();
 }
 
-pub fn render_video_window(ctx: &CtxRef, emu: &mut Emu) {
-    egui::Window::new("Video / PPU").show(ctx, |ui| {
+pub fn render_video_window(ctx: &Context, emu: &mut Emu, open: &mut bool) {
+    egui::Window::new("Video / PPU").open(open).show(ctx, |ui| {
         egui::Grid::new("ppu_properties_grid")
             .num_columns(2)
             .spacing([40.0, 4.0])

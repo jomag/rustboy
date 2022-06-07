@@ -12,7 +12,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libasound2-dev libsdl2-dev
-          sudo pip3 install jinja2-cli
+          sudo pip3 install jinja2-cli pillow
 
       - uses: actions-rs/toolchain@v1
         with:
@@ -35,6 +35,11 @@ jobs:
       - name: Download and extract Blargg tests
         run: git clone https://github.com/retrio/gb-test-roms.git test/blargg
 
+      - name: Download DMG-ACID2 test
+        run: |
+          curl https://github.com/mattcurrie/dmg-acid2/releases/download/v1.0/dmg-acid2.gb -L -o test/dmg-acid2.gb
+          curl https://github.com/mattcurrie/dmg-acid2/blob/master/img/reference-dmg.png\?raw=true -L -o test/dmg-acid2-ref.png
+
       - name: Build emulator
         run: cargo build --release
 
@@ -43,6 +48,9 @@ jobs:
 
       - name: Run Blargg tests
         run: ./run-tests.py blargg --report doc/blargg.md
+
+      - name: Run dmg-acid2 test
+        run: ./run-tests.py acid2 --report doc/dmg-acid2.md
 
       - name: Generate README
         run: jinja2 doc/README.tpl.md -o README.md

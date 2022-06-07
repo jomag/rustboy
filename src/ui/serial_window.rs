@@ -1,4 +1,4 @@
-use egui::CtxRef;
+use egui::Context;
 
 pub struct SerialWindow {
     pub output: String,
@@ -15,8 +15,9 @@ impl SerialWindow {
         self.output = format!("{}{}", self.output, byte as char);
     }
 
-    pub fn render(&mut self, ctx: &CtxRef) {
+    pub fn render(&mut self, ctx: &Context, open: &mut bool) {
         egui::Window::new("Serial Transfer")
+            .open(open)
             .resizable(true)
             .show(ctx, |ui| ui.label(&self.output));
     }

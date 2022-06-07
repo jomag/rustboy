@@ -307,27 +307,61 @@ class MooneyeTestSuite(TestSuite):
             grp.setup()
 
 
-def run_acid_test():
-    from PIL import Image, ImageChops, ImageOps
+class AcidTest:
+    rom_path: str
+    success: Optional[bool]
 
-    reference_image_path = "./dmg-acid2-ref.png"
-    emulator_image_path = "./messed-up.png"
-    diff_image_path = "./dmg-acid2-result.png"
+    def __init__(self, rom_path: str):
+        self.rom_path = rom_path
+        self.success = None
 
-    ref = Image.open(reference_image_path).convert(mode="RGB")
-    emu = Image.open(emulator_image_path).convert(mode="RGB")
-    assert ref.size == emu.size
-    width, height = ref.size
+    def setup(self):
+        pass
 
-    refp = ref.load()
-    emup = emu.load()
+    def run(self):
+        from PIL import Image, ImageChops, ImageOps
 
-    for y in range(height):
-        for x in range(width):
-            if any(abs(aa - bb) > 2 for aa, bb in zip(refp[x, y], emup[x, y])):
-                emup[x, y] = (255, 0, 0)
+        test = Test(name="DMG ACID2", rom_path=self.rom_path, variant="capture")
+        test.run()
 
-    emu.save(diff_image_path)
+        reference_image_path = "./test/dmg-acid2-ref.png"
+        emulator_image_path = "./capture.png"
+        diff_image_path = "./dmg-acid2-result.png"
+
+        ref = Image.open(reference_image_path).convert(mode="RGB")
+        emu = Image.open(emulator_image_path).convert(mode="RGB")
+        assert ref.size == emu.size
+        width, height = ref.size
+
+        refp = ref.load()
+        emup = emu.load()
+
+        if refp is None or emup is None:
+            print("This should not happen. Test only to quiet the linter.")
+            return
+
+        self.success = True
+
+        for y in range(height):
+            for x in range(width):
+                if any(abs(aa - bb) > 2 for aa, bb in zip(refp[x, y], emup[x, y])):
+                    emup[x, y] = (255, 0, 0)
+                    self.success = False
+
+        emu.save(diff_image_path)
+
+    def build_report(self, with_title: bool):
+        if with_title:
+            report = f"## dmg-acid2\n"
+        else:
+            report = "\n"
+
+        if self.success:
+            report += f"Pass ${PASS_EMOJI}"
+        else:
+            report += f"Fail ${FAIL_EMOJI}"
+
+        return report
 
 
 parser = argparse.ArgumentParser(description="Run test suites")
@@ -375,7 +409,11 @@ if all_suites or "blargg" in args.suites:
         )
 
 if all_suites or "acid2" in args.suites:
-    run_acid_test()
+    acid = AcidTest("./test/dmg-acid2.gb")
+    acid.setup()
+    acid.run()
+    if args.report:
+        reports.append(acid.build_report(with_title=not single_test))
 
 if len(reports) > 0:
     with open(args.report, "w") as f:

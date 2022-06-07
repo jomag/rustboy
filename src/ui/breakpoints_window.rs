@@ -1,4 +1,4 @@
-use egui::{Button, Color32, CtxRef, TextEdit};
+use egui::{Button, Color32, Context, TextEdit};
 
 use crate::debug::{Breakpoint, Debug};
 use crate::emu::Emu;
@@ -14,8 +14,9 @@ impl BreakpointsWindow {
         }
     }
 
-    pub fn render(&mut self, ctx: &CtxRef, emu: &mut Emu, debug: &mut Debug) {
+    pub fn render(&mut self, ctx: &Context, emu: &mut Emu, debug: &mut Debug, open: &mut bool) {
         egui::Window::new("Breakpoints")
+            .open(open)
             .resizable(true)
             .show(ctx, |ui| {
                 ui.scope(|ui| {

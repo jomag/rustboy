@@ -1,4 +1,4 @@
-use egui::{CtxRef, ScrollArea, Ui};
+use egui::{Context, ScrollArea, Ui};
 
 use crate::emu::Emu;
 
@@ -29,10 +29,10 @@ impl MemoryView {
         ui.label(format!("{:04X} {} {}", offset, hex_str, char_str));
     }
 
-    pub fn render(&mut self, ctx: &CtxRef, ui: &mut Ui, emu: &Emu) {
+    pub fn render(&mut self, ctx: &Context, ui: &mut Ui, emu: &Emu) {
         ui.scope(|ui| {
             let text_style = egui::TextStyle::Monospace;
-            let row_height = ui.fonts()[text_style].row_height();
+            let row_height = 20.0; // FIXME: ui.fonts()[text_style].row_height();
             let num_rows = self.mem_size / MemoryView::BYTES_PER_ROW;
 
             ui.style_mut().override_text_style = Some(text_style);
@@ -62,11 +62,14 @@ impl MemoryWindow {
         }
     }
 
-    pub fn render(&mut self, ctx: &CtxRef, emu: &mut Emu) {
-        egui::Window::new("Memory").resizable(true).show(ctx, |ui| {
-            ui.label("TEXT");
-            ui.separator();
-            self.mem_view.render(ctx, ui, emu);
-        });
+    pub fn render(&mut self, ctx: &Context, emu: &mut Emu, open: &mut bool) {
+        egui::Window::new("Memory")
+            .open(open)
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.label("TEXT");
+                ui.separator();
+                self.mem_view.render(ctx, ui, emu);
+            });
     }
 }

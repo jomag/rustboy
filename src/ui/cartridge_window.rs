@@ -1,4 +1,4 @@
-use egui::CtxRef;
+use egui::Context;
 
 use crate::emu::Emu;
 
@@ -9,11 +9,11 @@ impl CartridgeWindow {
         CartridgeWindow {}
     }
 
-    pub fn render(&mut self, ctx: &CtxRef, emu: &mut Emu) {
+    pub fn render(&mut self, ctx: &Context, emu: &mut Emu, open: &mut bool) {
         let c = &emu.mmu.cartridge;
         let t = &c.cartridge_type();
 
-        egui::Window::new("Cartridge").show(ctx, |ui| {
+        egui::Window::new("Cartridge").open(open).show(ctx, |ui| {
             ui.label(format!("Cartridge type: {}", t.to_string()));
             ui.label(format!("Type code: {}", c.read_abs(0x147)));
             ui.label(format!("Licensee: {}", c.header().licensee()));

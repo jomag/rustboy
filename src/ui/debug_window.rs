@@ -22,7 +22,7 @@ use crate::registers::Registers;
 // 2       12    12
 
 use egui::{
-    emath, epaint, pos2, style, vec2, Color32, CtxRef, Label, Pos2, Rect, RichText, Sense, Shape,
+    emath, epaint, pos2, style, vec2, Color32, Context, Label, Pos2, Rect, RichText, Sense, Shape,
     Stroke, TextStyle, Ui,
 };
 
@@ -185,10 +185,10 @@ impl DisassemblyView {
         }
     }
 
-    pub fn render(&mut self, ctx: &CtxRef, ui: &mut Ui, emu: &Emu) {
+    pub fn render(&mut self, ctx: &Context, ui: &mut Ui, emu: &Emu) {
         ui.scope(|ui| {
             ui.style_mut().override_text_style = Some(egui::TextStyle::Monospace);
-            let row_height = ui.fonts().row_height(TextStyle::Monospace) + 2.0;
+            let row_height = 16.0; //ui.fonts().row_height(TextStyle::Monospace) + 2.0;
             let avail_height = ui.available_height();
             let lines = (avail_height / row_height) as usize;
             if lines >= 1 {
@@ -213,30 +213,11 @@ impl DebugWindow {
         }
     }
 
-    pub fn render(&mut self, ctx: &CtxRef, emu: &mut Emu, debug: &mut Debug) {
+    pub fn render(&mut self, ctx: &Context, emu: &mut Emu, debug: &mut Debug, open: &mut bool) {
         egui::Window::new("Debugger")
+            .open(open)
             .resizable(true)
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    if ui.button("Break").clicked() {
-                        debug.break_execution();
-                    };
-                    if ui.button("Step").clicked() {
-                        debug.step();
-                    };
-                    if ui.button("Continue").clicked() {
-                        debug.continue_execution();
-                    };
-                    if ui.button("Next scanline").clicked() {
-                        debug.break_on_scanline((emu.mmu.ppu.ly + 1) % SCREEN_HEIGHT);
-                        debug.continue_execution();
-                    }
-                    if ui.button("Reset").clicked() {
-                        emu.reset();
-                    }
-                });
-
-                ui.separator();
                 self.registers_view.render(ui, &emu);
                 ui.separator();
                 self.dis_view.render(ctx, ui, &emu);
