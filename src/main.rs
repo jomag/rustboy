@@ -20,7 +20,6 @@ mod interrupt;
 mod lcd;
 mod mmu;
 mod ppu;
-mod ppu_fifo;
 mod registers;
 mod serial;
 mod test_runner;
