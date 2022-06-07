@@ -484,11 +484,11 @@ impl PPU {
 
     pub fn step_1m(&mut self) -> bool {
         match self.mode {
-            Mode::OAMSearch => {
-                if self.scanline_timer == 80 {
-                    self.mode = Mode::PixelTransfer;
-                }
-            }
+            Mode::OAMSearch => match self.scanline_timer {
+                0 => {}
+                80 => self.mode = Mode::PixelTransfer,
+                _ => {}
+            },
 
             Mode::PixelTransfer => {
                 if self.scanline_timer == 80 + 160 {
