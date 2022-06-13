@@ -2,7 +2,7 @@ use egui::{Label, Ui};
 use egui_wgpu_backend::RenderPass;
 use wgpu::{Device, Queue};
 
-use crate::{
+use crate::gameboy::{
     emu::Emu,
     ppu::{
         get_tile_data_offset, TileAddressingMode, PPU, TILE_COLUMNS, TILE_HEIGHT, TILE_ROWS,

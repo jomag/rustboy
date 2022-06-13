@@ -1,6 +1,6 @@
 use egui::{emath, epaint, pos2, vec2, Context, Rect, Sense, Shape, Stroke, Ui};
 
-use crate::{apu::wave_gen::CH3_WAVE_MEMORY_SIZE, emu::Emu};
+use crate::gameboy::{apu::wave_gen::CH3_WAVE_MEMORY_SIZE, emu::Emu};
 
 pub fn render_wavetable(ui: &mut Ui, emu: &mut Emu) {
     let sample_count = CH3_WAVE_MEMORY_SIZE * 2;

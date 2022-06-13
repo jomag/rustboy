@@ -1,6 +1,6 @@
 use ringbuf::Producer;
 
-use crate::mmu::{SB_REG, SC_REG};
+use super::mmu::{SB_REG, SC_REG};
 
 // This is a much simplified implementation of the serial transfer
 // functionality in Gameboy. It only supports writing to a ringbuf,

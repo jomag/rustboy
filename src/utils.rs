@@ -1,4 +1,4 @@
-use crate::mmu::MMU;
+use crate::gameboy::mmu::MMU;
 
 pub fn read_zero_terminated_string(
     mmu: &MMU,

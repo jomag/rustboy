@@ -1,6 +1,6 @@
 use egui::{Context, Ui};
 
-use crate::{
+use crate::gameboy::{
     emu::Emu,
     mmu::{MemoryMapped, LCDC_REG, LY_REG, SCX_REG, SCY_REG, STAT_REG, WX_REG, WY_REG},
     ppu::{

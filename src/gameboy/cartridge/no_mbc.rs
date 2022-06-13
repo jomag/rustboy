@@ -1,7 +1,7 @@
+use super::super::mmu::MemoryMapped;
 use super::{
     cartridge::Cartridge, cartridge_header::CartridgeHeader, cartridge_type::CartridgeType,
 };
-use crate::mmu::MemoryMapped;
 
 pub struct NoMBC {
     // Memory buffers

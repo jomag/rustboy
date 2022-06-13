@@ -1,12 +1,13 @@
 use std::{collections::HashMap, iter, sync::Arc, time::Instant};
 
-use crate::{
+use crate::gameboy::{
     buttons::ButtonType,
     debug::Debug,
     emu::Emu,
     ppu::{SCREEN_HEIGHT, SCREEN_WIDTH},
-    APPNAME, CLOCK_SPEED,
 };
+
+use crate::{APPNAME, CLOCK_SPEED};
 
 use egui::{FontDefinitions, Key, Label};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};

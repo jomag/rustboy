@@ -1,6 +1,6 @@
 use egui::{Button, Context};
 
-use crate::debug::{Breakpoint, Debug};
+use crate::gameboy::debug::{Breakpoint, Debug};
 
 pub struct BreakpointsWindow {
     add_breakpoint_input: String,

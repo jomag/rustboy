@@ -2,7 +2,7 @@ use egui::{Label, Ui};
 use egui_wgpu_backend::RenderPass;
 use wgpu::{Device, Queue};
 
-use crate::{emu::Emu, ppu::PPU};
+use crate::gameboy::{emu::Emu, ppu::PPU};
 
 use super::{
     pixbuf::PixBuf,

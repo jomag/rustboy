@@ -1,4 +1,4 @@
-use crate::mmu::MMU;
+use super::mmu::MMU;
 
 #[derive(Copy, Clone)]
 pub enum Machine {

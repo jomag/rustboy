@@ -1,6 +1,6 @@
 use egui::Context;
 
-use crate::emu::Emu;
+use crate::gameboy::emu::Emu;
 
 pub struct CartridgeWindow {}
 

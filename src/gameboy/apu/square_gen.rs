@@ -1,11 +1,11 @@
-use crate::apu::dac::DAC;
-use crate::apu::length_counter::LengthCounter;
-use crate::apu::sweep::Sweep;
-use crate::emu::Machine;
-use crate::mmu::{
+use super::super::emu::Machine;
+use super::super::mmu::{
     NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, NR20_REG, NR21_REG, NR22_REG, NR23_REG,
     NR24_REG,
 };
+use super::dac::DAC;
+use super::length_counter::LengthCounter;
+use super::sweep::Sweep;
 
 // SquareWaveSoundGenerator
 // ------------------------

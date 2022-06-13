@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::io::Write;
 
-use crate::emu::Emu;
-use crate::mmu::MMU;
+use super::emu::Emu;
+use super::mmu::MMU;
 
 #[derive(PartialEq)]
 pub enum ExecState {

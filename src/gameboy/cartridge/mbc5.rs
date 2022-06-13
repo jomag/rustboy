@@ -1,7 +1,7 @@
+use super::super::mmu::MemoryMapped;
 use super::cartridge::Cartridge;
 use super::cartridge_header::{CartridgeHeader, RAM_BANK_SIZE, ROM_BANK_SIZE};
 use super::cartridge_type::CartridgeType;
-use crate::mmu::MemoryMapped;
 
 pub struct MBC5 {
     // Memory buffers

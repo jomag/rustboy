@@ -3,19 +3,19 @@ extern crate ansi_term;
 use std::fs::File;
 use std::io::Read;
 
-use crate::emu::Machine;
-use crate::interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
+use super::emu::Machine;
+use super::interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
 
-use crate::apu::apu::{AudioProcessingUnit, SAMPLES_PER_FRAME};
-use crate::buttons::Buttons;
-use crate::cartridge::{cartridge::Cartridge, cartridge::NoCartridge, load_cartridge};
-use crate::dma::DMA;
-use crate::instructions;
-use crate::interrupt::handle_interrupts;
-use crate::ppu::PPU;
-use crate::registers::Registers;
-use crate::serial::Serial;
-use crate::timer::Timer;
+use super::apu::apu::{AudioProcessingUnit, SAMPLES_PER_FRAME};
+use super::buttons::Buttons;
+use super::cartridge::{cartridge::Cartridge, cartridge::NoCartridge, load_cartridge};
+use super::dma::DMA;
+use super::instructions;
+use super::interrupt::handle_interrupts;
+use super::ppu::PPU;
+use super::registers::Registers;
+use super::serial::Serial;
+use super::timer::Timer;
 
 pub const OAM_OFFSET: usize = 0xFE00;
 

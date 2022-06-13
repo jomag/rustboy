@@ -1,6 +1,6 @@
 use egui::Context;
 
-use crate::{
+use crate::gameboy::{
     emu::Emu,
     mmu::OAM_OFFSET,
     ppu::{OAM_OBJECT_COUNT, OAM_OBJECT_SIZE},

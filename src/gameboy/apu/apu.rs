@@ -1,10 +1,13 @@
-use crate::{
-    apu::noise_gen::NoiseSoundGenerator,
-    apu::square_gen::SquareWaveSoundGenerator,
-    apu::wave_gen::WaveSoundGenerator,
+use super::super::{
     emu::Machine,
     mmu::{NR50_REG, NR51_REG, NR52_REG},
-    CYCLES_PER_FRAME,
+};
+
+use crate::{ui::audio_player::AudioRecorder, CYCLES_PER_FRAME};
+
+use super::{
+    noise_gen::NoiseSoundGenerator, square_gen::SquareWaveSoundGenerator,
+    wave_gen::WaveSoundGenerator,
 };
 
 use blip_buf::BlipBuf;
@@ -12,13 +15,6 @@ use blip_buf::BlipBuf;
 // Approx numberof samples per frame at native frame rate.
 // The actual count is a little less than this.
 pub const SAMPLES_PER_FRAME: usize = CYCLES_PER_FRAME / 59;
-
-pub trait AudioRecorder {
-    fn mono(&mut self, sample: f32);
-    fn gen1(&mut self, sample: f32);
-    fn gen2(&mut self, sample: f32);
-    fn flush(&mut self);
-}
 
 pub struct AudioProcessingUnit {
     machine: Machine,
