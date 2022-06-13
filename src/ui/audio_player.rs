@@ -1,13 +1,8 @@
-use blip_buf::BlipBuf;
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Sample, SampleFormat, Stream, StreamConfig,
 };
-use ringbuf::{Consumer, Producer, RingBuffer};
-
-use crate::{
-    emu::Emu, ui::full::TARGET_FPS, wave_audio_recorder::WaveAudioRecorder, CYCLES_PER_FRAME,
-};
+use ringbuf::{Producer, RingBuffer};
 
 pub struct AudioPlayer {
     stream: Option<Stream>,
@@ -26,13 +21,6 @@ impl AudioPlayer {
         let buf = RingBuffer::<i16>::new(((48000 * 10) / 60) as usize);
         let (producer, mut consumer) = buf.split();
         self.producer = Some(producer);
-
-        let spec = hound::WavSpec {
-            channels: 1,
-            sample_rate: 48000,
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
 
         let host = cpal::default_host();
         let device = host
@@ -54,7 +42,6 @@ impl AudioPlayer {
         let sample_format = config.sample_format();
         let config: StreamConfig = config.into();
 
-        let sample_rate = config.sample_rate.0 as f32;
         let channels = config.channels as usize;
 
         let mut next_value = move || match consumer.pop() {

@@ -24,8 +24,6 @@
 // DMG and CGB in single-speed mode. For CGB in double-speed mode
 // it is equivalent to 2 T-cycles.
 
-use std::io::Write;
-
 use crate::{
     emu::Machine,
     interrupt::{IF_LCDC_BIT, IF_VBLANK_BIT},

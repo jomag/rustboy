@@ -1,10 +1,9 @@
 use std::fmt::UpperHex;
 use std::ops::Sub;
 
-use crate::debug::{format_mnemonic, Debug};
+use crate::debug::format_mnemonic;
 use crate::emu::Emu;
 use crate::instructions;
-use crate::ppu::SCREEN_HEIGHT;
 use crate::registers::Registers;
 
 // cycle   reg   prev reg   frm
@@ -21,10 +20,7 @@ use crate::registers::Registers;
 // 2       12    12
 // 2       12    12
 
-use egui::{
-    emath, epaint, pos2, style, vec2, Color32, Context, Label, Pos2, Rect, RichText, Sense, Shape,
-    Stroke, TextStyle, Ui,
-};
+use egui::{Context, Label, RichText, Ui};
 
 pub struct RegistersView {
     prev: Registers,
@@ -120,13 +116,6 @@ impl DisassemblyView {
         }
     }
 
-    pub fn ensure_visible(&mut self, address: usize) {
-        if self.start_address > address {
-            self.start_address = address;
-            return;
-        }
-    }
-
     // Find the last visible address
     fn stop_address(&mut self, emu: &Emu, lines: usize) -> usize {
         let mut adr = self.start_address;
@@ -185,7 +174,7 @@ impl DisassemblyView {
         }
     }
 
-    pub fn render(&mut self, ctx: &Context, ui: &mut Ui, emu: &Emu) {
+    pub fn render(&mut self, ui: &mut Ui, emu: &Emu) {
         ui.scope(|ui| {
             ui.style_mut().override_text_style = Some(egui::TextStyle::Monospace);
             let row_height = 16.0; //ui.fonts().row_height(TextStyle::Monospace) + 2.0;
@@ -213,14 +202,14 @@ impl DebugWindow {
         }
     }
 
-    pub fn render(&mut self, ctx: &Context, emu: &mut Emu, debug: &mut Debug, open: &mut bool) {
+    pub fn render(&mut self, ctx: &Context, emu: &mut Emu, open: &mut bool) {
         egui::Window::new("Debugger")
             .open(open)
             .resizable(true)
             .show(ctx, |ui| {
                 self.registers_view.render(ui, &emu);
                 ui.separator();
-                self.dis_view.render(ctx, ui, &emu);
+                self.dis_view.render(ui, &emu);
             });
     }
 }

@@ -1,6 +1,4 @@
-use std::{
-    collections::HashMap, fs::File, io::BufWriter, iter, sync::Arc, thread::sleep, time::Instant,
-};
+use std::{collections::HashMap, iter, sync::Arc, time::Instant};
 
 use crate::{
     buttons::ButtonType,
@@ -18,13 +16,7 @@ use ringbuf::{Consumer, RingBuffer};
 use wgpu::{Device, FilterMode, Queue, Surface, SurfaceConfiguration};
 use winit::{event::Event::*, event_loop::ControlFlow, window::Window};
 
-use super::{
-    audio_player::AudioPlayer, audio_window::render_audio_window,
-    breakpoints_window::BreakpointsWindow, cartridge_window::CartridgeWindow,
-    debug_window::DebugWindow, main_window::MainWindow, memory_window::MemoryWindow,
-    oam_window::render_oam_window, ppu_window::render_video_window, render_stats::RenderStats,
-    serial_window::SerialWindow, vram_window::VRAMWindow,
-};
+use super::{audio_player::AudioPlayer, main_window::MainWindow, render_stats::RenderStats};
 
 pub const TARGET_FPS: f64 = 59.727500569606;
 pub const PIXEL_SIZE: usize = 4;

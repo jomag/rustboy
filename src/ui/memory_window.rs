@@ -29,7 +29,7 @@ impl MemoryView {
         ui.label(format!("{:04X} {} {}", offset, hex_str, char_str));
     }
 
-    pub fn render(&mut self, ctx: &Context, ui: &mut Ui, emu: &Emu) {
+    pub fn render(&mut self, ui: &mut Ui, emu: &Emu) {
         ui.scope(|ui| {
             let text_style = egui::TextStyle::Monospace;
             let row_height = 20.0; // FIXME: ui.fonts()[text_style].row_height();
@@ -69,7 +69,7 @@ impl MemoryWindow {
             .show(ctx, |ui| {
                 ui.label("TEXT");
                 ui.separator();
-                self.mem_view.render(ctx, ui, emu);
+                self.mem_view.render(ui, emu);
             });
     }
 }

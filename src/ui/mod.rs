@@ -6,7 +6,6 @@ pub mod debug_window;
 pub mod full;
 pub mod main_window;
 pub mod memory_window;
-pub mod minimal;
 pub mod oam_window;
 pub mod pixbuf;
 pub mod ppu_window;

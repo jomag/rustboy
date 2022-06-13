@@ -1,12 +1,8 @@
 use ringbuf::RingBuffer;
 
-use crate::{
-    debug::{format_mnemonic, Debug},
-    emu::Emu,
-    utils::read_zero_terminated_string,
-};
+use crate::{debug::Debug, emu::Emu, utils::read_zero_terminated_string};
 
-pub fn test_runner_expect(expect: &str, emu: &mut Emu, debug: &mut Debug) {
+pub fn test_runner_expect(expect: &str, emu: &mut Emu) {
     let echo_serial: bool = false;
     let mut output: String = "".to_string();
     let serial_buf = RingBuffer::<u8>::new(16);

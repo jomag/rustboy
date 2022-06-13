@@ -1,12 +1,12 @@
-use egui::{Color32, Label, Pos2, Stroke, Ui};
+use egui::{Label, Ui};
 use egui_wgpu_backend::RenderPass;
-use wgpu::{Device, FilterMode, Queue};
+use wgpu::{Device, Queue};
 
 use crate::{
     emu::Emu,
     ppu::{
-        get_tile_data_offset, TileAddressingMode, BG_AND_WINDOW_TILE_DATA_OFFSET_0,
-        BG_AND_WINDOW_TILE_DATA_OFFSET_1, PPU, TILE_COLUMNS, TILE_HEIGHT, TILE_ROWS, TILE_WIDTH,
+        get_tile_data_offset, TileAddressingMode, PPU, TILE_COLUMNS, TILE_HEIGHT, TILE_ROWS,
+        TILE_WIDTH,
     },
 };
 
