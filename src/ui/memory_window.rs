@@ -1,6 +1,6 @@
 use egui::{Context, ScrollArea, Ui};
 
-use crate::emu::Emu;
+use crate::gameboy::emu::Emu;
 
 pub struct MemoryView {
     mem_size: usize,

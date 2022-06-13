@@ -1,10 +1,10 @@
 use std::fmt::UpperHex;
 use std::ops::Sub;
 
-use crate::debug::format_mnemonic;
-use crate::emu::Emu;
-use crate::instructions;
-use crate::registers::Registers;
+use crate::gameboy::debug::format_mnemonic;
+use crate::gameboy::emu::Emu;
+use crate::gameboy::instructions;
+use crate::gameboy::registers::Registers;
 
 // cycle   reg   prev reg   frm
 // 0       5     0

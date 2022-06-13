@@ -2,9 +2,10 @@ use egui::Context;
 use egui_wgpu_backend::RenderPass;
 use wgpu::{Device, Queue};
 
-use crate::emu::Emu;
-use crate::ppu::SCREEN_HEIGHT;
-use crate::{debug::Debug, APPNAME};
+use crate::gameboy::debug::Debug;
+use crate::gameboy::emu::Emu;
+use crate::gameboy::ppu::SCREEN_HEIGHT;
+use crate::APPNAME;
 
 use super::{
     audio_window::render_audio_window, breakpoints_window::BreakpointsWindow,

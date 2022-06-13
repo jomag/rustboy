@@ -1,7 +1,7 @@
-use crate::apu::dac::DAC;
-use crate::apu::length_counter::LengthCounter;
-use crate::emu::Machine;
-use crate::mmu::{NR30_REG, NR31_REG, NR32_REG, NR33_REG, NR34_REG};
+use super::super::emu::Machine;
+use super::super::mmu::{NR30_REG, NR31_REG, NR32_REG, NR33_REG, NR34_REG};
+use super::dac::DAC;
+use super::length_counter::LengthCounter;
 
 pub const CH3_WAVE_MEMORY_SIZE: usize = 16;
 

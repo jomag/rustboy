@@ -1,4 +1,4 @@
-use crate::cartridge::is_mbc1_multicart;
+use super::is_mbc1_multicart;
 use crate::utils::VecExt;
 
 #[derive(Copy, Clone)]
@@ -38,10 +38,10 @@ pub enum CartridgeType {
     HuC3,
 }
 
-pub enum Aux {
-    RAM,
-    RTC,
-}
+// pub enum Aux {
+//     RAM,
+//     RTC,
+// }
 
 fn aux_string(name: &str, ram: bool, bat: bool, rtc: bool, rumble: bool) -> String {
     let mut extras: Vec<&str> = vec![];

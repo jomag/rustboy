@@ -2,7 +2,7 @@ use egui::{Context, Ui};
 use egui_wgpu_backend::RenderPass;
 use wgpu::{Device, Queue};
 
-use crate::emu::Emu;
+use crate::gameboy::emu::Emu;
 
 use super::{tile_data_view::TileDataView, tile_map_view::TileMapView};
 

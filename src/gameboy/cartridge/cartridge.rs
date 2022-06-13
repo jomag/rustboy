@@ -1,6 +1,6 @@
 use super::{cartridge_header::CartridgeHeader, cartridge_type::CartridgeType};
 
-use crate::mmu::MemoryMapped;
+use super::super::mmu::MemoryMapped;
 
 pub trait Cartridge: MemoryMapped {
     fn cartridge_type(&self) -> CartridgeType;

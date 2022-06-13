@@ -1,6 +1,7 @@
 use ringbuf::RingBuffer;
 
-use crate::{debug::Debug, emu::Emu, utils::read_zero_terminated_string};
+use crate::gameboy::{debug::Debug, emu::Emu};
+use crate::utils::read_zero_terminated_string;
 
 pub fn test_runner_expect(expect: &str, emu: &mut Emu) {
     let echo_serial: bool = false;

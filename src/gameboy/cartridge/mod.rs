@@ -10,7 +10,7 @@ pub mod no_mbc;
 use std::fs::File;
 use std::io::Read;
 
-use crate::cartridge::mbc3::MBC3;
+use super::cartridge::mbc3::MBC3;
 
 use super::cartridge::{
     cartridge::Cartridge, cartridge_type::CartridgeType, mbc1::MBC1, mbc2::MBC2, mbc5::MBC5,

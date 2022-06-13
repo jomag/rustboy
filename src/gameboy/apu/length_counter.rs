@@ -1,4 +1,4 @@
-use crate::emu::Machine;
+use super::super::emu::Machine;
 
 // All channels have a length counter which counts down and disables
 // the channel when it reaches zero. The length counter can be

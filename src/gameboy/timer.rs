@@ -2,7 +2,7 @@
 // http://gbdev.gg8.se/wiki/articles/Timer_and_Divider_Registers
 // http://gbdev.gg8.se/wiki/articles/Timer_Obscure_Behaviour
 
-use crate::interrupt::IF_TMR_BIT;
+use super::interrupt::IF_TMR_BIT;
 
 const CLOCK_SELECTION: [u16; 4] = [512, 8, 32, 128];
 

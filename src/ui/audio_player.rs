@@ -4,6 +4,13 @@ use cpal::{
 };
 use ringbuf::{Producer, RingBuffer};
 
+pub trait AudioRecorder {
+    fn mono(&mut self, sample: f32);
+    fn gen1(&mut self, sample: f32);
+    fn gen2(&mut self, sample: f32);
+    fn flush(&mut self);
+}
+
 pub struct AudioPlayer {
     stream: Option<Stream>,
     pub producer: Option<Producer<i16>>,

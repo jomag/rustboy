@@ -7,29 +7,17 @@ extern crate winit;
 #[macro_use]
 mod macros;
 
-mod apu;
-mod buttons;
-pub mod cartridge;
 mod conv;
-mod debug;
-mod dma;
-mod emu;
-mod instructions;
-mod interrupt;
-mod mmu;
-mod ppu;
-mod registers;
-mod serial;
+mod gameboy;
 mod test_runner;
-mod timer;
 mod ui;
 mod utils;
 mod wave_audio_recorder;
 
-use emu::Emu;
+use gameboy::emu::Emu;
 use ui::full::*;
 
-use crate::emu::Machine;
+use gameboy::emu::Machine;
 
 const APPNAME: &str = "Rustboy?";
 const VERSION: &str = "0.0.0";
@@ -126,7 +114,7 @@ fn main() -> Result<(), ()> {
     println!("Loading cartridge ROM: {}", cartridge_rom);
     emu.load_cartridge(cartridge_rom);
 
-    let mut debug = crate::debug::Debug::new();
+    let mut debug = gameboy::debug::Debug::new();
 
     match debug_log {
         Some(filename) => debug.start_debug_log(filename),

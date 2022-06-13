@@ -1,3 +1,5 @@
 /target
 **/*.rs.bk
 rom/
+.DS_Store
+.venv

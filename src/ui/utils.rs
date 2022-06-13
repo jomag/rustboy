@@ -1,6 +1,6 @@
 use egui::{Color32, Pos2, Rect, Stroke, Ui};
 
-use crate::ppu::{PPU, TILE_HEIGHT, TILE_WIDTH};
+use crate::gameboy::ppu::{PPU, TILE_HEIGHT, TILE_WIDTH};
 
 use super::{full::PIXEL_SIZE, pixbuf::PixBuf};
 

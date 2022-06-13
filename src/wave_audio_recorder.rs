@@ -1,6 +1,6 @@
 use std::{fs::File, io::BufWriter};
 
-use crate::apu::apu::AudioRecorder;
+use crate::ui::audio_player::AudioRecorder;
 
 pub struct WaveAudioRecorder {
     pub mono_writer: Option<hound::WavWriter<BufWriter<File>>>,
