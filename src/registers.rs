@@ -117,6 +117,10 @@ impl Registers {
         self.l = (value & 0xFF) as u8;
     }
 
+    pub fn inc_hl(&mut self) {
+        self.set_hl(self.hl().wrapping_add(1));
+    }
+
     pub fn set_af(&mut self, value: u16) {
         // Note that this one is special:
         // The lower 4 bits of register F are not usable.

@@ -1528,7 +1528,7 @@ pub fn step(mmu: &mut MMU) {
             let hl = mmu.reg.hl();
             let a = mmu.reg.a;
             mmu.write(hl as usize, a);
-            mmu.reg.set_hl(hl + 1);
+            mmu.reg.inc_hl();
         }
 
         // LD (HL), d8: store immediate value at (HL)
@@ -1548,7 +1548,7 @@ pub fn step(mmu: &mut MMU) {
         0x2A => {
             let hl = mmu.reg.hl();
             mmu.reg.a = mmu.read(hl as usize);
-            mmu.reg.set_hl(hl + 1);
+            mmu.reg.inc_hl();
         }
 
         // LD A, (HL-): load value from (HL) to A and decrement HL
