@@ -1,5 +1,5 @@
 use egui_wgpu_backend::RenderPass;
-use wgpu::{Device, FilterMode, Queue};
+use wgpu::{Device, FilterMode};
 
 // Size of one pixel in bytes. Currently only RGBA is supported (4 bytes)
 const PIXEL_SIZE: usize = 4;
@@ -58,13 +58,6 @@ impl PixBuf {
 
         self.texture = Some(texture);
         self.texture_id = Some(texture_id);
-    }
-
-    pub fn is_initialized(&self) -> bool {
-        match self.texture {
-            Some(_) => true,
-            None => false,
-        }
     }
 
     pub fn prepare(&mut self, queue: &wgpu::Queue) {

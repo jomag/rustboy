@@ -166,9 +166,9 @@ impl MainWindow {
         self.vram_window
             .render(ctx, emu, queue, &mut self.vram_window_open);
         self.debug_window
-            .render(ctx, emu, debug, &mut self.debug_window_open);
+            .render(ctx, emu, &mut self.debug_window_open);
         self.breakpoints_window
-            .render(ctx, emu, debug, &mut self.breakpoints_window_open);
+            .render(ctx, debug, &mut self.breakpoints_window_open);
         self.serial_window.render(ctx, &mut self.serial_window_open);
         self.cartridge_window
             .render(ctx, emu, &mut self.cartridge_window_open);

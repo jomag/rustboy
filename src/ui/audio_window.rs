@@ -1,6 +1,4 @@
-use egui::{
-    emath, epaint, pos2, style, vec2, Color32, Context, Pos2, Rect, Sense, Shape, Stroke, Ui,
-};
+use egui::{emath, epaint, pos2, vec2, Context, Rect, Sense, Shape, Stroke, Ui};
 
 use crate::{apu::wave_gen::CH3_WAVE_MEMORY_SIZE, emu::Emu};
 

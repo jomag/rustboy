@@ -2,13 +2,7 @@ use std::collections::HashMap;
 use std::io::Write;
 
 use crate::emu::Emu;
-use crate::instructions::op_length;
-use crate::mmu::{
-    IE_REG, IF_REG, LCDC_REG, MMU, NR10_REG, NR11_REG, NR12_REG, NR13_REG, NR14_REG, SCX_REG,
-    SCY_REG, STAT_REG,
-};
-
-use crate::timer::Timer;
+use crate::mmu::MMU;
 
 #[derive(PartialEq)]
 pub enum ExecState {
@@ -67,10 +61,6 @@ impl Debug {
         }
     }
 
-    pub fn is_stopped(&self) -> bool {
-        self.state != ExecState::STEP
-    }
-
     pub fn add_breakpoint(&mut self, adr: u16, bp: Breakpoint) {
         self.breakpoints.entry(adr).or_insert(vec![]).push(bp);
     }
@@ -126,9 +116,10 @@ impl Debug {
     #[allow(dead_code)]
     pub fn finalize(&mut self) {
         match self.debug_log {
-            Some(ref mut f) => {
-                f.sync_all();
-            }
+            Some(ref mut f) => match f.sync_all() {
+                Ok(_) => {}
+                Err(e) => println!("Failed to sync log: {:?}", e),
+            },
             None => {}
         };
     }
@@ -208,195 +199,6 @@ fn add_i8_to_u16(a: u16, b: i8) -> u16 {
     } else {
         return a - (-b) as u16;
     }
-}
-
-// pub fn log_state(file: &mut File, mmu: &MMU) {
-//     let f = mmu.reg.get_f();
-//     file.write_fmt(format_args!(
-//         "A:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} F:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} Op: {:02x} {:02x} DIV: {:02x}\n",
-//         mmu.reg.a, mmu.reg.b, mmu.reg.c, mmu.reg.d,
-//         mmu.reg.e, f, mmu.reg.h, mmu.reg.l,
-//         mmu.reg.sp, mmu.reg.pc, mmu.direct_read(mmu.reg.pc), mmu.direct_read(mmu.reg.pc + 1),
-//         mmu.timer.read_div()
-//     ));
-// }
-
-pub fn print_stack(mmu: &MMU, sp: usize) {
-    let mut a: usize = 0xFFFC;
-
-    if sp < 0xFF80 {
-        println!("  stack: SP at 0x{:04X}. Stack corrupted?", sp);
-        return;
-    }
-
-    if sp > a {
-        println!("  stack: empty");
-    } else {
-        print!("  stack:");
-        while a >= sp {
-            print!(" {:04X}", mmu.direct_read_u16(a));
-            a -= 2;
-        }
-        println!();
-    }
-}
-
-pub fn print_sprite(mmu: &MMU, i: usize) {
-    let offset = 0xFE00 + (i * 4);
-    let x = mmu.direct_read(offset + 1);
-    let y = mmu.direct_read(offset);
-    if x != 0 && y != 0 {
-        println!(
-            " - Sprite {} @ 0x{:04X}: X={}, Y={}, Pattern={}, Flags=0x{:02X}",
-            i,
-            offset,
-            x,
-            y,
-            mmu.direct_read(offset + 2),
-            mmu.direct_read(offset + 3)
-        );
-    }
-}
-
-pub fn print_sprites(mmu: &MMU) {
-    let lcdc = mmu.direct_read(LCDC_REG);
-
-    println!(
-        "Sprites are: {}",
-        if lcdc & 2 == 0 { "disabled" } else { "enabled" }
-    );
-    println!(
-        "Sprite size: {}",
-        if lcdc & 4 == 0 { "8x8" } else { "8x16" }
-    );
-
-    for i in 0..40 {
-        print_sprite(mmu, i);
-    }
-}
-
-fn get_bit(bitmap: u8, bit: u8) -> u8 {
-    if bitmap & (1 << bit) == 0 {
-        0
-    } else {
-        1
-    }
-}
-
-pub fn print_lcdc(mmu: &MMU) {
-    let v = mmu.direct_read(LCDC_REG);
-    println!("LCDC ({:04X}): {:02X}", LCDC_REG, v);
-    println!("  Bit 0={} - BG Display (0=Off, 1=On)", get_bit(v, 0));
-    println!(
-        "  Bit 1={} - OBJ (Sprite) Display (0=Off, 1=On)",
-        get_bit(v, 1)
-    );
-    println!(
-        "  Bit 2={} - OBJ (Sprite) Size (0=8x8, 1=8x16)",
-        get_bit(v, 2)
-    );
-    println!(
-        "  Bit 3={} - BG Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)",
-        get_bit(v, 3)
-    );
-    println!(
-        "  Bit 4={} - BG & Window Tile Data Select (0=8800-97FF, 1=8000-8FFF)",
-        get_bit(v, 4)
-    );
-    println!(
-        "  Bit 5={} - Window Display Enable (0=Off, 1=On)",
-        get_bit(v, 5)
-    );
-    println!(
-        "  Bit 6={} - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF",
-        get_bit(v, 6)
-    );
-    println!(
-        "  Bit 7={} - LCD Display Enable (0=Off, 1=On)",
-        get_bit(v, 7)
-    );
-}
-
-pub fn print_apu(mmu: &MMU) {
-    let nr10 = mmu.direct_read(NR10_REG);
-    let nr11 = mmu.direct_read(NR11_REG);
-    let nr12 = mmu.direct_read(NR12_REG);
-    let nr13 = mmu.direct_read(NR13_REG);
-    let nr14 = mmu.direct_read(NR14_REG);
-
-    println!("Channel 1 (tone & sweep):");
-    println!("  NR10: 0x{:02X} {:08b}b ", nr10, nr10);
-    println!("  NR11: 0x{:02X} {:08b}b ", nr11, nr11);
-    println!("  NR12: 0x{:02X} {:08b}b ", nr12, nr12);
-    println!("  NR13: 0x{:02X} {:08b}b ", nr13, nr13);
-    println!("  NR14: 0x{:02X} {:08b}b ", nr14, nr14);
-}
-
-#[allow(dead_code)]
-pub fn print_ppu_registers(mmu: &MMU) {
-    println!(
-        "  LCDC: 0x{:02X} STAT: 0x{:02X} SCX: 0x{:02X} SCY: 0x{:02X}",
-        mmu.direct_read(LCDC_REG),
-        mmu.direct_read(STAT_REG),
-        mmu.direct_read(SCX_REG),
-        mmu.direct_read(SCY_REG)
-    )
-}
-
-pub fn print_registers(mmu: &MMU) {
-    print!(
-        "  A: 0x{:02X} B: 0x{:02X} C: 0x{:02X} D: 0x{:02X} ",
-        mmu.reg.a, mmu.reg.b, mmu.reg.c, mmu.reg.d
-    );
-
-    println!(
-        "E: 0x{:02X} F: 0x{:02X} H: 0x{:02X} L: 0x{:02X}",
-        mmu.reg.e,
-        mmu.reg.get_f(),
-        mmu.reg.h,
-        mmu.reg.l
-    );
-
-    println!(
-        "  SP: 0x{:04X} PC: 0x{:04X} Cycle: 0x{:04X}/{}",
-        mmu.reg.sp, mmu.reg.pc, mmu.timer.cycle, mmu.timer.cycle
-    );
-
-    println!(
-        "  Flags: Z={}, N={}, H={}, C={}",
-        if mmu.reg.zero { 1 } else { 0 },
-        if mmu.reg.neg { 1 } else { 0 },
-        if mmu.reg.half_carry { 1 } else { 0 },
-        if mmu.reg.carry { 1 } else { 0 }
-    );
-
-    print_interrupt_state(&mmu);
-    print_timer_state(&mmu.timer);
-    print_stack(&mmu, mmu.reg.sp as usize);
-
-    if mmu.reg.halted {
-        println!("  CPU is halted");
-    }
-
-    if mmu.reg.stopped {
-        println!("  CPU is stopped")
-    }
-}
-
-pub fn print_interrupt_state(mmu: &MMU) {
-    println!(
-        "  IME: {} IE: 0x{:02X} IF: 0x{:02X}",
-        if mmu.reg.ime == 0 { 0 } else { 1 },
-        mmu.direct_read(IE_REG),
-        mmu.direct_read(IF_REG)
-    );
-}
-
-pub fn print_timer_state(timer: &Timer) {
-    println!(
-        "  TAC: 0x{:02X} TIMA: 0x{:02X} TMA: 0x{:02X} Abs cycle: {}",
-        timer.tac, timer.tima, timer.tma, timer.abs_cycle
-    );
 }
 
 const SIMPLE_MNEMONICS: [&str; 256] = [
@@ -828,17 +630,6 @@ pub fn format_mnemonic(mmu: &MMU, addr: usize) -> String {
             );
         }
     }
-}
-
-pub fn print_listing(mmu: &MMU, mut addr: usize, line_count: i32) -> usize {
-    for _n in 0..line_count {
-        println!("0x{:04X}: {}", addr, format_mnemonic(&mmu, addr));
-        match op_length(mmu.direct_read(addr)) {
-            Some(len) => addr = addr + len,
-            None => break,
-        }
-    }
-    addr
 }
 
 #[allow(dead_code)]

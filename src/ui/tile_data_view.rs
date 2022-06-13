@@ -1,11 +1,8 @@
 use egui::{Label, Ui};
 use egui_wgpu_backend::RenderPass;
-use wgpu::{Device, FilterMode, Queue};
+use wgpu::{Device, Queue};
 
-use crate::{
-    emu::Emu,
-    ppu::{BG_AND_WINDOW_TILE_DATA_OFFSET_0, BG_AND_WINDOW_TILE_DATA_OFFSET_1, PPU},
-};
+use crate::{emu::Emu, ppu::PPU};
 
 use super::{
     pixbuf::PixBuf,

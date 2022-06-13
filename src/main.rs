@@ -2,7 +2,6 @@ extern crate clap;
 extern crate ctrlc;
 extern crate num_traits;
 extern crate png;
-extern crate sdl2;
 extern crate winit;
 
 #[macro_use]
@@ -90,16 +89,12 @@ fn main() -> Result<(), ()> {
         .args_from_usage(
             "<ROM>                  'The ROM to run'
             -B, --boot=[FILE]       'Path to bootstrap ROM'
-            -b, --break=[ADDR]      'Break at address ADDR'
-            --break-cycle=[N]       'Break at cycle N'
             --break-frame=[N]       'Break at frame N'
             --exit-cycle=[N]        'Exit at cycle N'
-            --exit-frame=[N]        'Exit at frame N'
             --ff-bootstrap          'Fast forward bootstrap'
             -R, --record=[PATH]     'Record into directory'
             -s, --skip=[N]          'Frames to skip while recording'
             -C, --capture=[N]       'Capture screen at frame N'
-            --capture-to=[FILE]     'Capture filename'
             -t, --test=[VARIANT]    'Run test mode'
             --test-expect=[STR]     'Run test and validate serial output'
             --debug-log=[FILE]      'Write extensive debug info before each op'
@@ -114,20 +109,12 @@ fn main() -> Result<(), ()> {
     let test_expect = matches.value_of("test-expect");
     let _record: Option<&str> = matches.value_of("record");
     let _record_frame_skip: u32 = parse(matches.value_of("skip"), 3);
-    let break_at_address: Option<u16> = parse_optional(matches.value_of("break"));
-    let break_at_cycle: Option<u64> = parse_optional(matches.value_of("break-cycle"));
     let _break_at_frame: Option<u32> = parse_optional(matches.value_of("break-frame"));
     let _exit_at_cycle: Option<u32> = parse_optional(matches.value_of("exit-cycle"));
-    let exit_at_frame: Option<u32> = parse_optional(matches.value_of("exit-frame"));
-    let capture_at_frame: Option<u32> = parse_optional(matches.value_of("capture"));
     let debug_log: Option<&str> = matches.value_of("debug-log");
     let ff_bootstrap = matches.is_present("ff-bootstrap");
 
     let machine = handle_machine_option(matches.value_of("machine"))?;
-
-    let capture_filename: &str = matches
-        .value_of("capture-to")
-        .unwrap_or("capture-frame-#.png");
 
     let mut emu = Emu::new(machine);
     emu.init();
@@ -160,7 +147,7 @@ fn main() -> Result<(), ()> {
 
     if let Some(expect) = test_expect {
         // This never returns
-        test_runner::test_runner_expect(expect, &mut emu, &mut debug);
+        test_runner::test_runner_expect(expect, &mut emu);
     }
 
     if let Some(variant) = test_runner_variant {

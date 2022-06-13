@@ -1,7 +1,6 @@
-use egui::{Button, Color32, Context, TextEdit};
+use egui::{Button, Context};
 
 use crate::debug::{Breakpoint, Debug};
-use crate::emu::Emu;
 
 pub struct BreakpointsWindow {
     add_breakpoint_input: String,
@@ -14,7 +13,7 @@ impl BreakpointsWindow {
         }
     }
 
-    pub fn render(&mut self, ctx: &Context, emu: &mut Emu, debug: &mut Debug, open: &mut bool) {
+    pub fn render(&mut self, ctx: &Context, debug: &mut Debug, open: &mut bool) {
         egui::Window::new("Breakpoints")
             .open(open)
             .resizable(true)
