@@ -104,6 +104,41 @@ fn render_property_grid(ui: &mut Ui, emu: &mut Emu) {
     ui.label(format!("0x{:02X} ({})", stat, stat));
     ui.end_row();
 
+    let mode = stat & 3;
+    ui.label("\tMode");
+    ui.label(match mode & 3 {
+        0 => "0: HBlank",
+        1 => "1: VBlank",
+        2 => "2: OAM search",
+        3 => "3: Transfer pixels",
+        _ => panic!("Invalid mode"),
+    });
+    ui.end_row();
+
+    ui.label("\tLYC = LY");
+    read_only_checkbox(ui, stat & 4 != 0);
+    ui.end_row();
+
+    ui.label("\tHBlank int.")
+        .on_hover_text("Enable interrupt on H-blank");
+    read_only_checkbox(ui, stat & 8 != 0);
+    ui.end_row();
+
+    ui.label("\tVBlank int.")
+        .on_hover_text("Enable interrupt on V-blank");
+    read_only_checkbox(ui, stat & 16 != 0);
+    ui.end_row();
+
+    ui.label("\tOAM int.")
+        .on_hover_text("Enable interrupt on OAM search mode");
+    read_only_checkbox(ui, stat & 32 != 0);
+    ui.end_row();
+
+    ui.label("\tLYC=LY int.")
+        .on_hover_text("Enable interrupt on LYC=LY");
+    read_only_checkbox(ui, stat & 64 != 0);
+    ui.end_row();
+
     let wx = ppu.read(WX_REG);
     let wy = ppu.read(WY_REG);
     ui.label("WX, WY");

@@ -401,14 +401,14 @@ impl PPU {
                         let tx = if spr.flip_x {
                             ((spr.x + 7) as usize - lx) % 8
                         } else {
-                            (lx - spr.x as usize) % 8
+                            (lx + 8 - (spr.x & 7) as usize) % 8
                         };
 
                         let ty = if spr.flip_y {
                             ((spr.y + (self.object_height as i32) - 1) as usize - self.ly)
                                 % self.object_height
                         } else {
-                            (self.ly - spr.y as usize) % self.object_height
+                            (self.ly + 16 - (spr.y & 15) as usize) % self.object_height
                         };
 
                         let tile_index = match self.object_height {
@@ -485,7 +485,6 @@ impl PPU {
     pub fn step_1m(&mut self) -> bool {
         match self.mode {
             Mode::OAMSearch => match self.scanline_timer {
-                0 => {}
                 80 => self.mode = Mode::PixelTransfer,
                 _ => {}
             },
@@ -493,6 +492,9 @@ impl PPU {
             Mode::PixelTransfer => {
                 if self.scanline_timer == 80 + 160 {
                     self.render_scanline();
+                    if self.hblank_interrupt_enabled {
+                        self.irq |= IF_LCDC_BIT;
+                    }
                     self.mode = Mode::HorizontalBlank;
                 }
             }
@@ -510,9 +512,16 @@ impl PPU {
                         self.irq |= IF_LCDC_BIT;
                     }
                     if self.ly == SCREEN_HEIGHT {
+                        self.irq |= IF_VBLANK_BIT;
+                        if self.vblank_interrupt_enabled {
+                            self.irq |= IF_LCDC_BIT;
+                        }
                         self.mode = Mode::VerticalBlank;
                     } else {
                         self.mode = Mode::OAMSearch;
+                        if self.oam_search_interrupt_enabled {
+                            self.irq |= IF_LCDC_BIT;
+                        }
                     }
                 }
             }
@@ -522,12 +531,12 @@ impl PPU {
                     self.ly += 1;
                     self.scanline_timer = 0;
                     if self.ly == 154 {
-                        // if self.vblank_interrupt_enabled {
-                        self.irq |= IF_VBLANK_BIT;
-                        // }
                         self.mode = Mode::OAMSearch;
                         self.window_ly = 0;
                         self.ly = 0;
+                        if self.oam_search_interrupt_enabled {
+                            self.irq |= IF_LCDC_BIT;
+                        }
                         return true;
                     }
                 }
