@@ -92,7 +92,6 @@ impl TileMapView {
     }
 
     pub fn render(&mut self, ui: &mut Ui, emu: &mut Emu, queue: &Queue) {
-        println!("TILE MAP VIEW: RENDER");
         let scale: usize = 2;
         self.render_texture(&emu.mmu.ppu);
         self.buf.prepare(queue);
