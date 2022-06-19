@@ -12,7 +12,7 @@ minimal-ui = []
 
 [dependencies]
 ansi_term = "0.12.1"
-clap = "*"
+clap = {version = "3.2.1", features = ["derive"]}
 cpal = "0.13.4"
 ctrlc = "3.1.6"
 egui = "0.17.0"

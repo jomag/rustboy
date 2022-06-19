@@ -4,7 +4,7 @@ use wgpu::{Device, Queue};
 
 use crate::gameboy::{emu::Emu, ppu::PPU};
 
-use super::{
+use super::super::{
     pixbuf::PixBuf,
     utils::{render_grid, render_tile},
 };

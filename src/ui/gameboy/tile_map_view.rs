@@ -10,7 +10,7 @@ use crate::gameboy::{
     },
 };
 
-use super::{
+use super::super::{
     pixbuf::PixBuf,
     utils::{render_grid, render_tile},
 };

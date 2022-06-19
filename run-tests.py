@@ -10,9 +10,9 @@ RELEASE_MODE = True
 MOONEYE_DIR = f"{SCRIPT_DIR}/test/mooneye-test-suite"
 BLARGG_DIR = f"{SCRIPT_DIR}/test/blargg"
 RUSTBOY = (
-    f"{SCRIPT_DIR}/target/release/rustboy"
+    f"{SCRIPT_DIR}/target/release/rustboy-gb"
     if RELEASE_MODE
-    else f"{SCRIPT_DIR}/target/debug/rustboy"
+    else f"{SCRIPT_DIR}/target/debug/rustboy-gb"
 )
 TESTS_PER_ROW = 15
 PASS_EMOJI = ":green_heart:"

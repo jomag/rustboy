@@ -1,9 +1,9 @@
 use std::fmt::UpperHex;
 use std::ops::Sub;
 
-use crate::gameboy::debug::format_mnemonic;
 use crate::gameboy::emu::Emu;
 use crate::gameboy::instructions;
+use crate::gameboy::instructions::format_mnemonic;
 use crate::gameboy::registers::Registers;
 
 // cycle   reg   prev reg   frm
