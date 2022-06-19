@@ -1,7 +1,6 @@
 pub mod app;
 pub mod audio_player;
 pub mod breakpoints_window;
-pub mod full;
 pub mod gameboy;
 pub mod pixbuf;
 pub mod render_stats;

@@ -8,36 +8,7 @@ use rustboy::gameboy::emu::Emu;
 use rustboy::gameboy::emu::Machine;
 use rustboy::gameboy::{BOOTSTRAP_ROM, CARTRIDGE_ROM};
 use rustboy::ui::app::MoeApp;
-use rustboy::ui::full::*;
 use rustboy::ui::gameboy::main_window::GameboyMainWindow;
-
-fn parse_number<T: num_traits::Num>(text: &str) -> Result<T, T::FromStrRadixErr> {
-    if text.starts_with("0x") {
-        T::from_str_radix(&text[2..], 16)
-    } else {
-        T::from_str_radix(text, 10)
-    }
-}
-
-fn parse_optional<T: num_traits::Num>(value: Option<&str>) -> Option<T> {
-    match value {
-        Some(text) => match parse_number(text) {
-            Ok(num) => Some(num),
-            Err(_) => {
-                println!("Not a valid number: {:?}", text);
-                std::process::exit(1);
-            }
-        },
-        None => None,
-    }
-}
-
-fn parse<T: num_traits::Num>(value: Option<&str>, default: T) -> T {
-    match parse_optional(value) {
-        Some(num) => num,
-        None => default,
-    }
-}
 
 fn handle_machine_option(opt: Option<String>) -> Result<Machine, ()> {
     match opt.as_deref() {
