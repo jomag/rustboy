@@ -294,6 +294,9 @@ pub struct PPU {
 
     // Machine type
     machine: Machine,
+
+    // Frame number
+    pub frame_number: usize,
 }
 
 // Get offset to the tile data based on the selected addressing mode.
@@ -310,6 +313,7 @@ impl PPU {
         PPU {
             machine,
 
+            frame_number: 0,
             irq: 0,
             vram: [0; VRAM_SIZE],
             buffer: [0; SCREEN_WIDTH * SCREEN_HEIGHT],
@@ -536,6 +540,7 @@ impl PPU {
                         if self.oam_search_interrupt_enabled {
                             self.irq |= IF_LCDC_BIT;
                         }
+                        self.frame_number = self.frame_number.wrapping_add(1);
                         return true;
                     }
                 }

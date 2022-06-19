@@ -61,6 +61,7 @@ impl AudioPlayer {
             channels: usize,
             next_sample: &mut dyn FnMut() -> f32,
         ) {
+            // println!("WRIPTE BEEP");
             for frame in output.chunks_mut(channels) {
                 let value: T = cpal::Sample::from::<f32>(&next_sample());
                 for sample in frame.iter_mut() {

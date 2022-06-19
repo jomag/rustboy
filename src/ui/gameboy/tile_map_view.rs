@@ -10,7 +10,7 @@ use crate::gameboy::{
     },
 };
 
-use super::{
+use super::super::{
     pixbuf::PixBuf,
     utils::{render_grid, render_tile},
 };
@@ -92,6 +92,7 @@ impl TileMapView {
     }
 
     pub fn render(&mut self, ui: &mut Ui, emu: &mut Emu, queue: &Queue) {
+        println!("TILE MAP VIEW: RENDER");
         let scale: usize = 2;
         self.render_texture(&emu.mmu.ppu);
         self.buf.prepare(queue);

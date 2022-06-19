@@ -1,6 +1,6 @@
 use egui::{Button, Context};
 
-use crate::gameboy::debug::{Breakpoint, Debug};
+use crate::debug::{Breakpoint, Debug};
 
 pub struct BreakpointsWindow {
     add_breakpoint_input: String,
@@ -21,8 +21,8 @@ impl BreakpointsWindow {
                 ui.scope(|ui| {
                     ui.style_mut().override_text_style = Some(egui::TextStyle::Monospace);
 
-                    ui.horizontal(
-                        |ui| match u16::from_str_radix(&self.add_breakpoint_input, 16) {
+                    ui.horizontal(|ui| {
+                        match usize::from_str_radix(&self.add_breakpoint_input, 16) {
                             Ok(adr) => {
                                 ui.text_edit_singleline(&mut self.add_breakpoint_input);
                                 if ui.button("✚").clicked() {
@@ -33,8 +33,8 @@ impl BreakpointsWindow {
                                 ui.text_edit_singleline(&mut self.add_breakpoint_input);
                                 ui.add_enabled(false, Button::new("✚"));
                             }
-                        },
-                    );
+                        }
+                    });
 
                     ui.separator();
 

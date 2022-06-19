@@ -2,7 +2,7 @@ use egui::{Color32, Pos2, Rect, Stroke, Ui};
 
 use crate::gameboy::ppu::{PPU, TILE_HEIGHT, TILE_WIDTH};
 
-use super::{full::PIXEL_SIZE, pixbuf::PixBuf};
+use super::{app::PIXEL_SIZE, pixbuf::PixBuf};
 
 pub fn render_grid(ui: &Ui, r: Rect, columns: usize, rows: usize, color: Option<Color32>) {
     let stroke = Stroke::new(

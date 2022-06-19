@@ -1,9 +1,8 @@
 use super::super::{
     emu::Machine,
     mmu::{NR50_REG, NR51_REG, NR52_REG},
+    CYCLES_PER_FRAME,
 };
-
-use crate::{ui::audio_player::AudioRecorder, CYCLES_PER_FRAME};
 
 use super::{
     noise_gen::NoiseSoundGenerator, square_gen::SquareWaveSoundGenerator,
@@ -35,8 +34,6 @@ pub struct AudioProcessingUnit {
     pub buf_left_amp: i16,
     pub buf_right_amp: i16,
 
-    pub recorder: Option<Box<dyn AudioRecorder>>,
-
     // Current frame sequencer step. Updated at 512 Hz,
     // or every 8192'th cycle.
     pub frame_seq_step: u8,
@@ -57,7 +54,6 @@ impl AudioProcessingUnit {
             buf_clock: 0,
             buf_left_amp: 0,
             buf_right_amp: 0,
-            recorder: None,
             powered_on: false,
             frame_seq_step: 0,
         }
@@ -158,6 +154,7 @@ impl AudioProcessingUnit {
         let right_delta = (right as i32) - (self.buf_right_amp as i32);
         self.buf_left_amp = left;
         self.buf_right_amp = right;
+
         if left_delta != 0 {
             self.buf_left.add_delta(self.buf_clock, left_delta as i32);
         }
