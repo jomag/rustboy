@@ -18,8 +18,10 @@ pub trait Core: Sized {
     /// This function is used by Debug to log state after each operation.
     fn log_state(&self, f: &mut File);
 
-    /// Returns address of next operation to be executed (program counter).
-    fn pc(&self) -> usize;
+    /// Returns address of current operation being executed (program counter).
+    /// For the first cycle of an operation execution this is typically
+    /// equivalent to the program counter (PC).
+    fn op_offset(&self) -> usize;
 
     /// Return current scanline
     fn scanline(&self) -> usize;
@@ -39,4 +41,15 @@ pub trait Core: Sized {
     fn push_audio_samples(&mut self, p: &mut Producer<i16>);
 
     fn to_rgba8(&self, dst: &mut Box<[u8]>, palette: Vec<(u8, u8, u8)>);
+
+    // Return length of operation at given address in bytes
+    fn op_length(&self, adr: usize) -> usize;
+
+    // Return operation at given address formatted as a string,
+    // plus the address of the next operation
+    fn format_op(&self, adr: usize) -> (String, usize);
+
+    fn read(&self, adr: usize) -> u8;
+    fn write(&mut self, adr: usize, value: u8);
+    fn reset(&mut self);
 }

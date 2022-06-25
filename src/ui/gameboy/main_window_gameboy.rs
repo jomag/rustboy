@@ -2,9 +2,12 @@ use egui::Context;
 use egui_wgpu_backend::RenderPass;
 use wgpu::{Device, Queue};
 
+use crate::core::Core;
 use crate::debug::Debug;
 use crate::gameboy::emu::Emu;
 use crate::gameboy::ppu::SCREEN_HEIGHT;
+use crate::ui::main_window::MainWindow;
+use crate::ui::memory_window::MemoryWindow;
 use crate::ui::serial_window::SerialWindow;
 use crate::APPNAME;
 
@@ -12,25 +15,11 @@ use super::super::{breakpoints_window::BreakpointsWindow, render_stats::RenderSt
 
 use super::{
     audio_window::render_audio_window, cartridge_window::CartridgeWindow,
-    debug_window::DebugWindow, memory_window::MemoryWindow, oam_window::render_oam_window,
-    ppu_window::render_video_window, vram_window::VRAMWindow,
+    debug_window::DebugWindow, oam_window::render_oam_window, ppu_window::render_video_window,
+    vram_window::VRAMWindow,
 };
 
-pub trait MainWindow<T> {
-    fn init(&mut self, device: &Device, egui_rpass: &mut RenderPass);
-    fn append_serial(&mut self, data: u8);
-
-    fn render(
-        &mut self,
-        ctx: &Context,
-        emu: &mut T,
-        debug: &mut Debug,
-        queue: &Queue,
-        render_stats: &RenderStats,
-    );
-}
-
-pub struct GameboyMainWindow {
+pub struct MainWindowGameboy {
     vram_window: VRAMWindow,
     vram_window_open: bool,
 
@@ -54,7 +43,7 @@ pub struct GameboyMainWindow {
     oam_window_open: bool,
 }
 
-impl MainWindow<Emu> for GameboyMainWindow {
+impl MainWindow<Emu> for MainWindowGameboy {
     fn init(&mut self, device: &Device, rpass: &mut RenderPass) {
         self.vram_window.init(device, rpass);
     }
@@ -99,9 +88,9 @@ impl MainWindow<Emu> for GameboyMainWindow {
     }
 }
 
-impl GameboyMainWindow {
+impl MainWindowGameboy {
     pub fn new() -> Self {
-        GameboyMainWindow {
+        MainWindowGameboy {
             vram_window: VRAMWindow::new(),
             vram_window_open: false,
             debug_window: DebugWindow::new(),

@@ -1,5 +1,4 @@
-use super::super::mmu::MemoryMapped;
-use crate::conv;
+use crate::{conv, MemoryMapped};
 
 use super::{
     cartridge::Cartridge, cartridge_header::CartridgeHeader, cartridge_type::CartridgeType,

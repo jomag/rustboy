@@ -1,4 +1,4 @@
-use super::super::mmu::MemoryMapped;
+use crate::MemoryMapped;
 
 use super::{
     cartridge::Cartridge,

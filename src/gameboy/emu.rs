@@ -7,6 +7,7 @@ use ringbuf::Producer;
 use crate::{core::Core, gameboy::instructions::format_mnemonic};
 
 use super::buttons::ButtonType;
+use super::instructions;
 use super::{
     mmu::MMU,
     ppu::{SCREEN_HEIGHT, SCREEN_WIDTH},
@@ -109,7 +110,8 @@ impl Core for Emu {
         self.mmu.ppu.frame_number
     }
 
-    fn pc(&self) -> usize {
+    fn op_offset(&self) -> usize {
+        // FIXME: only true for the first cycle of an op execution
         self.mmu.reg.pc as usize
     }
 
@@ -147,6 +149,36 @@ impl Core for Emu {
         let p: [(u8, u8, u8); 4] = [palette[0], palette[1], palette[2], palette[3]];
         self.mmu.ppu.to_rgba8(dst, p);
     }
+
+    fn op_length(&self, adr: usize) -> usize {
+        if let Some(l) = instructions::op_length(self.mmu.direct_read(adr)) {
+            l
+        } else {
+            // FIXME: this is a bad workaround for ops we don't know the length of
+            0
+        }
+    }
+
+    fn format_op(&self, adr: usize) -> (String, usize) {
+        let text = format_mnemonic(&self.mmu, adr);
+
+        match instructions::op_length(self.mmu.direct_read(adr)) {
+            Some(len) => (text, adr + len),
+            None => (text, adr + 1),
+        }
+    }
+
+    fn read(&self, adr: usize) -> u8 {
+        self.mmu.direct_read(adr)
+    }
+
+    fn write(&mut self, adr: usize, value: u8) {
+        self.mmu.direct_write(adr, value);
+    }
+
+    fn reset(&mut self) {
+        self.mmu.reset();
+    }
 }
 
 impl Emu {
@@ -165,10 +197,6 @@ impl Emu {
                 (Key::Space, ButtonType::Select),
             ]),
         }
-    }
-
-    pub fn reset(&mut self) {
-        self.mmu.reset();
     }
 
     pub fn init(&mut self) {

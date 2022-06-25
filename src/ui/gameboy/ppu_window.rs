@@ -1,12 +1,16 @@
 use egui::{Context, Ui};
 
-use crate::gameboy::{
-    emu::Emu,
-    mmu::{MemoryMapped, LCDC_REG, LY_REG, SCX_REG, SCY_REG, STAT_REG, WX_REG, WY_REG},
-    ppu::{
-        BG_AND_WINDOW_TILE_DATA_OFFSET_0, BG_AND_WINDOW_TILE_DATA_OFFSET_1, BG_TILE_MAP_OFFSET_0,
-        BG_TILE_MAP_OFFSET_1, WINDOW_TILE_MAP_OFFSET_0, WINDOW_TILE_MAP_OFFSET_1,
+use crate::{
+    gameboy::{
+        emu::Emu,
+        mmu::{LCDC_REG, LY_REG, SCX_REG, SCY_REG, STAT_REG, WX_REG, WY_REG},
+        ppu::{
+            BG_AND_WINDOW_TILE_DATA_OFFSET_0, BG_AND_WINDOW_TILE_DATA_OFFSET_1,
+            BG_TILE_MAP_OFFSET_0, BG_TILE_MAP_OFFSET_1, WINDOW_TILE_MAP_OFFSET_0,
+            WINDOW_TILE_MAP_OFFSET_1,
+        },
     },
+    MemoryMapped,
 };
 
 fn read_only_checkbox(ui: &mut Ui, mut checked: bool) {

@@ -131,7 +131,7 @@ impl Debug {
         // which means that we're continuing after a breakpoint
         // was reached.
         if self.state != ExecState::CONTINUE {
-            let pc = core.pc();
+            let pc = core.op_offset();
             if self.breakpoints.contains_key(&pc) {
                 for bp in self.breakpoints[&pc].iter() {
                     if bp.evaluate(core) {

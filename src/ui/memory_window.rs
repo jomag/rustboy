@@ -1,6 +1,6 @@
 use egui::{Context, ScrollArea, Ui};
 
-use crate::gameboy::emu::Emu;
+use crate::core::Core;
 
 pub struct MemoryView {
     mem_size: usize,
@@ -13,12 +13,12 @@ impl MemoryView {
         MemoryView { mem_size }
     }
 
-    fn render_row(offset: usize, ui: &mut Ui, emu: &Emu) {
+    fn render_row(offset: usize, ui: &mut Ui, core: &impl Core) {
         let mut hex_str = String::with_capacity(MemoryView::BYTES_PER_ROW * 3);
         let mut char_str = String::with_capacity(MemoryView::BYTES_PER_ROW);
 
         for i in 0..=(MemoryView::BYTES_PER_ROW - 1) {
-            let b = emu.mmu.direct_read(offset + i);
+            let b = core.read(offset + i);
             hex_str.push_str(&format!(" {:02X}", b));
             char_str.push(match b {
                 32..=126 => b as char,
@@ -29,7 +29,7 @@ impl MemoryView {
         ui.label(format!("{:04X} {} {}", offset, hex_str, char_str));
     }
 
-    pub fn render(&mut self, ui: &mut Ui, emu: &Emu) {
+    pub fn render(&mut self, ui: &mut Ui, core: &impl Core) {
         ui.scope(|ui| {
             let text_style = egui::TextStyle::Monospace;
             let row_height = 20.0; // FIXME: ui.fonts()[text_style].row_height();
@@ -43,7 +43,7 @@ impl MemoryView {
                 num_rows,
                 |ui, row_range| {
                     for row in row_range {
-                        MemoryView::render_row(row * MemoryView::BYTES_PER_ROW, ui, emu);
+                        MemoryView::render_row(row * MemoryView::BYTES_PER_ROW, ui, core);
                     }
                 },
             )
@@ -62,14 +62,14 @@ impl MemoryWindow {
         }
     }
 
-    pub fn render(&mut self, ctx: &Context, emu: &mut Emu, open: &mut bool) {
+    pub fn render(&mut self, ctx: &Context, core: &impl Core, open: &mut bool) {
         egui::Window::new("Memory")
             .open(open)
             .resizable(true)
             .show(ctx, |ui| {
                 ui.label("TEXT");
                 ui.separator();
-                self.mem_view.render(ui, emu);
+                self.mem_view.render(ui, core);
             });
     }
 }

@@ -6,20 +6,6 @@ use crate::gameboy::instructions;
 use crate::gameboy::instructions::format_mnemonic;
 use crate::gameboy::registers::Registers;
 
-// cycle   reg   prev reg   frm
-// 0       5     0
-// 0       5     0
-// 0       5     0
-// 0       5     0
-// 1       20    5
-// 1       20    5
-// 1       20    5
-// 1       20    5
-// 2       12    12
-// 2       12    12
-// 2       12    12
-// 2       12    12
-
 use egui::{Context, Label, RichText, Ui};
 
 pub struct RegistersView {

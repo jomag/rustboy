@@ -1,7 +1,11 @@
 pub mod app;
 pub mod audio_player;
 pub mod breakpoints_window;
+pub mod c64;
+pub mod disassembly_view;
 pub mod gameboy;
+pub mod main_window;
+pub mod memory_window;
 pub mod pixbuf;
 pub mod render_stats;
 pub mod serial_window;

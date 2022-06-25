@@ -8,7 +8,7 @@ use rustboy::gameboy::emu::Emu;
 use rustboy::gameboy::emu::Machine;
 use rustboy::gameboy::{BOOTSTRAP_ROM, CARTRIDGE_ROM};
 use rustboy::ui::app::MoeApp;
-use rustboy::ui::gameboy::main_window::GameboyMainWindow;
+use rustboy::ui::gameboy::main_window_gameboy::MainWindowGameboy;
 
 fn handle_machine_option(opt: Option<String>) -> Result<Machine, ()> {
     match opt.as_deref() {
@@ -117,7 +117,7 @@ fn main() -> Result<(), ()> {
         rustboy::test_runner::test_runner(&variant, &mut emu, &mut debug);
     }
 
-    let main_window = GameboyMainWindow::new();
+    let main_window = MainWindowGameboy::new();
     let app = MoeApp::new(emu, main_window);
     app.run_with_wgpu(debug);
 

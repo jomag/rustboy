@@ -3,6 +3,8 @@ extern crate ansi_term;
 use std::fs::File;
 use std::io::Read;
 
+use crate::MemoryMapped;
+
 use super::emu::Machine;
 use super::interrupt::{IF_INP_BIT, IF_LCDC_BIT, IF_TMR_BIT, IF_VBLANK_BIT};
 
@@ -81,14 +83,6 @@ pub const NR52_REG: usize = 0xFF26;
 pub trait MemoryMapped16 {
     fn read(&self, address: u16) -> u8;
     fn write(&mut self, address: u16, value: u8);
-
-    // Perform reset as after power cycle
-    fn reset(&mut self);
-}
-
-pub trait MemoryMapped {
-    fn read(&self, address: usize) -> u8;
-    fn write(&mut self, address: usize, value: u8);
 
     // Perform reset as after power cycle
     fn reset(&mut self);

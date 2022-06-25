@@ -24,13 +24,15 @@
 // DMG and CGB in single-speed mode. For CGB in double-speed mode
 // it is equivalent to 2 T-cycles.
 
+use crate::MemoryMapped;
+
 use super::emu::Machine;
 
 use super::{
     interrupt::{IF_LCDC_BIT, IF_VBLANK_BIT},
     mmu::{
-        MemoryMapped, BGP_REG, LCDC_REG, LYC_REG, LY_REG, OAM_OFFSET, OBP0_REG, OBP1_REG, SCX_REG,
-        SCY_REG, STAT_REG, WX_REG, WY_REG,
+        BGP_REG, LCDC_REG, LYC_REG, LY_REG, OAM_OFFSET, OBP0_REG, OBP1_REG, SCX_REG, SCY_REG,
+        STAT_REG, WX_REG, WY_REG,
     },
 };
 

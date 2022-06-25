@@ -11,9 +11,7 @@ use winit::{event::Event::*, event_loop::ControlFlow};
 
 use crate::{core::Core, gameboy::CLOCK_SPEED};
 
-use super::{
-    audio_player::AudioPlayer, gameboy::main_window::MainWindow, render_stats::RenderStats,
-};
+use super::{audio_player::AudioPlayer, main_window::MainWindow, render_stats::RenderStats};
 
 pub const PIXEL_SIZE: usize = 4;
 pub const TARGET_FPS: f64 = 59.727500569606;
