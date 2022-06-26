@@ -7,7 +7,7 @@ use crate::{
     MemoryMapped,
 };
 
-use super::{bus::Bus, mmu::MMU};
+use super::bus::Bus;
 
 const SCREEN_WIDTH: usize = 320;
 const SCREEN_HEIGHT: usize = 200;
@@ -19,7 +19,6 @@ pub enum Machine {
 }
 
 pub struct CoreC64 {
-    pub mmu: MMU,
     pub machine: Machine,
     pub cpu: cpu::cpu_6510::CPU,
     pub bus: Bus,
@@ -120,7 +119,6 @@ impl Core for CoreC64 {
 impl CoreC64 {
     pub fn new(machine: Machine) -> Self {
         CoreC64 {
-            mmu: MMU::new(machine),
             machine,
             mock_frame_count: 0,
             cpu: CPU::new(),
