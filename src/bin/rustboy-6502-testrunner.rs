@@ -88,7 +88,6 @@ impl Core for Core6502 {
     }
 
     fn exec_op(&mut self) {
-        self.print_state();
         self.cpu.exec(&mut self.bus);
         self.frame += 1;
     }
@@ -140,17 +139,19 @@ impl Core6502 {
 
     pub fn print_state(&self) {
         let c = self.cpu;
-        let (dis, _) = self.format_op(c.pc.into());
+        let (dis, _) = self.format_op(c.op_offset().into());
         println!(
-            "A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PC:{:04X} OP:{:02X} => {}",
+            "clk:{} a:{:02x} x:{:02x} y:{:02x} p:{:02x} sp:{:02x} pc:{:04x} ir:{:02x}|@{:04X}:\"{}\"",
+            c.cycles,
             c.a,
             c.x,
             c.y,
             c.p,
             c.sp,
             c.pc,
-            self.bus.read(c.pc.into()),
-            dis
+            c.get_ir(),
+            c.op_offset(),
+            dis,
         );
     }
 }
@@ -240,6 +241,10 @@ struct Args {
     /// With UI and debugger
     #[clap(short, long, value_parser)]
     ui: bool,
+
+    /// Step one cycle at a time instead of a full operation
+    #[clap(long, value_parser)]
+    single_cycle: bool,
 }
 
 fn main() -> Result<(), io::Error> {
@@ -263,7 +268,7 @@ fn main() -> Result<(), io::Error> {
 
     if args.ui {
         debug.break_execution();
-        debug.add_breakpoint(0x95C, Breakpoint { enabled: true });
+        debug.add_breakpoint(0x0E52, Breakpoint { enabled: true });
         // debug.add_breakpoint(0x596, Breakpoint { enabled: true });
         let main_window = MainWindow6502::new();
         let app = MoeApp::new(core, main_window);
@@ -273,8 +278,14 @@ fn main() -> Result<(), io::Error> {
         let mut stuck_count: usize = 0;
         let mut prev_pc = core.op_offset();
 
-        while debug.before_op(&mut core) {
-            core.exec_op();
+        while debug.before_op(&mut core) && core.cpu.cycles < 40 {
+            core.print_state();
+
+            if args.single_cycle {
+                core.cpu.one_cycle(&mut core.bus);
+            } else {
+                core.exec_op();
+            }
 
             progress += 1;
             if progress % 10000 == 0 {

@@ -181,13 +181,22 @@ pub enum OpName {
 
 #[derive(Copy, Clone)]
 pub struct CPU {
+    // Current value of the address pins
+    pub adr: u16,
+
+    // Current value of the data pins
+    pub data: u8,
+
+    // True if the current cycle is a write cycle
+    pub wr: bool,
+
     pub a: u8,   // Accumulator Register
     pub x: u8,   // Index Register X
     pub y: u8,   // Index Register Y
     pub p: u8,   // Processor Status (flags)
     pub sp: u8,  // Stack Pointer
     pub pc: u16, // Program Counter
-    pub ir: u8,  // Instruction Register
+    ir: u8,      // Instruction Register
 
     // Clock cycle while executing one operation
     pub op_cycle: u8,
@@ -210,6 +219,13 @@ pub struct CPU {
 
     // Address to the first byte of current op
     pub op_offs: Option<u16>,
+
+    // Clock cycle since reset
+    pub cycles: usize,
+
+    // Sync works the same as the sync pin:
+    // It's true when the opcode is being fetched.
+    pub sync: bool,
 }
 
 fn lo_hi_u16(lo: u8, hi: u8) -> u16 {
@@ -229,18 +245,9 @@ macro_rules! op {
 
 // Throws away the result of the expression.
 macro_rules! throw_away {
-    ($x:expr) => {{
-        $x;
-    }};
-}
-
-macro_rules! exec_cmp_cpx_cpy {
-    ( $cpu:expr, $reg:expr, $mem:expr) => {{
-        let (r, ovf) = $reg.overflowing_sub($mem);
-        $cpu.set_negative_flag(r & 0x80 != 0);
-        $cpu.set_zero_flag(r == 0);
-        $cpu.set_carry_flag(!ovf);
-    }};
+    ($x:expr) => {
+        drop($x)
+    };
 }
 
 pub const OPS: [Op; 0x100] = [
@@ -579,6 +586,7 @@ impl CPU {
             op_fixed_pc: 0,
             op_offs: None,
             next_ir: None,
+            cycles: 0,
         }
     }
 
@@ -587,10 +595,15 @@ impl CPU {
         // 7 cycles after reset.
         //
         // Details: https://www.pagetable.com/?p=410
+        //
+        // The `perfect6502` emulator, based on the `visual6502`
+        // emulator, initialize X, P and SP with these seemingly
+        // random values at cycle 7.
         self.a = 0;
-        self.x = 0;
+        self.x = 0xC0;
         self.y = 0;
-        self.sp = 0xFF;
+        self.p = 0x16;
+        self.sp = 0xBD;
         self.pc = lo_hi_u16(bus.read(0xFFFC), bus.read(0xFFFD));
         self.ir = 0;
     }
@@ -619,11 +632,27 @@ impl CPU {
         }
     }
 
+    fn set_decimal_mode_flag(&mut self, en: bool) {
+        if en {
+            self.p |= DEC_MASK;
+        } else {
+            self.p &= !DEC_MASK;
+        }
+    }
+
     fn set_zero_flag(&mut self, en: bool) {
         if en {
             self.p |= ZERO_MASK;
         } else {
             self.p &= !ZERO_MASK;
+        }
+    }
+
+    fn set_interrupt_disable_flag(&mut self, b: bool) {
+        if b {
+            self.p |= IRQB_DISABLE_MASK;
+        } else {
+            self.p &= !IRQB_DISABLE_MASK;
         }
     }
 
@@ -650,6 +679,8 @@ impl CPU {
     }
 
     pub fn one_cycle(&mut self, bus: &mut impl MemoryMapped) {
+        self.cycles = self.cycles.wrapping_add(1);
+
         // Panic when an unimplemented operation is reached
         fn not_implemented(op: &Op) -> ! {
             panic!(
@@ -660,13 +691,6 @@ impl CPU {
 
         // Mark the end of current operation
         macro_rules! end_op {
-            // Set start of next operation to `next`
-            ($next_op_offset:expr, $next_pc:expr) => {{
-                self.pc = $next_pc;
-                self.op_offs = Some($next_op_offset);
-                self.op_cycle = 0;
-            }};
-
             // Set start of next operation to self.pc
             () => {{
                 self.op_offs = Some(self.pc);
@@ -687,29 +711,97 @@ impl CPU {
             }};
         }
 
+        macro_rules! inc_pc {
+            () => {{
+                self.pc = self.pc.wrapping_add(1);
+            }};
+        }
+
+        macro_rules! exec_cmp_cpx_cpy {
+            ($reg:expr, $mem:expr) => {{
+                let (r, ovf) = $reg.overflowing_sub($mem);
+                self.set_negative_flag(r & 0x80 != 0);
+                self.set_zero_flag(r == 0);
+                self.set_carry_flag(!ovf);
+            }};
+        }
+
+        macro_rules! exec_adc {
+            ($mem:expr) => {{
+                let (r, ovf) = self.a.overflowing_add($mem);
+                self.a = r;
+                self.set_negative_flag(r & 0x80 != 0);
+                self.set_zero_flag(r == 0);
+                self.set_carry_flag(ovf);
+                self.set_overflow_flag(ovf);
+            }};
+        }
+
+        macro_rules! exec_sbc {
+            ($mem:expr) => {{
+                let (r, ovf) = self.a.overflowing_sub($mem);
+                self.a = r;
+                self.set_negative_flag(r & 0x80 != 0);
+                self.set_zero_flag(r == 0);
+                self.set_carry_flag(ovf);
+                self.set_overflow_flag(ovf);
+            }};
+        }
+
+        macro_rules! exec_bit {
+            ($mem:expr) => {{
+                self.set_zero_flag(self.p & ($mem) == 0);
+                self.p = (self.p & 0b0011_1111) | (($mem) & 0b1100_0000);
+            }};
+        }
+
+        macro_rules! group {
+            ($op:ident) => { OpName::$op };
+            ($op:ident, $($rest:ident),+) => { OpName::$op | group!($($rest),+) };
+        }
+
+        if self.sync {
+            self.ir = bus.read(self.adr);
+            self.sync = false;
+        }
+
         if self.op_cycle == 0 {
-            self.op_cycle = 1;
             match self.next_ir {
                 Some(ir) => {
                     self.op_offs = Some(self.pc - 1);
                     self.ir = ir;
                     self.next_ir = None;
+                    self.op_cycle = 1;
                 }
                 None => {
                     self.op_offs = Some(self.pc);
                     self.ir = self.read_pc(bus);
+                    self.op_cycle = 1;
                     return;
                 }
             }
         }
 
         let op = &OPS[usize::from(self.ir)];
-        println!("-- ir = {:02x}", self.ir);
 
         match op.adr {
             AdrMode::Acc => not_implemented(op),
 
             AdrMode::Stack => match op.name {
+                OpName::BRK => match self.op_cycle {
+                    1 => throw_away!(self.read_pc(bus)),
+                    2 => self.push(bus, self.pch()),
+                    3 => self.push(bus, self.pcl()),
+                    4 => self.push(bus, self.p | 0b110000),
+                    5 => self.set_pcl(bus.read(0xFFFE)),
+                    6 => {
+                        self.set_pch(bus.read(0xFFFF));
+                        self.set_interrupt_disable_flag(true);
+                        end_op!();
+                    }
+                    _ => invalid_op_cycle!(),
+                },
+
                 OpName::PHA | OpName::PHP => match self.op_cycle {
                     1 => throw_away!(bus.read(self.pc.into())),
                     2 => {
@@ -746,6 +838,24 @@ impl CPU {
                     _ => invalid_op_cycle!(),
                 },
 
+                OpName::RTI => match self.op_cycle {
+                    1 => throw_away!(bus.read(self.pc.into())),
+                    2 => inc_sp!(),
+                    3 => {
+                        self.p = self.read_stack(bus).into();
+                        inc_sp!();
+                    }
+                    4 => {
+                        self.op_ptr = self.read_stack(bus).into();
+                        inc_sp!();
+                    }
+                    5 => {
+                        self.pc = self.op_ptr | ((self.read_stack(bus) as u16) << 8);
+                        end_op!();
+                    }
+                    _ => invalid_op_cycle!(),
+                },
+
                 OpName::RTS => match self.op_cycle {
                     1 => throw_away!(bus.read(self.pc.into())),
                     2 => inc_sp!(),
@@ -770,8 +880,8 @@ impl CPU {
                 OpName::JMP => match self.op_cycle {
                     1 => self.op_a = self.read_pc(bus),
                     2 => {
-                        let pc = lo_hi_u16(self.op_a, self.read_pc(bus));
-                        end_op!(pc, pc);
+                        self.pc = lo_hi_u16(self.op_a, self.read_pc(bus));
+                        end_op!();
                     }
                     _ => invalid_op_cycle!(),
                 },
@@ -782,8 +892,8 @@ impl CPU {
                     4 => self.push(bus, self.pcl()),
                     5 => self.op_b = self.read_pc(bus),
                     6 => {
-                        let pc = lo_hi_u16(self.op_a, self.op_b);
-                        end_op!(pc, pc);
+                        self.pc = lo_hi_u16(self.op_a, self.op_b);
+                        end_op!();
                     }
                     _ => invalid_op_cycle!(),
                 },
@@ -797,12 +907,12 @@ impl CPU {
                             OpName::LDA => self.a = self.alu_load(v),
                             OpName::LDX => self.x = self.alu_load(v),
                             OpName::LDY => self.y = self.alu_load(v),
-                            OpName::CMP => exec_cmp_cpx_cpy!(self, self.a, v),
+                            OpName::CMP => exec_cmp_cpx_cpy!(self.a, v),
                             _ => not_implemented(op),
                         }
                         end_op!();
                     }
-                    _ => unreachable!(),
+                    _ => invalid_op_cycle!(),
                 },
 
                 OpName::STA | OpName::STX | OpName::STY => match self.op_cycle {
@@ -822,49 +932,80 @@ impl CPU {
 
             AdrMode::AbsIdxInd => not_implemented(op),
 
-            AdrMode::AbsIdxX => match op.name {
-                OpName::LDA | OpName::STA | OpName::CMP => match self.op_cycle {
-                    1 => self.op_a = self.read_pc(bus),
-                    2 => self.op_b = self.read_pc(bus),
-                    3 | 4 => {
-                        let adr = match self.op_cycle {
-                            3 => {
-                                let (a, ovf) = self.op_a.overflowing_add(self.x);
-                                if !ovf {
-                                    end_op!();
+            AdrMode::AbsIdxX | AdrMode::AbsIdxY => {
+                let reg = match op.adr {
+                    AdrMode::AbsIdxX => self.x,
+                    AdrMode::AbsIdxY => self.y,
+                    _ => unreachable!(),
+                };
+
+                match op.name {
+                    // Read instructions
+                    group!(LDA, LDX, LDY, EOR, AND, ORA, ADC, SBC, CMP, BIT) => match self.op_cycle
+                    {
+                        1 => self.op_a = self.read_pc(bus),
+                        2 => self.op_b = self.read_pc(bus),
+                        3 | 4 => {
+                            let adr = match self.op_cycle {
+                                3 => {
+                                    let (a, ovf) = self.op_a.overflowing_add(reg);
+                                    if !ovf {
+                                        end_op!();
+                                    }
+                                    lo_hi_u16(a, self.op_b)
                                 }
-                                lo_hi_u16(a, self.op_b)
-                            }
-                            4 => {
-                                end_op!();
-                                lo_hi_u16(self.op_a, self.op_b).wrapping_add(self.x as u16)
-                            }
-                            _ => invalid_op_cycle!(),
-                        };
+                                4 => {
+                                    end_op!();
+                                    lo_hi_u16(self.op_a, self.op_b).wrapping_add(reg.into())
+                                }
+                                _ => invalid_op_cycle!(),
+                            };
 
-                        let v = bus.read(adr.into());
+                            let m = bus.read(adr.into());
 
-                        match op.name {
-                            OpName::LDA => self.a = v,
-                            OpName::CMP => {
-                                exec_cmp_cpx_cpy!(self, self.a, v);
-                                // let (r, ovf) = self.a.overflowing_sub(v);
-                                // self.set_negative_flag(r & 0x80 != 0);
-                                // self.set_zero_flag(r == 0);
-                                // self.set_carry_flag(!ovf);
+                            match op.name {
+                                OpName::LDA => self.a = self.alu_load(m),
+                                OpName::LDX => self.x = self.alu_load(m),
+                                OpName::LDY => self.y = self.alu_load(m),
+                                OpName::EOR => self.a = self.alu_load(self.a ^ m),
+                                OpName::AND => self.a = self.alu_load(self.a & m),
+                                OpName::ORA => self.a = self.alu_load(self.a | m),
+                                OpName::ADC => exec_adc!(m),
+                                OpName::SBC => exec_sbc!(m),
+                                OpName::CMP => exec_cmp_cpx_cpy!(self.a, m),
+                                OpName::BIT => exec_bit!(m),
+                                _ => not_implemented(op),
                             }
-
-                            // FIXME: STA does not work the same as LDA, CMP, etc. Move?
-                            OpName::STA => bus.write(adr.into(), self.a),
-                            _ => not_implemented(op),
                         }
-                    }
-                    _ => invalid_op_cycle!(),
-                },
-                _ => not_implemented(op),
-            },
+                        _ => invalid_op_cycle!(),
+                    },
 
-            AdrMode::AbsIdxY => not_implemented(op),
+                    // Write instructions
+                    group!(STA, STX, STY) => match self.op_cycle {
+                        1 => self.op_a = self.read_pc(bus),
+                        2 => {
+                            self.op_b = self.read_pc(bus);
+                            self.op_ptr = lo_hi_u16(self.op_a.wrapping_add(reg), self.op_b);
+                        }
+                        3 => {
+                            throw_away!(bus.read(self.op_ptr.into()));
+                            self.op_ptr = lo_hi_u16(self.op_a, self.op_b).wrapping_add(reg.into());
+                        }
+                        4 => {
+                            let v = match op.name {
+                                OpName::STA => self.a,
+                                OpName::STX => self.x,
+                                OpName::STY => self.y,
+                                _ => unreachable!(),
+                            };
+                            bus.write(self.op_ptr.into(), v);
+                            end_op!();
+                        }
+                        _ => invalid_op_cycle!(),
+                    },
+                    _ => not_implemented(op),
+                }
+            }
 
             AdrMode::AbsInd => match op.name {
                 OpName::JMP => match self.op_cycle {
@@ -884,9 +1025,11 @@ impl CPU {
             AdrMode::Imp => {
                 match op.name {
                     OpName::CLC => self.set_carry_flag(false),
-                    OpName::CLD => self.p &= !DEC_MASK,
+                    OpName::SEC => self.set_carry_flag(true),
+                    OpName::CLD => self.set_decimal_mode_flag(false),
+                    OpName::SED => self.set_decimal_mode_flag(true),
                     OpName::CLV => self.set_overflow_flag(false),
-                    OpName::CLI => self.p &= !IRQB_DISABLE_MASK,
+                    OpName::CLI => self.set_interrupt_disable_flag(false),
                     OpName::TXS => self.sp = self.x,
                     OpName::DEX => self.x = self.alu_load(self.x.wrapping_add(-1 as i8 as u8)),
                     OpName::DEY => self.y = self.alu_load(self.y.wrapping_add(-1 as i8 as u8)),
@@ -898,45 +1041,124 @@ impl CPU {
                     OpName::INX => self.x = self.alu_load(self.x.wrapping_add(1)),
                     OpName::INY => self.y = self.alu_load(self.y.wrapping_add(1)),
                     OpName::NOP => {}
-                    OpName::SEI => not_implemented(op),
+                    OpName::SEI => self.set_interrupt_disable_flag(true),
                     _ => not_implemented(op),
                 }
                 end_op!();
             }
 
-            AdrMode::Imm => {
-                let m = self.read_pc(bus);
-                match op.name {
-                    OpName::LDA => self.a = self.alu_load(m),
-                    OpName::LDX => self.x = self.alu_load(m),
-                    OpName::LDY => self.y = self.alu_load(m),
-                    OpName::CMP => exec_cmp_cpx_cpy!(self, self.a, m),
-                    OpName::CPX => exec_cmp_cpx_cpy!(self, self.x, m),
-                    OpName::CPY => exec_cmp_cpx_cpy!(self, self.y, m),
-                    OpName::ADC => {
-                        let (r, ovf) = self.a.overflowing_add(m);
-                        self.a = r;
-                        self.set_negative_flag(r & 0x80 != 0);
-                        self.set_zero_flag(r == 0);
-                        self.set_carry_flag(ovf);
-                        self.set_overflow_flag(ovf);
+            AdrMode::Imm => match self.op_cycle {
+                1 => {
+                    let m = self.read_pc(bus);
+                    match op.name {
+                        OpName::LDA => self.a = self.alu_load(m),
+                        OpName::LDX => self.x = self.alu_load(m),
+                        OpName::LDY => self.y = self.alu_load(m),
+                        OpName::CMP => exec_cmp_cpx_cpy!(self.a, m),
+                        OpName::CPX => exec_cmp_cpx_cpy!(self.x, m),
+                        OpName::CPY => exec_cmp_cpx_cpy!(self.y, m),
+                        OpName::ADC => exec_adc!(m),
+                        OpName::EOR => self.a = self.alu_load(self.a ^ m),
+                        OpName::ORA => self.a = self.alu_load(self.a | m),
+                        _ => not_implemented(op),
                     }
-                    OpName::EOR => {
-                        self.a = self.a ^ m;
-                        self.set_negative_flag(self.a & 0x80 != 0);
-                        self.set_zero_flag(self.a == 0);
-                    }
-                    _ => not_implemented(op),
+                    end_op!();
                 }
-                end_op!();
-            }
+                _ => invalid_op_cycle!(),
+            },
 
-            AdrMode::Zp => not_implemented(op),
+            AdrMode::Zp => match op.name {
+                OpName::LDA
+                | OpName::LDX
+                | OpName::LDY
+                | OpName::EOR
+                | OpName::AND
+                | OpName::ORA
+                | OpName::ADC
+                | OpName::SBC
+                | OpName::CMP
+                | OpName::BIT => match self.op_cycle {
+                    1 => self.op_a = self.read_pc(bus),
+                    2 => {
+                        let m = bus.read(self.op_a.into());
+                        match op.name {
+                            OpName::LDA => self.a = self.alu_load(m),
+                            OpName::LDX => self.x = self.alu_load(m),
+                            OpName::LDY => self.y = self.alu_load(m),
+                            OpName::EOR => self.a = self.alu_load(self.a ^ m),
+                            OpName::AND => self.a = self.alu_load(self.a & m),
+                            OpName::ORA => self.a = self.alu_load(self.a | m),
+                            OpName::ADC => exec_adc!(m),
+                            OpName::SBC => exec_sbc!(m),
+                            OpName::CMP => exec_cmp_cpx_cpy!(self.a, m),
+                            OpName::BIT => exec_bit!(m),
+                            _ => unreachable!(),
+                        };
+                        end_op!();
+                    }
+                    _ => invalid_op_cycle!(),
+                },
+
+                OpName::STA | OpName::STX | OpName::STY => match self.op_cycle {
+                    1 => self.op_a = self.read_pc(bus),
+                    2 => {
+                        let v = match op.name {
+                            OpName::STA => self.a,
+                            OpName::STX => self.x,
+                            OpName::STY => self.y,
+                            _ => unreachable!(),
+                        };
+                        bus.write(self.op_a.into(), v);
+                        end_op!();
+                    }
+                    _ => invalid_op_cycle!(),
+                },
+                _ => not_implemented(op),
+            },
 
             AdrMode::ZpIdxX | AdrMode::ZpIdxY => match op.name {
+                OpName::LDA
+                | OpName::LDX
+                | OpName::LDY
+                | OpName::EOR
+                | OpName::AND
+                | OpName::ORA
+                | OpName::ADC
+                | OpName::SBC
+                | OpName::CMP
+                | OpName::BIT => match self.op_cycle {
+                    1 => self.op_a = self.read_pc(bus),
+                    2 => {
+                        let idx = match op.adr {
+                            AdrMode::ZpIdxX => self.x,
+                            AdrMode::ZpIdxY => self.y,
+                            _ => not_implemented(op),
+                        };
+                        self.op_a = bus.read(self.op_a.into()).wrapping_add(idx);
+                    }
+                    3 => {
+                        let m = bus.read(self.op_a.into());
+                        match op.name {
+                            OpName::LDA => self.a = self.alu_load(m),
+                            OpName::LDX => self.x = self.alu_load(m),
+                            OpName::LDY => self.y = self.alu_load(m),
+                            OpName::EOR => self.a = self.alu_load(self.a ^ m),
+                            OpName::AND => self.a = self.alu_load(self.a & m),
+                            OpName::ORA => self.a = self.alu_load(self.a | m),
+                            OpName::ADC => exec_adc!(m),
+                            OpName::SBC => exec_sbc!(m),
+                            OpName::CMP => exec_cmp_cpx_cpy!(self.a, m),
+                            OpName::BIT => exec_bit!(m),
+                            _ => not_implemented(op),
+                        }
+                        end_op!();
+                    }
+                    _ => invalid_op_cycle!(),
+                },
+
                 OpName::STA | OpName::STY | OpName::STX => match self.op_cycle {
                     1 => self.op_a = self.read_pc(bus),
-                    2 => drop(bus.read(self.op_a.into())),
+                    2 => throw_away!(bus.read(self.op_a.into())),
                     3 => {
                         let i = match op.adr {
                             AdrMode::ZpIdxX => self.x,
@@ -986,14 +1208,7 @@ impl CPU {
             AdrMode::ZpIndIdxY => not_implemented(op),
 
             AdrMode::PcRel => match op.name {
-                OpName::BCC
-                | OpName::BCS
-                | OpName::BNE
-                | OpName::BEQ
-                | OpName::BPL
-                | OpName::BMI
-                | OpName::BVC
-                | OpName::BVS => match self.op_cycle {
+                group!(BCC, BCS, BNE, BEQ, BPL, BMI, BVC, BVS) => match self.op_cycle {
                     1 => self.op_a = self.read_pc(bus),
                     2 => {
                         // Fetch opcode of next instruction
@@ -1023,9 +1238,11 @@ impl CPU {
                             self.op_fixed_pc = self.pc.wrapping_add(self.op_a as i8 as u16);
                             self.pc = (self.pc & 0xFF00) | (self.op_fixed_pc & 0xFF);
                         } else {
-                            println!("branch not taken. end of op.");
+                            println!("branch not taken. end of op. pc={:04x}", self.pc);
                             // Otherwise increment PC and we're done.
-                            end_op!(self.pc, self.pc.wrapping_add(1));
+                            self.op_offs = Some(self.pc);
+                            inc_pc!();
+                            self.op_cycle = 0;
                         }
                     }
                     3 => {
@@ -1035,7 +1252,9 @@ impl CPU {
                         // Fix PCH
                         if self.op_fixed_pc == self.pc {
                             println!("pch was correct: {:04x}. end of op.", self.op_fixed_pc);
-                            end_op!(self.op_fixed_pc, self.op_fixed_pc.wrapping_add(1));
+                            self.op_offs = Some(self.pc);
+                            inc_pc!();
+                            self.op_cycle = 0;
                         } else {
                             println!(
                                 "pch needs fixing. {:04x} vs {:04x}.",
@@ -1082,6 +1301,10 @@ impl CPU {
     }
 
     fn push(&mut self, bus: &mut impl MemoryMapped, value: u8) {
+        println!(
+            "PUSH! sp={}/0x{:02X}, value={}/0x{:02X}",
+            self.sp, self.sp, value, value
+        );
         bus.write(self.sp as usize + 0x100, value);
         self.sp = self.sp.wrapping_sub(1);
     }
@@ -1090,12 +1313,16 @@ impl CPU {
         (self.pc & 0xFF) as u8
     }
 
+    pub fn pch(&self) -> u8 {
+        ((self.pc >> 8) & 0xFF) as u8
+    }
+
     pub fn set_pcl(&mut self, pcl: u8) {
         self.pc = (self.pc & 0xFF00) | (pcl as u16);
     }
 
-    pub fn pch(&self) -> u8 {
-        ((self.pc >> 8) & 0xFF) as u8
+    pub fn set_pch(&mut self, pch: u8) {
+        self.pc = (self.pc & 0xFF) | ((pch as u16) << 8);
     }
 
     pub fn op_offset(&self) -> u16 {
@@ -1105,6 +1332,13 @@ impl CPU {
                 0 => self.pc,
                 _ => panic!("op offset unknown"),
             },
+        }
+    }
+
+    pub fn get_ir(&self) -> u8 {
+        match self.next_ir {
+            Some(ir) if self.op_cycle == 0 => ir,
+            _ => self.ir,
         }
     }
 }

@@ -102,7 +102,7 @@ impl RegistersView {
                 RegistersView::render_register(ui, "A:", cpu.a, self.compare_with.a);
                 RegistersView::render_register(ui, "X:", cpu.x, self.compare_with.x);
                 RegistersView::render_register(ui, "Y:", cpu.y, self.compare_with.y);
-                RegistersView::render_register(ui, "IR:", cpu.ir, self.compare_with.ir);
+                RegistersView::render_register(ui, "IR:", cpu.get_ir(), self.compare_with.get_ir());
                 RegistersView::render_register(ui, "P:", cpu.p, self.compare_with.p);
             });
             ui.horizontal(|ui| {
@@ -119,11 +119,10 @@ impl RegistersView {
         // can also be changed by the debugger, and the PC may not
         // change if it's on a jump instruction to the same address.
 
-        // if self.prev_cycle != emu.mmu.timer.abs_cycle {
-        //     self.compare_with = self.prev;
-        //     self.prev = emu.mmu.reg;
-        //     self.prev_cycle = emu.mmu.timer.abs_cycle;
-        // }
+        if self._prev.cycles != cpu.cycles {
+            self.compare_with = self._prev;
+            self._prev = *cpu;
+        }
 
         // FIXME: Important that the above is enabled again!
     }

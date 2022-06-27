@@ -3,3 +3,4 @@
 rom/
 .DS_Store
 .venv
+/research/
