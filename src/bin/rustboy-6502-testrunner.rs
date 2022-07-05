@@ -48,6 +48,10 @@ impl Bus6502 {
         self.mem = content.into_boxed_slice();
         return Ok(());
     }
+
+    pub fn load_buf(&mut self, buf: Vec<u8>, offset: usize) {
+        self.mem[offset..(offset + buf.len())].copy_from_slice(&buf);
+    }
 }
 
 struct Core6502 {
@@ -137,11 +141,11 @@ impl Core6502 {
         self.cpu.reset(&self.bus);
     }
 
-    pub fn print_state(&self) {
+    pub fn print_state(&self, data: u8) {
         let c = self.cpu;
         let (dis, _) = self.format_op(c.op_offset().into());
         println!(
-            "clk:{} a:{:02x} x:{:02x} y:{:02x} p:{:02x} sp:{:02x} pc:{:04x} ir:{:02x}|@{:04X}:\"{}\"",
+            "clk:{} a:{:02x} x:{:02x} y:{:02x} p:{:02x} sp:{:02x} pc:{:04x} ir:{:02x} sync:{}|@{:04X}:\"{}\" (op cycle {})",
             c.cycles,
             c.a,
             c.x,
@@ -150,9 +154,29 @@ impl Core6502 {
             c.sp,
             c.pc,
             c.get_ir(),
+            if c.sync { 1 } else { 0 },
             c.op_offset(),
             dis,
+            c.op_cycle,
         );
+    }
+
+    pub fn one_cycle(&mut self) {
+        // let data = match self.cpu.wr {
+        //     true => {
+        //         self.bus.write(self.cpu.adr.into(), self.cpu.data);
+        //         self.cpu.data
+        //     }
+        //     false => self.bus.read(self.cpu.adr.into()),
+        // };
+
+        // let data = self.bus.read(self.cpu.adr.into());
+        // println!(
+        //     "Preparing data for memory address 0x{:04x}: {:02x}",
+        //     self.cpu.adr, data
+        // );
+
+        self.cpu.one_cycle(&mut self.bus);
     }
 }
 
@@ -226,13 +250,12 @@ impl MainWindow6502 {
 #[clap(author, version, about)]
 struct Args {
     /// Test binary
-    #[clap(
-        short,
-        long,
-        value_parser,
-        default_value = "rom/6502/6502_functional_test.bin"
-    )]
-    bin: String,
+    #[clap(short, long, value_parser)]
+    bin: Option<String>,
+
+    /// Raw hexcode input
+    #[clap(short, long, value_parser)]
+    raw: Option<String>,
 
     /// Start address
     #[clap(short, long, value_parser, default_value = "1024")]
@@ -252,14 +275,33 @@ fn main() -> Result<(), io::Error> {
 
     let mut core = Core6502::new();
 
-    println!("Loading binary: {}", args.bin);
-    match core.bus.load(&args.bin) {
-        Ok(_) => {}
-        Err(e) => match e.kind() {
-            ErrorKind::NotFound => panic!("File not found"),
-            e => panic!("Failed to load kernal: {:?}", e),
-        },
-    };
+    if args.bin.is_none() && args.raw.is_none() {
+        println!("One of --bin and --raw must be specified");
+        return Ok(());
+    }
+
+    match args.bin {
+        Some(bin) => {
+            println!("Loading binary: {}", bin);
+            match core.bus.load(&bin) {
+                Ok(_) => {}
+                Err(e) => match e.kind() {
+                    ErrorKind::NotFound => panic!("File not found"),
+                    e => panic!("Failed to load kernal: {:?}", e),
+                },
+            };
+        }
+        None => {}
+    }
+
+    match args.raw {
+        Some(raw) => {
+            let raw = raw.replace(" ", "");
+            let decoded = hex::decode(raw).expect("Decoding raw input failed");
+            core.bus.load_buf(decoded, args.start);
+        }
+        None => {}
+    }
 
     core.init();
     core.cpu.pc = args.start as u16;
@@ -268,7 +310,7 @@ fn main() -> Result<(), io::Error> {
 
     if args.ui {
         debug.break_execution();
-        debug.add_breakpoint(0x0E52, Breakpoint { enabled: true });
+        debug.add_breakpoint(0x37ed, Breakpoint { enabled: true });
         // debug.add_breakpoint(0x596, Breakpoint { enabled: true });
         let main_window = MainWindow6502::new();
         let app = MoeApp::new(core, main_window);
@@ -278,11 +320,14 @@ fn main() -> Result<(), io::Error> {
         let mut stuck_count: usize = 0;
         let mut prev_pc = core.op_offset();
 
-        while debug.before_op(&mut core) && core.cpu.cycles < 40 {
-            core.print_state();
+        // core.print_state(core.bus.read(core.cpu.adr.into()));
+        // println!("");
+
+        while debug.before_op(&mut core) && core.cpu.cycles < 400000 {
+            core.print_state(core.bus.read(core.cpu.adr.into()));
 
             if args.single_cycle {
-                core.cpu.one_cycle(&mut core.bus);
+                core.one_cycle();
             } else {
                 core.exec_op();
             }
@@ -298,7 +343,7 @@ fn main() -> Result<(), io::Error> {
                 stuck_count = 0;
             } else {
                 stuck_count += 1;
-                if stuck_count == 5 {
+                if stuck_count == 50 {
                     println!("PC seems to be stuck at {:04x}", pc);
                     break;
                 }
