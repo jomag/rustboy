@@ -20,14 +20,21 @@ use rustboy::{
 
 struct Bus6502 {
     pub mem: Box<[u8]>,
+    pub verbose: bool,
 }
 
 impl MemoryMapped for Bus6502 {
     fn read(&self, adr: usize) -> u8 {
+        if self.verbose {
+            println!("Read @{:04x}: {:02x}", adr, self.mem[adr]);
+        }
         self.mem[adr]
     }
 
     fn write(&mut self, adr: usize, value: u8) {
+        if self.verbose {
+            println!("Write @{:04x} = {:02x}", adr, value);
+        }
         self.mem[adr] = value;
     }
 
@@ -38,6 +45,7 @@ impl Bus6502 {
     pub fn new() -> Self {
         Bus6502 {
             mem: vec![0; 0x10000].into_boxed_slice(),
+            verbose: true,
         }
     }
 
@@ -323,8 +331,11 @@ fn main() -> Result<(), io::Error> {
         // core.print_state(core.bus.read(core.cpu.adr.into()));
         // println!("");
 
-        while debug.before_op(&mut core) && core.cpu.cycles < 400000 {
+        while debug.before_op(&mut core) && core.cpu.cycles < 96241363 {
+            let v = core.bus.verbose;
+            core.bus.verbose = false;
             core.print_state(core.bus.read(core.cpu.adr.into()));
+            core.bus.verbose = v;
 
             if args.single_cycle {
                 core.one_cycle();
